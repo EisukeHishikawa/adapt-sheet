@@ -58,7 +58,8 @@ npm run dev
 ## Git / CI運用
 
 - mainブランチへの直接pushは禁止（Branch Protection）。
-- PR作成時・main merge時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）のCIが自動実行される。CIが100%成功しないとマージ不可。
+- PR作成時・main merge時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）のCIを自動実行する運用を予定している。ただし2026-07-05時点でCIワークフローは未構築のため、それまではローカルでのテスト・静的解析結果をPR本文に記載する。CI構築後は100%成功しないとマージ不可とする。
+- レビュー承認必須（Require approvals）は、ソロ開発期間中は無効化している（PR作成者本人は自分のPRを承認できないGitHub仕様のため）。共同開発者が加わった時点で再度有効化を検討する。
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
 - ブランチを切る前に `main` ブランチを `git pull origin main` で最新化する（サブモジュールがある場合は `git submodule update --remote` も実行）。
 - マージ済みのローカルブランチを見つけた場合は削除を提案する。

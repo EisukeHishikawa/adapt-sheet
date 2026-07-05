@@ -25,6 +25,38 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Body_render_api_render_post */
+        Body_render_api_render_post: {
+            /**
+             * Html
+             * @default
+             */
+            html: string;
+            /**
+             * Css
+             * @default
+             */
+            css: string;
+            /**
+             * Json
+             * @default {}
+             */
+            json: string;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Width Mm */
+            width_mm?: number | null;
+            /** Height Mm */
+            height_mm?: number | null;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /** RenderResponse */
         RenderResponse: {
             /** Html */
@@ -35,6 +67,19 @@ export interface components {
             json?: {
                 [key: string]: unknown;
             };
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -52,7 +97,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_render_api_render_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -61,6 +110,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RenderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

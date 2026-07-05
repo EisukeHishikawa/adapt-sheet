@@ -23,7 +23,8 @@
 
 | 変数名 | 説明 | 備考 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Claude API利用のためのAPIキー | ローカルではモック層を経由するため未設定でも動作（[CLAUDE.md](../CLAUDE.md) 参照） |
+| `ANTHROPIC_API_KEY` | Claude API利用のためのAPIキー | `USE_MOCK_AI=false`のときのみ必須（[CLAUDE.md](../CLAUDE.md) 参照） |
+| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`ANTHROPIC_API_KEY`を使い実APIを呼び出す（ADR-007） |
 | `DOCLING_SERVE_ARTIFACTS_PATH` | Doclingモデルの焼き込み先絶対パス | コンテナ内で完全オフライン動作させるために必須 |
 | `AUTH0_DOMAIN` / `AUTH0_AUDIENCE` | Auth0テナント情報 | フェーズ5以降で使用 |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報 | フェーズ5以降で使用。ローカルは `Supabase Local CLI` の値を使用 |

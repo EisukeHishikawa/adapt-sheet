@@ -14,6 +14,14 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      // frontend/src/lib/api.ts は相対パス`/api/render`をfetchするため、
+      // プロキシがないとViteの開発サーバー自身に届いてしまい疎通しない。
+      // バックエンド（uvicorn）はREADME/CLAUDE.mdの手順どおり8000番ポートで起動する前提。
+      '/api': 'http://localhost:8000',
+    },
+  },
   test: {
     // DOM APIを使うコンポーネントテストのためjsdom環境を使用
     environment: 'jsdom',

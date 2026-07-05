@@ -8,7 +8,8 @@
 
 - **フロントエンド**: React / TypeScript / Vite / Zustand / shadcn/ui / TailwindCSS
 - **バックエンド**: Python / FastAPI / Docling / Anthropic SDK / SQLAlchemy
-- **テスト**: Vitest + React Testing Library / pytest / Playwright
+- **型同期**: openapi-typescript（FastAPIの`openapi.json`からフロント用TypeScript型を生成。ADR-006参照）
+- **テスト**: Vitest + React Testing Library + MSW / pytest / Playwright
 - **インフラ**: Terraform / AWS (Lambda, CloudFront, S3, API Gateway, WAF) / GitHub Actions
 - **認証・DB**: Auth0 / Supabase (PostgreSQL)
 
@@ -29,7 +30,7 @@ cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pytest
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload   # ポート8000で起動（frontendのViteプロキシ先）
 ```
 
 ### フロントエンド
@@ -39,6 +40,19 @@ cd frontend
 npm install
 npm run dev
 npm run test
+```
+
+> `npm run dev` はVite開発サーバーの`/api`パスをバックエンド（`http://localhost:8000`）へプロキシする設定済み（`vite.config.ts`）。描画ボタンでの疎通確認にはバックエンドの同時起動が必要。
+>
+> `openapi-typescript`のpeer dependencyがTypeScript 6系に未対応のため、`npm install`時に警告が出る場合は`npm install --force`を使用する（詳細はADR-006）。
+
+### フロント・バック同時起動時の型同期
+
+バックエンドの`openapi.json`からフロント用TypeScript型（`frontend/src/types/api.ts`）を再生成する場合は以下を実行する（スキーマ変更時に都度実行する運用。ADR-006）。
+
+```bash
+cd backend && source .venv/bin/activate && python scripts/export_openapi.py
+cd frontend && npm run generate-types
 ```
 
 ## ドキュメント一覧

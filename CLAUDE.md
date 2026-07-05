@@ -15,6 +15,8 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 ### バックエンド (Python / FastAPI)
 
+> Python 3.9系（macOS標準の`python3`）で動作確認済み。Docling 2.x系も同バージョンで動作する。
+
 ```bash
 cd backend
 pytest                    # 全テスト実行
@@ -60,3 +62,10 @@ npm run dev
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
 - ブランチを切る前に `main` ブランチを `git pull origin main` で最新化する（サブモジュールがある場合は `git submodule update --remote` も実行）。
 - マージ済みのローカルブランチを見つけた場合は削除を提案する。
+
+## GitHub MCP / ギットハブ運用ルール
+
+- 各ステップの実装が完了したら、GitHub MCPを使用して `main` へのプルリクエスト（PR）を作成すること。
+- PRのタイトルは `feat: stepX-[タスク名]` の形式に統一すること。
+- PRを作成した後は、必ずその差分（Diff）を元に、実装内容の解説をユーザーに行うこと。
+- ユーザーの承認（マージの指示）があるまで、自動でマージは行わないこと。

@@ -35,6 +35,12 @@
 | `VITE_API_BASE_URL` | バックエンドAPIのベースURL（ローカル/ステージング/本番で切替） |
 | `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` | Auth0 SDK設定（フェーズ5以降） |
 
+### ClaudeCode / MCP
+
+| 変数名 | 説明 | 備考 |
+|---|---|---|
+| `GITHUB_TOKEN` | GitHub MCP Server（`.mcp.json`）の認証に使用するPersonal Access Token | ローカルでは `.env`（gitignore対象）に設定し、`.envrc` + `direnv` での自動読み込みを想定（`direnv` 未導入の場合は手動で `export` する） |
+
 機密情報（APIキー等）はリポジトリにコミットせず、GitHub ActionsのSecretsおよびAWS Systems Manager Parameter Store等で管理する。
 
 ---

@@ -8,6 +8,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# フロントの型生成（npm run generate-types）の入力となる生成物。
+# backend/scripts/export_openapi.py で都度生成するためコミット対象外とする。
+backend/openapi.json
+
 # Node
 node_modules/
 dist/

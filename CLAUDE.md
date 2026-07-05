@@ -22,17 +22,19 @@ cd backend
 pytest                    # 全テスト実行
 pytest path/to/test.py -v # 単体テスト
 ruff check .               # 静的解析
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload   # ポート8000で起動（frontendのViteプロキシ先）
+python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-006）
 ```
 
 ### フロントエンド (React / TypeScript)
 
 ```bash
 cd frontend
-npm run test        # Vitest
-npm run test:e2e     # Playwright
-npm run lint         # ESLint
+npm run test          # Vitest（msw使用、実APIには接続しない）
+npm run test:e2e       # Playwright
+npm run lint           # ESLint
 npm run dev
+npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側を先に実行しておく）
 ```
 
 ## コード規約

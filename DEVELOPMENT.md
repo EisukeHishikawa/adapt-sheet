@@ -35,9 +35,9 @@ ClaudeCodeを活用し、**テスト駆動開発（TDD）**で最小限の機能
 画面全部を一気に作らず、「入力したら右側で変わる」というコア体験を最小で実装します。
 
 #### ⬛ ステップ 3: フロントエンド「超最小」環境の構築
-- [ ] Vite + TypeScript + TailwindCSS + shadcn/ui + ESLint の導入
-- [ ] `Vitest` + `React Testing Library` のテスト環境構築
-- [ ] 🧪 **テスト確認:** サンプルコンポーネントに対する単体テストがローカルで動作することを確認
+- [x] Vite + TypeScript + TailwindCSS + shadcn/ui + ESLint の導入
+- [x] `Vitest` + `React Testing Library` のテスト環境構築
+- [x] 🧪 **テスト確認:** サンプルコンポーネントに対する単体テストがローカルで動作することを確認
 
 #### ⬛ ステップ 4: 2カラムの超最小画面と状態管理の実装 【フロントTDD】
 - [ ] 🧪 **テストコード作成:** 「Zustandのストア値を更新したら、プレビュー要素（iframe等）のテキストが切り替わる」という**テストを先に記述**

@@ -16,6 +16,12 @@
 
 > 各セットアップ手順はフェーズ2・3の実装が進み次第、随時追記する。
 
+### 前提ツール（ローカル開発）
+
+- **Homebrew**: `gh` 等のパッケージ管理に使用（[brew.sh](https://brew.sh)）
+- **GitHub CLI (`gh`)**: リポジトリ作成・PR作成・Branch Protection設定に使用。`brew install gh` 後 `gh auth login` で認証
+- **Python 3.9系**（macOS標準の`python3`で動作確認済み。Doclingも同バージョンで動作）
+
 ### バックエンド
 
 ```bash

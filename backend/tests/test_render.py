@@ -1,9 +1,15 @@
 import re
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client
+from app.services.docling_client import PDFConversionError, get_pdf_converter
+
+# DEVELOPMENT.md ステップ7で追加するPDFアップロードテスト用フィクスチャ。
+# scripts/verify_docling.pyやtest_docling_client.pyと同じ実PDFを使い回す。
+SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 
 # DEVELOPMENT.md ステップ2のTDD要件: 実装前に「POSTしたらダミーデータが返る」という
 # 期待値のみを先に定義する（Red状態）。app/main.py側は本テストを通すための最小実装。
@@ -56,3 +62,52 @@ def test_render_returns_502_when_ai_generation_fails():
         assert response.status_code == 502
     finally:
         app.dependency_overrides.pop(get_ai_client, None)
+
+
+def test_render_uses_docling_html_when_pdf_uploaded():
+    # docs/architecture.md 2節のシーケンス図: PDFが送信された場合、Docling変換結果が
+    # プロンプト構築のコンテキストとして使われることを検証する。
+    # 実際のDocling変換は重い（モデルロード）ため、ここではdependency_overridesで
+    # 高速なフェイクに差し替え、main.pyの配線（変換結果をプロンプトへ渡す処理）のみを検証する
+    # （実際にDoclingが正しくHTML抽出できることはtest_docling_client.pyで別途検証済み）。
+    captured_prompts = []
+
+    class _RecordingAIClient:
+        def generate(self, prompt: str) -> RenderResult:
+            captured_prompts.append(prompt)
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    class _FakePDFConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            return "<p>docling-extracted-html-marker</p>"
+
+    app.dependency_overrides[get_ai_client] = lambda: _RecordingAIClient()
+    app.dependency_overrides[get_pdf_converter] = lambda: _FakePDFConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"html": "<p>pdfがある場合はこちらは使われない想定</p>"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+        assert "docling-extracted-html-marker" in captured_prompts[0]
+    finally:
+        app.dependency_overrides.pop(get_ai_client, None)
+        app.dependency_overrides.pop(get_pdf_converter, None)
+
+
+def test_render_returns_422_when_pdf_conversion_fails():
+    # docs/spec.md エラーコード定義: Docling解析エラーは422 Unprocessable Entityとする。
+    class _FailingPDFConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_pdf_converter] = lambda: _FailingPDFConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_pdf_converter, None)

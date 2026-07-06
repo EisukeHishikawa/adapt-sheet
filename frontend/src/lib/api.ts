@@ -5,18 +5,17 @@ import type { components } from '@/types/api'
 // （CLAUDE.md「型安全」の規約）、この型定義を経由せずに/api/renderのレスポンスを扱わないこと。
 export type RenderResponse = components['schemas']['RenderResponse']
 
-// docs/spec.md 3.1はpdf/css/json/prompt/width_mm/height_mmも含む契約だが、
-// 現時点でこれらを送るのはエディタ（EditorPanel）のhtmlフィールドのみ。
-// バックエンドのrender()もリクエストパラメータを持たずopenapi.jsonに
-// リクエストスキーマが存在しない（型を自動生成できない）ため、CLAUDE.mdの
-// 型安全規約に沿って「実際に使うフィールドだけ」を手書きし、手書き範囲を最小に保つ。
-// フェーズ3でバックエンドが他フィールドを受け付けるようになったら、生成された
-// リクエスト型（frontend/src/types/api.ts）に置き換える。
+// docs/spec.md 3.1はcss/json/prompt/width_mmも含む契約だが、現時点でエディタから
+// 送るのはhtml/pdfフィールドのみのため、CLAUDE.mdの型安全規約に沿って
+// 「実際に使うフィールドだけ」を手書きし、手書き範囲を最小に保つ。
+// 他フィールドをエディタに追加するタイミングで、生成された型
+// （frontend/src/types/api.ts の Body_render_api_render_post）に順次揃えていく。
 export type RenderRequestFields = {
   html?: string
+  pdf?: File
 }
 
-// docs/spec.md 3.1が`multipart/form-data`を要求しているため、将来pdfファイル送信も
+// docs/spec.md 3.1が`multipart/form-data`を要求しているため、pdfファイルも
 // 同じ関数で扱えるようFormDataを使う（JSON.stringifyのapplication/jsonにはしない）。
 export async function renderSheet(fields: RenderRequestFields): Promise<RenderResponse> {
   const formData = new FormData()

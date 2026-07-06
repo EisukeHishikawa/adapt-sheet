@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { PdfDropzone } from '@/components/PdfDropzone'
 import { useSheetStore } from '@/store/sheetStore'
 
 // 左カラムの入力エディタ。ステップ4は「超最小」実装のためHTML入力のtextarea一つのみとし、
@@ -23,6 +24,8 @@ export function EditorPanel() {
           {isLoading ? '描画中...' : '描画'}
         </Button>
       </div>
+      {/* ステップ7: 既存PDFをベースにしたい場合のアップロード導線（docs/spec.md 2.1）。 */}
+      <PdfDropzone />
       <textarea
         id="html-editor"
         aria-label="HTML入力"

@@ -51,6 +51,8 @@ export interface components {
             width_mm?: number | null;
             /** Height Mm */
             height_mm?: number | null;
+            /** Pdf */
+            pdf?: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -99,7 +101,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/x-www-form-urlencoded": components["schemas"]["Body_render_api_render_post"];
+                "multipart/form-data": components["schemas"]["Body_render_api_render_post"];
             };
         };
         responses: {

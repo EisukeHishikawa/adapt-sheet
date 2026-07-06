@@ -1,7 +1,7 @@
 import json as json_lib
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Form, HTTPException
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.ai_client import (
@@ -10,6 +10,11 @@ from app.services.ai_client import (
     build_prompt,
     get_ai_client,
     validate_render_result,
+)
+from app.services.docling_client import (
+    PDFConversionError,
+    PDFConverter,
+    get_pdf_converter,
 )
 
 app = FastAPI()
@@ -28,8 +33,7 @@ class RenderResponse(BaseModel):
     json_: dict = Field(default_factory=dict, alias="json")
 
 
-# ステップ6でモックから本実装へ差し替え。docs/spec.md 3.1のリクエスト項目のうち
-# pdfフィールドはステップ7（Docling統合）で扱うため、ここでは未対応とする。
+# ステップ6でモックから本実装へ差し替え、ステップ7でpdfフィールド（Docling統合）に対応。
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
 def render(
     html: str = Form(""),
@@ -40,9 +44,12 @@ def render(
     prompt: str = Form(""),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
+    pdf: Optional[UploadFile] = File(None),
     # FastAPIのDependsで注入することで、テスト側がdependency_overridesにより
     # AIクライアントの成功/失敗を差し替えられるようにする（ADR-007）。
     ai_client: AIClient = Depends(get_ai_client),
+    # 同様にDocling変換もDependsで注入し、テスト側で高速なフェイクに差し替え可能にする。
+    pdf_converter: PDFConverter = Depends(get_pdf_converter),
 ) -> RenderResponse:
     try:
         json_data = json_lib.loads(json_field)
@@ -55,8 +62,18 @@ def render(
     if not isinstance(json_data, dict):
         raise HTTPException(status_code=400, detail="json フィールドはオブジェクト形式である必要があります")
 
+    # docs/architecture.md 2節のシーケンス図: PDFが存在する場合、Doclingで抽出したHTMLを
+    # 既存htmlフィールドの代わりにプロンプト構築のベースコンテキストとして使う。
+    effective_html = html
+    if pdf is not None:
+        try:
+            effective_html = pdf_converter.convert_to_html(pdf.filename or "uploaded.pdf", pdf.file.read())
+        except PDFConversionError as exc:
+            # docs/spec.md エラーコード定義: Docling解析エラーは422 Unprocessable Entity。
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     prompt_text = build_prompt(
-        html=html,
+        html=effective_html,
         css=css,
         json_data=json_data,
         prompt=prompt,

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import App from './App'
@@ -14,6 +14,8 @@ const initialSheetState = {
   htmlContent: '',
   cssContent: '',
   jsonContent: {},
+  pdfFile: null,
+  pdfFileName: null,
   isLoading: false,
   error: null,
 }
@@ -90,5 +92,37 @@ describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('/api/render が失敗しました')
     expect(useSheetStore.getState().htmlContent).toBe('')
+  })
+})
+
+// DEVELOPMENT.md ステップ7のTDD要件：
+// 「PDFドラッグ＆ドロップエリアにファイルを渡してから描画すると、正常にレンダリングされる」ことを検証する。
+// リクエストにpdfフィールドが正しく含まれることの検証は、MSW（Node環境）がFile入りの
+// FormDataをHTTPボディへエンコードする際にjsdomのFileとundiciのFile実装がかみ合わず
+// 例外になる既知の制約があるため、ここでは行わずlib/api.test.tsのfetch呼び出し引数の
+// 直接検証に委ねる。本テストではUIの一連の流れ（ドロップ→描画→反映）のみを確認する。
+describe('PDFアップロード時のAPI疎通（ステップ7）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+  })
+
+  it('PDFをドロップしてから描画すると、ファイル名が表示され正常に描画結果が反映される', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const file = new File(['%PDF-1.4 dummy'], 'invoice.pdf', { type: 'application/pdf' })
+    const dropzone = screen.getByLabelText('PDFドラッグ＆ドロップエリア')
+    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } })
+
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument()
+    expect(useSheetStore.getState().pdfFile).toBe(file)
+
+    await user.click(screen.getByRole('button', { name: '描画' }))
+
+    const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
+    await waitFor(() => {
+      expect(preview.srcdoc).toContain(dummyRenderResponse.html)
+    })
+    expect(useSheetStore.getState().error).toBeNull()
   })
 })

@@ -33,6 +33,8 @@ pytest
 uvicorn app.main:app --reload   # ポート8000で起動（frontendのViteプロキシ先）
 ```
 
+> `/api/render`はデフォルトでモックAIクライアント（`USE_MOCK_AI`未設定時）を使用するため、`ANTHROPIC_API_KEY`が無くてもローカルで動作する。実際のClaude APIを呼び出す場合のみ`USE_MOCK_AI=false`と`ANTHROPIC_API_KEY`を設定する（詳細は[docs/deployment.md](./docs/deployment.md)、ADR-007参照）。
+
 ### フロントエンド
 
 ```bash

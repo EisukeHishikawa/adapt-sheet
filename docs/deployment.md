@@ -37,6 +37,7 @@
 |---|---|
 | `VITE_API_BASE_URL` | バックエンドAPIのベースURL（ローカル/ステージング/本番で切替） |
 | `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` | Auth0 SDK設定（フェーズ5以降） |
+| `BACKEND_URL` | Viteの`/api`プロキシ転送先。Docker Compose環境でのみ使用し`http://backend:8000`（コンテナ間のサービス名解決）を設定する。未設定時（`npm run dev`をホストで直接実行する場合）は`http://localhost:8000`が既定（`vite.config.ts`、ADR-012） |
 
 ### ClaudeCode / MCP
 

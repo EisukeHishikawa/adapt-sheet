@@ -6,6 +6,7 @@ from app.services.ai_client import (
     RenderResult,
     build_prompt,
     get_ai_client,
+    parse_gemini_response,
     validate_render_result,
 )
 
@@ -64,7 +65,7 @@ def test_validate_render_result_accepts_matching_placeholder():
 def test_get_ai_client_defaults_to_mock(monkeypatch):
     # ADR-007: 環境変数未設定時はテスト・ローカル開発を安全にするためモックを既定にする。
     monkeypatch.delenv("USE_MOCK_AI", raising=False)
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     assert isinstance(get_ai_client(), MockAIClient)
 
@@ -73,7 +74,40 @@ def test_get_ai_client_raises_when_real_requested_without_key(monkeypatch):
     # USE_MOCK_AI=falseで実APIを明示指定したのにAPIキーが無い場合は、
     # 実行時エラーではなく起動直後にAIGenerationErrorとして検知させる。
     monkeypatch.setenv("USE_MOCK_AI", "false")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     with pytest.raises(AIGenerationError):
         get_ai_client()
+
+
+# ADR-010: AnthropicからGemini APIへの移行に伴うテスト。
+# GeminiAIClient.generate自体は実ネットワーク呼び出しを伴うため単体テストの対象にせず、
+# レスポンス解析ロジック（parse_gemini_response）を純粋関数として切り出してテストする。
+
+
+def test_parse_gemini_response_parses_plain_json():
+    text = '{"html": "<p>{{name}}</p>", "css": "body{}", "json": {"name": "value"}}'
+    result = parse_gemini_response(text)
+
+    assert isinstance(result, RenderResult)
+    assert result.html == "<p>{{name}}</p>"
+    assert result.data == {"name": "value"}
+
+
+def test_parse_gemini_response_strips_code_fence():
+    # Geminiはプロンプトでコードブロック記法不要と指示しても、
+    # ```json ... ``` で囲んで返すことがあるため、フェンス除去が必須。
+    text = '```json\n{"html": "<p>ok</p>", "css": "body{}", "json": {}}\n```'
+    result = parse_gemini_response(text)
+
+    assert result.html == "<p>ok</p>"
+
+
+def test_parse_gemini_response_rejects_invalid_json():
+    with pytest.raises(AIGenerationError):
+        parse_gemini_response("not a json")
+
+
+def test_parse_gemini_response_rejects_missing_keys():
+    with pytest.raises(AIGenerationError):
+        parse_gemini_response('{"html": "<p>ok</p>"}')

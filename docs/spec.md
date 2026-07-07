@@ -6,7 +6,7 @@
 
 ## 1. プロダクト概要
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。既存PDFの解析（Docling）とClaude APIによる生成、リアルタイムプレビューを統合したSPA。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。既存PDFの解析（Docling）とGemini API（旧Claude API。ADR-010）による生成、リアルタイムプレビューを統合したSPA。
 
 ### 対象ユーザー
 
@@ -100,7 +100,7 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 | `413 Payload Too Large` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
 | `422 Unprocessable Entity` | Docling解析エラー | PDFの構造が破損している、パスワード保護されている等でテキスト抽出不可 |
 | `429 Too Many Requests` | レート制限超過 | 未認証エリアのIP単位、または認証エリアのユーザー単位のレート制限に抵触 |
-| `502 Bad Gateway` | AI生成エラー | Claude API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
+| `502 Bad Gateway` | AI生成エラー | Gemini API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
 | `500 Internal Server Error` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
 
 各エラーは例外種別に応じたステータスコードを厳格に返す（[CLAUDE.md](../CLAUDE.md) のエラーハンドリング規約に準拠）。

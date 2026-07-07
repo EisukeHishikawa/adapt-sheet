@@ -3,7 +3,8 @@
 ADR-007に基づき、本番用のGeminiAIClientとテスト/ローカル開発用のMockAIClientを
 同一インターフェース（AIClient）で切り替えられるようにし、pytest実行時・ローカル開発時に
 実際のGemini APIを誤って消費しない構成にする。ADR-010の決定に基づき、旧AnthropicAIClientは
-削除しGeminiへ完全置換した。
+削除しGeminiへ完全置換した。ADR-011に基づき、ステップ10でローカル開発用の第三の経路として
+Ollama経由のLlamaAIClientを追加した（pytestの既定はMockAIClientのまま変更しない）。
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Protocol
 
+import requests
 from google import genai
 from google.genai import errors as genai_errors
 
@@ -130,6 +132,8 @@ def parse_gemini_response(text: str) -> RenderResult:
     Geminiは同じ指示でも```json ... ```のコードフェンスで囲んで返すことがあるため、
     ここでフェンス除去を行ってからパースする。GeminiAIClientから分離した純粋関数にすることで、
     実際のAPI呼び出し（ネットワーク）なしにレスポンス解析ロジックだけを単体テストできるようにする。
+    レスポンス契約（{"html", "css", "json"}）はプロバイダー非依存のため、
+    ステップ10で追加したLlamaAIClient（Ollama）のレスポンス解析にもそのまま流用する。
     """
     cleaned = text.strip()
     if cleaned.startswith("```"):
@@ -166,16 +170,62 @@ class GeminiAIClient:
         return parse_gemini_response(response.text or "")
 
 
+class LlamaAIClient:
+    """ローカル開発用のOllama（llama3.2:3b）クライアント（ADR-011、DEVELOPMENT.md ステップ10）。
+
+    pytestで使うMockAIClientの決定論的な契約は変更せず、ローカルで無料・オフラインに
+    AI生成のバリエーションを手元で確認するための第三の経路として追加する。Ollamaは
+    APIキー不要でローカルホストのREST APIとして動作するため、GeminiAIClientと異なり
+    認証情報は扱わない。
+    """
+
+    _MODEL = "llama3.2:3b"
+    _DEFAULT_BASE_URL = "http://localhost:11434"
+
+    def __init__(self, base_url: Optional[str] = None) -> None:
+        # OLLAMA_BASE_URLで接続先を上書きできるようにし、Ollamaを別ポート/別ホストで
+        # 動かす開発者環境にも対応する。
+        resolved = base_url or os.getenv("OLLAMA_BASE_URL") or self._DEFAULT_BASE_URL
+        self._base_url = resolved.rstrip("/")
+
+    def generate(self, prompt: str) -> RenderResult:
+        try:
+            response = requests.post(
+                f"{self._base_url}/api/generate",
+                json={
+                    "model": self._MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    # OllamaのJSON強制出力を使い、Geminiと同じ{"html", "css", "json"}契約に
+                    # 沿ったレスポンスを安定して得る。
+                    "format": "json",
+                },
+                timeout=120,
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            # docs/spec.md: AI生成の呼び出し失敗は502として扱うため、他経路と同じ専用例外に変換する。
+            raise AIGenerationError(f"Ollama(Llama 3.2 3B)呼び出しに失敗しました: {exc}") from exc
+
+        return parse_gemini_response(response.json().get("response", ""))
+
+
 def get_ai_client() -> AIClient:
     """FastAPIのDependsとして利用するファクトリ。
 
     ADR-007に基づき、USE_MOCK_AI未設定時はテスト・ローカル開発を安全にするため
-    既定でモックを返す。実APIを使うには USE_MOCK_AI=false を明示し、
-    かつ GEMINI_API_KEY を設定する必要がある（両方揃わない限り実APIは呼ばれない）。
+    既定でモックを返す。実生成を使うには USE_MOCK_AI=false を明示する必要がある。
+    その上でAI_PROVIDER（既定gemini）により実経路を選択する。ADR-011に基づき、
+    AI_PROVIDER=llama を指定するとAPIキー不要のローカルOllama経路（LlamaAIClient）を、
+    それ以外はGEMINI_API_KEYを要求するGeminiAIClientを使う。
     """
     use_mock = os.getenv("USE_MOCK_AI", "true").strip().lower() not in ("false", "0", "no")
     if use_mock:
         return MockAIClient()
+
+    provider = os.getenv("AI_PROVIDER", "gemini").strip().lower()
+    if provider == "llama":
+        return LlamaAIClient()
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:

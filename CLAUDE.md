@@ -40,7 +40,7 @@ npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側
 ## コード規約
 
 - **型安全**: FastAPIの `openapi.json` から自動生成したTypeScript型を使用する。フロント・バック間でキー名を手書きで一致させない。
-- **AI呼び出しのモック**: pytest実行時・ローカル開発時にGemini API（Google AI Studio、旧Anthropic Claude APIから移行。ADR-010）を実際に叩かない。プロンプトに応じた疑似レスポンスを返すモック層を必ず経由する。
+- **AI呼び出しのモック**: pytest実行時・ローカル開発時にGemini API（Google AI Studio、旧Anthropic Claude APIから移行。ADR-010）を実際に叩かない。プロンプトに応じた疑似レスポンスを返すモック層を必ず経由する。pytestの既定は常に`MockAIClient`（`USE_MOCK_AI`未設定時）であり、この既定は`AI_PROVIDER`等の他の環境変数の値に関わらず変更しない。ローカルで生成AIのバリエーションを確認したい場合のみ、`USE_MOCK_AI=false`と`AI_PROVIDER=llama`でAPIキー不要のOllama（`llama3.2:3b`）経路を使える（ADR-011）。
 - **固定情報と業務データの分離**: 生成するHTMLにおいて、タイトル等の固定テキストはHTMLへ直書き、明細等の業務データのみテンプレート変数としてJSONと連動させる。
 - **エラーハンドリング**: バリデーションエラー・AI生成エラー・Docling解析エラーは、例外種別に応じたHTTPステータスコードを厳格に返す。
 - **既存設計の尊重**: 既存コードの設計意図や命名規則を尊重し、必要以上の書き換えを行わない。

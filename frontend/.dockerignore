@@ -1,0 +1,7 @@
+# frontend/Dockerfileのビルドコンテキストから、ホスト側のnode_modules/distを除外する。
+# node_modulesはmacOS向けにインストールされたネイティブバイナリ(esbuild等)を含み、
+# Linuxコンテナに持ち込むと不整合を起こすため、コンテナ内で改めてnpm installする。
+node_modules/
+dist/
+test-results/
+e2e/report/

@@ -117,6 +117,16 @@
 
 ---
 
+## ADR-012: Docker Compose環境へのOllamaコンテナ導入を廃止
+
+- **ステータス**: Accepted
+- **コンテキスト**: ローカル開発環境をDocker Compose化する際、`ollama/ollama`イメージをコンテナとして追加し、backendの既定AI経路を`USE_MOCK_AI=false`＋`AI_PROVIDER=llama`（ADR-011のLlamaAIClient）に設定して動作確認した。実際に`sample.pdf`をDocling経由でAI生成へ流したところ、Docling抽出後の長いプロンプトに対して`llama3.2:3b`が`{"html", "css", "json"}`の必須キー構成を満たすJSONを安定して返せず、`/api/render`が502で失敗するケースが頻発した（`format: "json"`はJSON構文の妥当性のみ強制し、キー構成までは保証しないため）。
+- **決定**: `docker-compose.yml`から`ollama`・`ollama-init`サービスおよび`ollama_data`ボリュームを削除し、backendサービスの既定AI経路を`USE_MOCK_AI=true`（`MockAIClient`）に戻す。
+- **理由**: Docker Compose環境の目的はfrontend/backendの開発環境再現であり、信頼性の低いAI生成経路を既定にする必要性は低い。モックであれば`/api/render`のレスポンス契約（`docs/spec.md` 3.1）を決定論的に確認でき、Docker環境構築の本来の目的（venv/npm installの手動セットアップ省略）を損なわない。
+- **トレードオフ**: Docker Compose環境内でOllama経由の生成バリエーションを確認する手段がなくなる。なお、ADR-011で追加した`LlamaAIClient`自体（アプリケーションコード）や、Dockerを使わない手動セットアップでのOllamaローカル利用（README「バックエンド」節、`OLLAMA_BASE_URL`）は本決定の対象外であり、引き続き利用可能。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`/`AI_PROVIDER=gemini`/`GEMINI_API_KEY`に上書きする。JSON整形の信頼性が今後の技術的関心事として残る場合は、Ollamaの構造化出力（JSON Schemaによる`format`指定）や大きめのモデルへの変更を再検討候補とする。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

@@ -17,6 +17,25 @@
 
 > 各セットアップ手順はフェーズ2・3の実装が進み次第、随時追記する。
 
+### Docker Composeでのクイックスタート（推奨）
+
+venvを手動セットアップせずに、frontend・backendの2コンテナを一括起動できる。
+
+```bash
+docker compose up --build
+```
+
+- フロントエンド: http://localhost:5173
+- バックエンド: http://localhost:8000
+
+backend/frontendはそれぞれ`./backend`・`./frontend`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。
+
+> 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-012参照）。Dockerを使わない手動セットアップでのOllamaローカル利用（下記「バックエンド」節）は引き続き利用可能。
+
+### 手動セットアップ（venv / npm install）
+
+Dockerを使わない場合は以下の手順でセットアップする。
+
 ### 前提ツール（ローカル開発）
 
 - **Homebrew**: `gh` 等のパッケージ管理に使用（[brew.sh](https://brew.sh)）

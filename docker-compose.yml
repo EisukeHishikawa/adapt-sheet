@@ -1,0 +1,41 @@
+# ローカル開発用のDocker Compose定義。
+# frontend/backendの2コンテナを連携させ、READMEの手順（venv手動セットアップ）なしで
+# `docker compose up --build` 一発で開発環境を再現できるようにする。
+# 本番デプロイ（AWS Lambda等）はdocs/deployment.mdのTerraform経由の別構成であり、本ファイルの対象外。
+#
+# 補足: Compose Specification移行に伴い`version:`キーは現行のDocker Compose CLIでは
+# 不要（指定すると警告が出る）ため、あえて記載しない。
+#
+# 補足: 当初はOllamaコンテナ（llama3.2:3b）も含めていたが、docs/decisions.md ADR-012の
+# とおり廃止した。小型モデルではDocling抽出後の長いプロンプトに対しJSON整形の失敗率が高く
+# 実用に耐えなかったため、backendの既定AI経路はMockAIClientに戻している。
+
+services:
+  # ① フロントエンド (Vite + React)
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173" # Viteの開発サーバー既定ポート（package.json/vite.config.ts参照）
+    volumes:
+      - ./frontend:/app
+      # ホスト側のnode_modules(macOS向けバイナリ)でコンテナ内のnode_modules(Linux向け)を
+      # 上書きしないよう、無名ボリュームでコンテナ内のnode_modulesを保護する。
+      - /app/node_modules
+    environment:
+      # vite.config.tsの/apiプロキシ先をコンテナ間通信用のサービス名に切り替える。
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+
+  # ② バックエンド (FastAPI + Docling)
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      # ADR-012によりOllama経由の実生成は廃止。USE_MOCK_AI未設定時の既定（true）と同じだが、
+      # docker-compose環境の意図を明示するためあえて記載する。実Gemini APIを使いたい場合は
+      # USE_MOCK_AI=false/AI_PROVIDER=gemini/GEMINI_API_KEYを上書き設定する。
+      - USE_MOCK_AI=true

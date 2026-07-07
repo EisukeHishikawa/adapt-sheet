@@ -15,11 +15,16 @@ export default defineConfig({
     },
   },
   server: {
+    // Docker Compose環境ではfrontendコンテナ外（ホストPC）からアクセスする必要があるが、
+    // Viteの既定は127.0.0.1のみへのbindのため、コンテナ内で起動する場合は全interfaceで
+    // listenする必要がある。ローカル（非Docker）実行時もhost:trueは無害なため常時有効にする。
+    host: true,
     proxy: {
       // frontend/src/lib/api.ts は相対パス`/api/render`をfetchするため、
       // プロキシがないとViteの開発サーバー自身に届いてしまい疎通しない。
-      // バックエンド（uvicorn）はREADME/CLAUDE.mdの手順どおり8000番ポートで起動する前提。
-      '/api': 'http://localhost:8000',
+      // ローカル実行時はbackend（uvicorn）が8000番ポートで起動する前提のlocalhostを既定にし、
+      // Docker Compose環境ではサービス名で疎通させるためBACKEND_URL（docker-compose.yml参照）で上書きする。
+      '/api': process.env.BACKEND_URL ?? 'http://localhost:8000',
     },
   },
   test: {

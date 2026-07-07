@@ -30,7 +30,7 @@ docker compose up --build
 
 backend/frontendはそれぞれ`./backend`・`./frontend`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。
 
-> 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-012参照）。Dockerを使わない手動セットアップでのOllamaローカル利用（下記「バックエンド」節）は引き続き利用可能。
+> 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-013参照）。Dockerを使わない手動セットアップでのOllamaローカル利用（下記「バックエンド」節）は引き続き利用可能。
 
 ### 手動セットアップ（venv / npm install）
 

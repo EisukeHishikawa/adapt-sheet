@@ -1,6 +1,6 @@
-# ローカル開発用のDocker Compose定義。
-# frontend/backendの2コンテナを連携させ、READMEの手順（venv手動セットアップ）なしで
-# `docker compose up --build` 一発で開発環境を再現できるようにする。
+# 開発環境用のDocker Compose定義。開発はこの構成のみを対象とし、ローカル（非Docker）での
+# 直接実行はサポートしない（ADR-014）。frontend/backendの2コンテナを連携させ、
+# `docker compose up --build` 一発で開発環境を構築する。
 # 本番デプロイ（AWS Lambda等）はdocs/deployment.mdのTerraform経由の別構成であり、本ファイルの対象外。
 #
 # 補足: Compose Specification移行に伴い`version:`キーは現行のDocker Compose CLIでは
@@ -21,9 +21,10 @@ services:
       # ホスト側のnode_modules(macOS向けバイナリ)でコンテナ内のnode_modules(Linux向け)を
       # 上書きしないよう、無名ボリュームでコンテナ内のnode_modulesを保護する。
       - /app/node_modules
-    environment:
-      # vite.config.tsの/apiプロキシ先をコンテナ間通信用のサービス名に切り替える。
-      - BACKEND_URL=http://backend:8000
+      # `npm run generate-types`はfrontendから見て`../backend/openapi.json`を相対参照するため
+      # （package.json参照）、backendコンテナが書き出すopenapi.jsonを同じ相対位置に読み取り専用で
+      # マウントし、コンテナが分かれていても型同期コマンドが動作するようにする。
+      - ./backend/openapi.json:/backend/openapi.json:ro
     depends_on:
       - backend
 

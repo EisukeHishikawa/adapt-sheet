@@ -1,6 +1,5 @@
-# ローカル開発用のバックエンドイメージ（docker-compose.yml参照）。
-# Python 3.9系はREADME/CLAUDE.mdに記載のとおりDoclingの動作確認済みバージョンのため、
-# ホストのmacOS標準pythonと揃えてローカル(.venv)との差異を避ける。
+# 開発用のバックエンドイメージ（docker-compose.yml参照）。開発環境はこのコンテナのみを対象とする（ADR-014）。
+# Python 3.9系はCLAUDE.mdに記載のとおりDoclingの動作確認済みバージョンのため採用する。
 FROM python:3.9-slim
 
 WORKDIR /app
@@ -22,15 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# requirements.txtのocrmac / pyobjc-framework-*は、DoclingのOCRエンジンとしてmacOSの
-# Apple Vision framework(pyobjc経由)を使うための依存で、Linux上ではビルドできない。
-# Doclingは実行時にOcrAutoOptionsで利用可能なOCRエンジンを自動選択する仕組みのため、
-# requirements.txtに含まれるクロスプラットフォームなrapidocrを残したままmacOS専用パッケージのみ
-# 除外すれば、コンテナ内ではrapidocrが自動選択されて動作する（requirements.txt自体はmacOS用の
-# ままローカル開発と互換を保つため変更しない）。
-RUN grep -vE '^(ocrmac|pyobjc-core|pyobjc-framework-(Cocoa|CoreML|Quartz|Vision))==' requirements.txt > requirements.linux.txt \
-    && pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.linux.txt
+# requirements.txtにはLinux(コンテナ)向けの依存のみを含む（ADR-014）。DoclingはOcrAutoOptionsで
+# 実行時に利用可能なOCRエンジンを自動選択する仕組みのため、requirements.txtに含まれる
+# クロスプラットフォームなrapidocrが自動選択されて動作する。
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 

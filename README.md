@@ -17,9 +17,15 @@
 
 > 各セットアップ手順はフェーズ2・3の実装が進み次第、随時追記する。
 
-### Docker Composeでのクイックスタート（推奨）
+開発環境はDocker Composeのみを対象とする。ローカル（非Docker）での直接実行はサポートしない（[docs/decisions.md](./docs/decisions.md) ADR-014参照）。
 
-venvを手動セットアップせずに、frontend・backendの2コンテナを一括起動できる。
+### 前提ツール
+
+- **Docker Desktop**（または互換のOCIランタイム）: アプリの起動に必須
+- **Homebrew**: `gh` 等のパッケージ管理に使用（[brew.sh](https://brew.sh)）
+- **GitHub CLI (`gh`)**: リポジトリ作成・PR作成・Branch Protection設定に使用。`brew install gh` 後 `gh auth login` で認証
+
+### 起動方法
 
 ```bash
 docker compose up --build
@@ -30,50 +36,29 @@ docker compose up --build
 
 backend/frontendはそれぞれ`./backend`・`./frontend`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。
 
-> 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-013参照）。Dockerを使わない手動セットアップでのOllamaローカル利用（下記「バックエンド」節）は引き続き利用可能。
+> 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-013参照）。
 
-### 手動セットアップ（venv / npm install）
+### テスト・静的解析
 
-Dockerを使わない場合は以下の手順でセットアップする。
-
-### 前提ツール（ローカル開発）
-
-- **Homebrew**: `gh` 等のパッケージ管理に使用（[brew.sh](https://brew.sh)）
-- **GitHub CLI (`gh`)**: リポジトリ作成・PR作成・Branch Protection設定に使用。`brew install gh` 後 `gh auth login` で認証
-- **Python 3.9系**（macOS標準の`python3`で動作確認済み。Doclingも同バージョンで動作）
-
-### バックエンド
+起動中のコンテナに対して実行する。
 
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pytest
-uvicorn app.main:app --reload   # ポート8000で起動（frontendのViteプロキシ先）
+docker compose exec backend pytest                    # 全テスト実行
+docker compose exec backend pytest path/to/test.py -v  # 単体テスト
+docker compose exec backend ruff check .                # 静的解析
+docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
+docker compose exec frontend npm run lint                # ESLint
 ```
 
-> `/api/render`はデフォルトでモックAIクライアント（`USE_MOCK_AI`未設定時）を使用するため、`GEMINI_API_KEY`が無くてもローカルで動作する。実際のGemini APIを呼び出す場合は`USE_MOCK_AI=false`と`GEMINI_API_KEY`を設定する（詳細は[docs/deployment.md](./docs/deployment.md)、ADR-007・ADR-010参照）。ローカルでAI生成のバリエーションを確認したい場合は、`USE_MOCK_AI=false`と`AI_PROVIDER=llama`を設定するとAPIキー不要でOllama（`llama3.2:3b`）経由の生成を試せる（ADR-011）。
+> `npm run test:e2e`（Playwright）は、frontendイメージのベース（`node:20-alpine`）がブラウザバイナリに非対応のため現状コンテナ内では実行できない（未対応・今後の課題。[docs/decisions.md](./docs/decisions.md) ADR-014参照）。
 
-### フロントエンド
-
-```bash
-cd frontend
-npm install
-npm run dev
-npm run test
-```
-
-> `npm run dev` はVite開発サーバーの`/api`パスをバックエンド（`http://localhost:8000`）へプロキシする設定済み（`vite.config.ts`）。描画ボタンでの疎通確認にはバックエンドの同時起動が必要。
->
-> `openapi-typescript`のpeer dependencyがTypeScript 6系に未対応のため、`npm install`時に警告が出る場合は`npm install --force`を使用する（詳細はADR-006）。
-
-### フロント・バック同時起動時の型同期
+### 型同期
 
 バックエンドの`openapi.json`からフロント用TypeScript型（`frontend/src/types/api.ts`）を再生成する場合は以下を実行する（スキーマ変更時に都度実行する運用。ADR-006）。
 
 ```bash
-cd backend && source .venv/bin/activate && python scripts/export_openapi.py
-cd frontend && npm run generate-types
+docker compose exec backend python scripts/export_openapi.py
+docker compose exec frontend npm run generate-types
 ```
 
 ## ドキュメント一覧

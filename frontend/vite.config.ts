@@ -29,5 +29,8 @@ export default defineConfig({
     globals: true,
     // jest-domのカスタムマッチャ（toBeInTheDocument等）を各テスト実行前に読み込む
     setupFiles: ['./src/test/setup.ts'],
+    // Playwrightのe2e（e2e/*.spec.ts）はブラウザ実行前提でVitest（jsdom）では動かないため、
+    // Vitestの収集対象から除外する（デフォルトのnode_modules/dist除外も維持する）。
+    exclude: ['**/node_modules/**', '**/dist/**', 'e2e/**'],
   },
 })

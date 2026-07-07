@@ -16,8 +16,14 @@ const initialSheetState = {
   jsonContent: {},
   pdfFile: null,
   pdfFileName: null,
+  // ステップ8で追加したフィールド。setStateは浅いマージのため、ここに列挙しないと
+  // history等が前テストの値のまま残る（テスト間の状態漏れ防止）。
+  widthMm: null,
+  heightMm: null,
+  history: [],
   isLoading: false,
   error: null,
+  successMessage: null,
 }
 
 // DEVELOPMENT.md ステップ4のTDD要件：
@@ -90,7 +96,9 @@ describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
 
     await user.click(screen.getByRole('button', { name: '描画' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('/api/render が失敗しました')
+    // ステップ8: エラー文言はステータスコードに対応するユーザー向けメッセージに丸められる
+    // （500は想定外エラー扱い。docs/spec.md 4章 / sheetStore.messageForStatus参照）。
+    expect(await screen.findByRole('alert')).toHaveTextContent('サーバーで想定外のエラーが発生しました。')
     expect(useSheetStore.getState().htmlContent).toBe('')
   })
 })

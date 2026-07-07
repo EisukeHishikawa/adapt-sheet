@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Playwright（E2E）の生成物。テスト本体(e2e/)は追跡し、実行時の成果物のみ除外する。
+test-results
+playwright-report
+blob-report
+playwright/.cache
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

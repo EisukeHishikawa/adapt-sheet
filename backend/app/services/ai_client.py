@@ -1,8 +1,9 @@
-"""Claude API (Anthropic SDK) 統合レイヤー（DEVELOPMENT.md ステップ6）。
+"""Gemini API (google-genai SDK) 統合レイヤー（DEVELOPMENT.md ステップ6→ステップ9でGeminiへ移行）。
 
-ADR-007に基づき、本番用のAnthropicAIClientとテスト/ローカル開発用のMockAIClientを
+ADR-007に基づき、本番用のGeminiAIClientとテスト/ローカル開発用のMockAIClientを
 同一インターフェース（AIClient）で切り替えられるようにし、pytest実行時・ローカル開発時に
-実際のAnthropic APIを誤って消費しない構成にする。
+実際のGemini APIを誤って消費しない構成にする。ADR-010の決定に基づき、旧AnthropicAIClientは
+削除しGeminiへ完全置換した。
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional, Protocol
 
-import anthropic
+from google import genai
+from google.genai import errors as genai_errors
 
 # htmlのテンプレート変数 {{key}} を抽出する正規表現。
 # CLAUDE.mdの「固定情報と業務データの分離」規約に基づき、これらのkeyは
@@ -121,39 +123,47 @@ class MockAIClient:
         )
 
 
-class AnthropicAIClient:
-    """本番用のAnthropic SDKクライアント。USE_MOCK_AI=false かつ ANTHROPIC_API_KEY設定時のみ使用する。"""
+def parse_gemini_response(text: str) -> RenderResult:
+    """Geminiのレスポンステキストをdocs/spec.md 3.1の契約に沿ってパースする。
 
-    # Claude Sonnet系の最新世代を既定モデルとする。将来のモデル更新時はここを変更する。
-    _MODEL = "claude-sonnet-4-5"
+    Anthropicではプロンプト指示のみでコードブロック記法なしのJSONが安定して返っていたが、
+    Geminiは同じ指示でも```json ... ```のコードフェンスで囲んで返すことがあるため、
+    ここでフェンス除去を行ってからパースする。GeminiAIClientから分離した純粋関数にすることで、
+    実際のAPI呼び出し（ネットワーク）なしにレスポンス解析ロジックだけを単体テストできるようにする。
+    """
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\n", "", cleaned)
+        cleaned = re.sub(r"\n```$", "", cleaned)
+
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise AIGenerationError(f"AIレスポンスがJSON形式ではありません: {exc}") from exc
+
+    try:
+        return RenderResult(html=payload["html"], css=payload["css"], data=payload["json"])
+    except KeyError as exc:
+        raise AIGenerationError(f"AIレスポンスに必須キーが不足しています: {exc}") from exc
+
+
+class GeminiAIClient:
+    """本番用のGemini SDKクライアント（ADR-010）。USE_MOCK_AI=false かつ GEMINI_API_KEY設定時のみ使用する。"""
+
+    # 無料枠で利用できる高速モデルを既定とする。将来のモデル更新時はここを変更する。
+    _MODEL = "gemini-2.0-flash"
 
     def __init__(self, api_key: str) -> None:
-        self._client = anthropic.Anthropic(api_key=api_key)
+        self._client = genai.Client(api_key=api_key)
 
     def generate(self, prompt: str) -> RenderResult:
         try:
-            response = self._client.messages.create(
-                model=self._MODEL,
-                max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}],
-            )
-        except anthropic.APIError as exc:
-            # docs/spec.md: Claude API呼び出し失敗は502として扱うため、専用例外に変換する。
-            raise AIGenerationError(f"Anthropic API呼び出しに失敗しました: {exc}") from exc
+            response = self._client.models.generate_content(model=self._MODEL, contents=prompt)
+        except genai_errors.APIError as exc:
+            # docs/spec.md: Gemini API呼び出し失敗は502として扱うため、専用例外に変換する。
+            raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
 
-        text = "".join(
-            block.text for block in response.content if getattr(block, "type", None) == "text"
-        )
-
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise AIGenerationError(f"AIレスポンスがJSON形式ではありません: {exc}") from exc
-
-        try:
-            return RenderResult(html=payload["html"], css=payload["css"], data=payload["json"])
-        except KeyError as exc:
-            raise AIGenerationError(f"AIレスポンスに必須キーが不足しています: {exc}") from exc
+        return parse_gemini_response(response.text or "")
 
 
 def get_ai_client() -> AIClient:
@@ -161,15 +171,15 @@ def get_ai_client() -> AIClient:
 
     ADR-007に基づき、USE_MOCK_AI未設定時はテスト・ローカル開発を安全にするため
     既定でモックを返す。実APIを使うには USE_MOCK_AI=false を明示し、
-    かつ ANTHROPIC_API_KEY を設定する必要がある（両方揃わない限り実APIは呼ばれない）。
+    かつ GEMINI_API_KEY を設定する必要がある（両方揃わない限り実APIは呼ばれない）。
     """
     use_mock = os.getenv("USE_MOCK_AI", "true").strip().lower() not in ("false", "0", "no")
     if use_mock:
         return MockAIClient()
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise AIGenerationError(
-            "USE_MOCK_AI=false が指定されていますが ANTHROPIC_API_KEY が未設定です"
+            "USE_MOCK_AI=false が指定されていますが GEMINI_API_KEY が未設定です"
         )
-    return AnthropicAIClient(api_key=api_key)
+    return GeminiAIClient(api_key=api_key)

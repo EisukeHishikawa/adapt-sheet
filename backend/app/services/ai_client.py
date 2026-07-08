@@ -155,7 +155,9 @@ class GeminiAIClient:
     """本番用のGemini SDKクライアント（ADR-010）。USE_MOCK_AI=false かつ GEMINI_API_KEY設定時のみ使用する。"""
 
     # 無料枠で利用できる高速モデルを既定とする。将来のモデル更新時はここを変更する。
-    _MODEL = "gemini-2.0-flash"
+    # 2026-07-08時点、gemini-2.0-flashは無料枠クォータが0（429 RESOURCE_EXHAUSTED）だったため、
+    # 現行の無料枠推奨モデルであるgemini-2.5-flashに切り替えた。
+    _MODEL = "gemini-2.5-flash"
 
     def __init__(self, api_key: str) -> None:
         self._client = genai.Client(api_key=api_key)

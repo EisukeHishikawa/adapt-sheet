@@ -22,4 +22,7 @@ dist/
 .env.local
 
 # Editor / local notes
-.claude/
+# .claude/CLAUDE.md（個人メモ）・settings.local.json・scheduled_tasks.lock等は非公開のまま維持しつつ、
+# チームで共有すべき.claude/skills/配下のみ例外的にGit管理対象にする。
+.claude/*
+!.claude/skills/

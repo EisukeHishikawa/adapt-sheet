@@ -104,6 +104,7 @@
 - **決定**: バックエンドのAI生成クライアント（`backend/app/services/ai_client.py`）をGemini API（`google-genai`ライブラリ）へ全面置換する。`AnthropicAIClient`は削除し、`anthropic`パッケージも依存関係から除去する。既存の`AIClient`インターフェース・`MockAIClient`・`validate_render_result`の契約は変更しない。
 - **理由**: 無料枠内で本番相当のAI生成フローを検証でき、開発コストをゼロに近づけられる。プロバイダー切り替えのインターフェースがADR-007により既に抽象化されているため、置換の影響範囲を`ai_client.py`内に閉じ込められる。
 - **トレードオフ**: 無料枠のレート制限・将来的な有料化リスクがある。Gemini特有のレスポンス形式（SDKの返却オブジェクト構造）に合わせたパースロジックの実装が必要。Anthropic実装を残さず完全置換するため、将来的にAnthropicへ戻す場合は再実装が必要になる。
+- **追記（2026-07-08）**: `GeminiAIClient._MODEL`を`gemini-2.0-flash`から`gemini-2.5-flash`に変更した。実APIキーで疎通確認したところ`gemini-2.0-flash`は無料枠クォータが0（`429 RESOURCE_EXHAUSTED`）で呼び出せず、現行の無料枠推奨モデルである`gemini-2.5-flash`に切り替えたところ正常にHTML/CSS/JSONを生成できた。
 
 ---
 

@@ -40,6 +40,10 @@ services:
       # docker-compose環境の意図を明示するためあえて記載する。実Gemini APIを使いたい場合は
       # USE_MOCK_AI=false/AI_PROVIDER=gemini/GEMINI_API_KEYを上書き設定する。
       - USE_MOCK_AI=true
+      # GEMINI_API_KEYはプロジェクトルートの.env（Git管理外）から`${...}`展開でコンテナに渡す。
+      # 既定（USE_MOCK_AI=true）では未使用だが、上記のとおりモックを無効化した際に
+      # そのまま実Gemini APIを呼び出せるよう、キー自体は常に注入しておく。
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
 
   # ③ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に

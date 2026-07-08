@@ -114,6 +114,7 @@
 - **決定**: ローカルで無料・オフラインに動作する`Ollama`＋`llama3.2:3b`モデルを使う`LlamaAIClient`（`backend/app/services/ai_client.py`）を第三の経路として追加する。既存の`AIClient`インターフェース・`MockAIClient`・`validate_render_result`の契約は変更しない。切り替えは`USE_MOCK_AI=false`かつ`AI_PROVIDER=llama`の環境変数で行い、`AI_PROVIDER`未設定時は従来通り`GeminiAIClient`が既定のままとなる（pytestは`USE_MOCK_AI`未設定のため`AI_PROVIDER`の値に関わらず`MockAIClient`が使われる）。
 - **理由**: ローカルGPU/CPUで完結するためAPIキー・レート制限・通信コストが発生せず、生成AIのバリエーション確認を何度でも試せる。OllamaのREST API（`/api/generate`、`format=json`）のレスポンス契約はGeminiと同じ`{"html", "css", "json"}`形式にできるため、`parse_gemini_response`をそのまま再利用でき実装コストが小さい。
 - **トレードオフ**: Ollama本体・モデル（約2GB）のローカルインストールが開発者ごとに必要になる。3Bモデルは本番の`gemini-2.0-flash`と比べて生成品質が低く、本番挙動の代替検証には使えない（あくまでUIバリエーション確認用）。
+- **追記（2026-07-08）**: `LlamaAIClient`のコード自体は維持するが、Docker Compose環境へのOllamaコンテナ導入は廃止し（ADR-013）、ローカル（非Docker）実行のサポート自体も終了した（ADR-014）ため、この開発機のHomebrew版Ollama本体・`llama3.2:3b`モデルはアンインストールした。`AI_PROVIDER=llama`を使う場合は開発者が自前でOllamaを用意する必要がある。
 
 ---
 

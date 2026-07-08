@@ -2,8 +2,18 @@ import json as json_lib
 from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.errors import (
+    ai_generation_error_handler,
+    http_exception_handler,
+    pdf_conversion_error_handler,
+    validation_exception_handler,
+)
+from app.logging_config import configure_logging
+from app.middleware import RequestContextMiddleware
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
@@ -17,7 +27,22 @@ from app.services.docling_client import (
     get_pdf_converter,
 )
 
+# アプリ生成前にログ設定を行い、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-016）。
+configure_logging()
+
 app = FastAPI()
+
+# リクエスト相関ID採番・アクセスログ・想定外例外の500化（ADR-016/017、app/middleware.py）。
+app.add_middleware(RequestContextMiddleware)
+
+# 例外→構造化エラーレスポンスの整形をハンドラへ集約する（ADR-017）。
+# StarletteHTTPExceptionで登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+# 入力バリデーション失敗はdocs/spec.md 4章に合わせ400へ寄せる（FastAPI既定の422はDocling専用のため）。
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+# ドメイン例外はmain.py内でHTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
+app.add_exception_handler(PDFConversionError, pdf_conversion_error_handler)
+app.add_exception_handler(AIGenerationError, ai_generation_error_handler)
 
 
 # response_modelとして明示することで、openapi.json（フロントの型生成元。docs/spec.md 3.2）に
@@ -64,13 +89,11 @@ def render(
 
     # docs/architecture.md 2節のシーケンス図: PDFが存在する場合、Doclingで抽出したHTMLを
     # 既存htmlフィールドの代わりにプロンプト構築のベースコンテキストとして使う。
+    # ADR-017に基づき、PDFConversionErrorはここで捕捉せずそのまま送出し、
+    # app/errors.pyのハンドラで422構造化エラーへ一元変換する。
     effective_html = html
     if pdf is not None:
-        try:
-            effective_html = pdf_converter.convert_to_html(pdf.filename or "uploaded.pdf", pdf.file.read())
-        except PDFConversionError as exc:
-            # docs/spec.md エラーコード定義: Docling解析エラーは422 Unprocessable Entity。
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        effective_html = pdf_converter.convert_to_html(pdf.filename or "uploaded.pdf", pdf.file.read())
 
     prompt_text = build_prompt(
         html=effective_html,
@@ -81,11 +104,8 @@ def render(
         height_mm=height_mm,
     )
 
-    try:
-        result = ai_client.generate(prompt_text)
-        validate_render_result(result)
-    except AIGenerationError as exc:
-        # docs/spec.md エラーコード定義: AI生成エラー（Claude API呼び出し失敗等）は502 Bad Gateway。
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # ADR-017に基づき、AIGenerationErrorもここでは捕捉せず、ハンドラで502構造化エラーへ変換する。
+    result = ai_client.generate(prompt_text)
+    validate_render_result(result)
 
     return RenderResponse(html=result.html, css=result.css, json_=result.data)

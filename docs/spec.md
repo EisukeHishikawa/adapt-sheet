@@ -94,16 +94,39 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 
 ## 4. エラーコード定義
 
-| HTTPステータス | ケース | 発生条件 |
-|---|---|---|
-| `400 Bad Request` | バリデーションエラー | 必須項目の欠如、サイズ指定の型不正、JSON構文エラーなど |
-| `413 Payload Too Large` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
-| `422 Unprocessable Entity` | Docling解析エラー | PDFの構造が破損している、パスワード保護されている等でテキスト抽出不可 |
-| `429 Too Many Requests` | レート制限超過 | 未認証エリアのIP単位、または認証エリアのユーザー単位のレート制限に抵触 |
-| `502 Bad Gateway` | AI生成エラー | Gemini API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
-| `500 Internal Server Error` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
+| HTTPステータス | `error.code` | ケース | 発生条件 |
+|---|---|---|---|
+| `400 Bad Request` | `VALIDATION_ERROR` | バリデーションエラー | 必須項目の欠如、サイズ指定の型不正、JSON構文エラーなど |
+| `413 Payload Too Large` | `PAYLOAD_TOO_LARGE` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
+| `422 Unprocessable Entity` | `PDF_CONVERSION_ERROR` | Docling解析エラー | PDFの構造が破損している、パスワード保護されている等でテキスト抽出不可 |
+| `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | 未認証エリアのIP単位、または認証エリアのユーザー単位のレート制限に抵触 |
+| `502 Bad Gateway` | `AI_GENERATION_ERROR` | AI生成エラー | Gemini API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
+| `500 Internal Server Error` | `INTERNAL_ERROR` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
 
 各エラーは例外種別に応じたステータスコードを厳格に返す（[CLAUDE.md](../CLAUDE.md) のエラーハンドリング規約に準拠）。
+
+### 4.1 エラーレスポンス形式（ステップ14・ADR-017）
+
+すべてのエラー応答は、HTTPステータスに加えて次の構造化JSONボディを返す。フロントエンドはこの `message` をそのままユーザー向け文言として表示し、`request_id` を問い合わせ用に保持する（[CLAUDE.md](../CLAUDE.md) の型安全・エラーハンドリング規約に準拠）。
+
+```json
+{
+  "error": {
+    "code": "AI_GENERATION_ERROR",
+    "message": "AIによる生成に失敗しました。しばらくしてから再度お試しください。",
+    "request_id": "3f2b1c9a-4d5e-6f70-8a9b-0c1d2e3f4a5b"
+  }
+}
+```
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `error.code` | string | 機械可読なエラー識別子（上表の `error.code` 列）。フロントの分岐処理に使う。 |
+| `error.message` | string | ユーザーへ表示する安全な日本語文言。技術的詳細・スタックトレースは含めない。 |
+| `error.request_id` | string | リクエスト単位の相関ID。同じ値が `X-Request-ID` レスポンスヘッダーおよびサーバーの構造化ログ（ステップ13・ADR-016）に出力され、障害調査時に画面表示とログを突き合わせられる。 |
+
+- `message` はステータス／例外種別ごとに固定の安全文言へ丸める。バックエンドの生の例外メッセージ（英語や内部情報を含みうる）はサーバーログにのみ記録し、レスポンスには出さない。
+- 成功・失敗を問わず全レスポンスに `X-Request-ID` ヘッダーを付与する（ステップ13で導入するログ基盤と相関）。
 
 ---
 

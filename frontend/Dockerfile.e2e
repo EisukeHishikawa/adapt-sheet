@@ -1,0 +1,22 @@
+# E2E（Playwright）専用の開発用イメージ。frontend/Dockerfile（node:20-alpine）は軽量に保つ方針の
+# ため変更せず、ブラウザバイナリの実行に必要なglibc環境（Playwright公式にAlpine/musl libcは
+# 非対応）を独立イメージとして用意する（docker-compose.ymlのe2eサービス参照、ADR-014）。
+# タグはpackage-lock.jsonで解決済みの@playwright/testバージョンと完全一致させる必要がある
+# （ブラウザバイナリとnpmパッケージのバージョンがずれるとPlaywrightが起動時にエラーになるため）。
+FROM mcr.microsoft.com/playwright:v1.61.1-jammy
+
+WORKDIR /app
+
+# frontendサービス（Vite開発サーバー）の起動待ちポーリングに使う。
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 依存関係の定義ファイルだけ先にコピーし、Dockerのレイヤーキャッシュを効かせる（frontend/Dockerfileと同様）。
+COPY package.json package-lock.json .npmrc ./
+RUN npm install
+
+COPY . .
+
+# depends_onはコンテナの起動順序のみを保証し、Viteサーバーの準備完了までは待たないため、
+# frontendサービスへの疎通が確認できるまでポーリングしてからテストを実行する。
+CMD ["sh", "-c", "until curl -sf http://frontend:5173/ -o /dev/null; do sleep 1; done; npx playwright test"]

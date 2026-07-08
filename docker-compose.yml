@@ -40,3 +40,25 @@ services:
       # docker-compose環境の意図を明示するためあえて記載する。実Gemini APIを使いたい場合は
       # USE_MOCK_AI=false/AI_PROVIDER=gemini/GEMINI_API_KEYを上書き設定する。
       - USE_MOCK_AI=true
+
+  # ③ E2Eテスト (Playwright)
+  # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
+  # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
+  # として用意する（ADR-014）。frontend/backendのように常時起動する必要はないため、
+  # `profiles`でopt-in化し、明示的に指定した場合のみ起動する
+  # （例: `docker compose --profile e2e run --rm e2e`）。
+  e2e:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.e2e
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      # 起動済みのfrontendサービスに対してテストする（playwright.config.tsのwebServer自動起動を
+      # スキップし、コンテナ間のサービス名で疎通する）。
+      - PLAYWRIGHT_TEST_BASE_URL=http://frontend:5173
+    depends_on:
+      - frontend
+    profiles:
+      - e2e

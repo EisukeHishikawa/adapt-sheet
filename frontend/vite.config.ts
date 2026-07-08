@@ -19,6 +19,11 @@ export default defineConfig({
     // （ホストPC）からアクセスする必要があるが、Viteの既定は127.0.0.1のみへのbindのため、
     // 全interfaceでlistenする必要がある。
     host: true,
+    // Viteのallowed hosts制限（DNSリバインディング対策）は既定でHostヘッダーの値を検証するが、
+    // Docker Compose上のe2eサービス（frontend/Dockerfile.e2e）はサービス名`frontend`で疎通する
+    // ため、Hostヘッダーが`frontend:5173`となり既定では403 Forbiddenになる。e2e疎通のために
+    // サービス名を明示的に許可する。
+    allowedHosts: ['frontend'],
     proxy: {
       // frontend/src/lib/api.ts は相対パス`/api/render`をfetchするため、
       // プロキシがないとViteの開発サーバー自身に届いてしまい疎通しない。

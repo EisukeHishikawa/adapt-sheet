@@ -117,6 +117,41 @@
 
 ---
 
+## ADR-012: ローカル開発環境のDocker Compose化
+
+- **ステータス**: Accepted
+- **コンテキスト**: これまでのローカル開発は、backendがPython venv手動構築（`python -m venv .venv` → `pip install -r requirements.txt`）、frontendが`npm install`という手作業のセットアップを前提としており、開発者ごとの環境差異（特にDoclingのOS依存バイナリ・MLモデル。[CLAUDE.md](../CLAUDE.md) の環境依存の注意点を参照）が起きやすかった。`docker compose up --build`一発でfrontend/backendを再現できる環境を整備したいという要望があった（DEVELOPMENT.md ステップ11）。
+- **決定**: `docker-compose.yml`と`backend/Dockerfile`・`frontend/Dockerfile`を新規作成し、frontend（Node 20-alpine + Vite）・backend（Python 3.9-slim + FastAPI + Docling）をコンテナ化した。`./backend:/app`・`./frontend:/app`のバインドマウントと`uvicorn --reload`・`vite --host 0.0.0.0`により、ホスト側のコード編集を即座にコンテナへ反映するホットリロード構成にした。DoclingのOCRエンジンは実行時に利用可能なもの（`OcrAutoOptions`）へ自動選択させる仕組みのため、Linux（コンテナ）上では`requirements.txt`に含まれるクロスプラットフォームな`rapidocr`が自動選択されて動作する（macOS専用のOCR依存については ADR-014 参照）。
+- **理由**: venv/npm installの手動セットアップを不要にし、開発者間の環境差異を吸収できる。バインドマウント＋ホットリロードにより、コンテナ化しても既存のローカル開発の快適さ（コード編集の即時反映）を損なわない。
+- **トレードオフ**: 初回ビルド時にDocling/torch等の大容量パッケージのダウンロードが発生し、時間がかかる。本Dockerfileはローカル開発専用であり、AWS Lambda Web Adapterやモデル事前焼き込み（フェーズ4 ステップ18、ADR-004）を含む本番用コンテナ化とは別物である。
+
+---
+
+## ADR-013: Docker Compose環境へのOllamaコンテナ導入を廃止
+
+- **ステータス**: Accepted
+- **コンテキスト**: ADR-012のDocker Compose化に併せて`ollama/ollama`イメージをコンテナとして追加し、backendの既定AI経路を`USE_MOCK_AI=false`＋`AI_PROVIDER=llama`（ADR-011のLlamaAIClient）に設定して動作確認した。実際に`sample.pdf`をDocling経由でAI生成へ流したところ、Docling抽出後の長いプロンプトに対して`llama3.2:3b`が`{"html", "css", "json"}`の必須キー構成を満たすJSONを安定して返せず、`/api/render`が502で失敗するケースが頻発した（Ollamaの`format: "json"`はJSON構文の妥当性のみ強制し、キー構成までは保証しないため）。
+- **決定**: `docker-compose.yml`から`ollama`・`ollama-init`サービスおよび`ollama_data`ボリュームを削除し、backendサービスの既定AI経路を`USE_MOCK_AI=true`（`MockAIClient`）に戻す。
+- **理由**: Docker Compose環境の主目的はfrontend/backendの開発環境再現であり、信頼性の低いAI生成経路を既定にする必要性は低い。モックであれば`/api/render`のレスポンス契約（`docs/spec.md` 3.1）を決定論的に確認でき、ADR-012が意図したDocker環境構築の本来の目的を損なわない。
+- **トレードオフ**: Docker Compose環境内でOllama経由の生成バリエーションを確認する手段がなくなった。なお、ADR-011で追加した`LlamaAIClient`自体（アプリケーションコード）は本決定の対象外であり、`OLLAMA_BASE_URL`を通じたOllama連携は引き続き利用可能（ただしADR-014によりOllama自体をローカル(非Docker)で用意する手順はドキュメントの対象外とした）。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`/`AI_PROVIDER=gemini`/`GEMINI_API_KEY`に上書きする。JSON整形の信頼性が今後の技術的関心事として残る場合は、Ollamaの構造化出力（JSON Schemaによる`format`指定）や大きめのモデルへの変更を再検討候補とする。
+
+---
+
+## ADR-014: ローカル環境での直接実行（非Docker）のサポートを終了
+
+- **ステータス**: Accepted
+- **コンテキスト**: ADR-012でDocker Compose環境を整備した後も、README.mdにはvenv/npm installによる手動セットアップ手順が併記されており、`backend/Dockerfile`や`frontend/vite.config.ts`にもホスト（非Docker）実行との差異を吸収するための考慮（ホストのPythonバージョンとの整合、`requirements.txt`のmacOS互換維持、Viteプロキシ先のlocalhostフォールバック等）が残っていた。2つの実行方法を並行して記述・維持するコストと、記述間の不整合リスクが見合わないと判断した。
+- **決定**: ローカル（非Docker）での直接実行はサポート対象外とし、Docker Compose環境のみを開発環境として位置づける。具体的には以下を実施した。
+  - `README.md`から手動セットアップ（venv/npm install）の手順一式を削除し、Docker Composeでの起動方法のみを記載する
+  - `backend/requirements.txt`からmacOS専用の`ocrmac`/`pyobjc-framework-*`を削除し、`backend/Dockerfile`のLinux向け除外インストール（grepによるフィルタリング）を撤去して単純な`pip install -r requirements.txt`に戻す
+  - `frontend/vite.config.ts`の`/api`プロキシ先を`http://backend:8000`固定にし、`BACKEND_URL`環境変数によるホスト実行時のフォールバックを削除する
+  - `CLAUDE.md`のビルド・テストコマンドを`docker compose exec`経由の実行に統一する
+- **理由**: 単一の実行環境に一本化することで、ドキュメント・Dockerfile双方の記述量とメンテナンスコストを削減できる。特にDoclingのOS依存バイナリ問題（ADR-003）は、コンテナ内Linuxに統一することで実質的に解消される。
+- **トレードオフ**: Docker Desktop（またはOCI互換ランタイム）が利用できない環境では開発できなくなる。将来的にホスト実行の需要が生じた場合は、本ADRを踏まえて改めて手動セットアップ手順を整備する必要がある。
+- **既知の課題と解決（追記）**: 当初、フロントエンドのPlaywright（E2E）は`node:20-alpine`ベースイメージがブラウザバイナリ非対応（Alpine/musl libc）のためコンテナ内で実行できない課題があった。frontendの軽量なAlpineイメージ自体は変更せず、代わりにMicrosoft公式のPlaywrightイメージ（`mcr.microsoft.com/playwright`、glibcベースでブラウザ同梱）を使う独立サービス`e2e`（`frontend/Dockerfile.e2e`）を`docker-compose.yml`に追加し、**専用コンテナ方式で解決済み**。`e2e`サービスはfrontendサービスに依存（`depends_on`）し、起動済みのVite開発サーバーへコンテナ間のサービス名（`http://frontend:5173`）で接続する。`playwright.config.ts`は`PLAYWRIGHT_TEST_BASE_URL`が設定されている場合、自身での`webServer`起動をスキップしてこの接続先を使う。常時起動する必要はないため`profiles: [e2e]`でopt-in化し、`docker compose --profile e2e run --rm e2e`で実行する。あわせて、Viteの`allowedHosts`制限（DNSリバインディング対策）によりコンテナ間のHostヘッダー（`frontend`）がデフォルトでは拒否される問題が判明したため、`vite.config.ts`の`server.allowedHosts`に`frontend`を追加して解消した。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

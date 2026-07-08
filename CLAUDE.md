@@ -13,28 +13,26 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 > フェーズ2以降、実装が進み次第このセクションを実コマンドで更新する。
 
+開発環境はDocker Composeのみを対象とし、ローカル（非Docker）での直接実行はサポートしない（ADR-014）。`docker compose up --build`でfrontend/backendを起動した上で、以下のコマンドは起動中のコンテナに対して実行する。
+
 ### バックエンド (Python / FastAPI)
 
-> Python 3.9系（macOS標準の`python3`）で動作確認済み。Docling 2.x系も同バージョンで動作する。
+> Python 3.9系で動作確認済み（`backend/Dockerfile`）。Docling 2.x系も同バージョンで動作する。
 
 ```bash
-cd backend
-pytest                    # 全テスト実行
-pytest path/to/test.py -v # 単体テスト
-ruff check .               # 静的解析
-uvicorn app.main:app --reload   # ポート8000で起動（frontendのViteプロキシ先）
-python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-006）
+docker compose exec backend pytest                    # 全テスト実行
+docker compose exec backend pytest path/to/test.py -v  # 単体テスト
+docker compose exec backend ruff check .                # 静的解析
+docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-006）
 ```
 
 ### フロントエンド (React / TypeScript)
 
 ```bash
-cd frontend
-npm run test          # Vitest（msw使用、実APIには接続しない）
-npm run test:e2e       # Playwright
-npm run lint           # ESLint
-npm run dev
-npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側を先に実行しておく）
+docker compose exec frontend npm run test          # Vitest（msw使用、実APIには接続しない）
+docker compose exec frontend npm run lint           # ESLint
+docker compose exec frontend npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側を先に実行しておく）
+docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス。ADR-014参照）
 ```
 
 ## コード規約

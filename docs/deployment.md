@@ -48,7 +48,7 @@
 
 ---
 
-## 3. バックエンドのコンテナ化（フェーズ4 ステップ9）
+## 3. バックエンドのコンテナ化（フェーズ4 ステップ18）
 
 1. Dockerfileに`AWS Lambda Web Adapter`のバイナリを追加。
 2. ビルド時に`docling-tools models download`を実行し、Doclingモデルをコンテナに焼き込む。
@@ -59,7 +59,7 @@
 
 ---
 
-## 4. インフラのコード化（フェーズ4 ステップ10）
+## 4. インフラのコード化（フェーズ4 ステップ19）
 
 - Terraformで以下を定義・構築する。
   - フロントエンド: CloudFront + S3
@@ -70,7 +70,7 @@
 
 ---
 
-## 5. CI/CDの構築（フェーズ4 ステップ11）
+## 5. CI/CDの構築（フェーズ4 ステップ20）
 
 - PR作成時・mainマージ時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）を自動実行するワークフローを構築する。
 - 「CIが100%成功しなければマージ不可」をBranch Protection Ruleに設定する（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。

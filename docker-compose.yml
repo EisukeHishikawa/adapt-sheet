@@ -1,0 +1,64 @@
+# 開発環境用のDocker Compose定義。開発はこの構成のみを対象とし、ローカル（非Docker）での
+# 直接実行はサポートしない（ADR-014）。frontend/backendの2コンテナを連携させ、
+# `docker compose up --build` 一発で開発環境を構築する。
+# 本番デプロイ（AWS Lambda等）はdocs/deployment.mdのTerraform経由の別構成であり、本ファイルの対象外。
+#
+# 補足: Compose Specification移行に伴い`version:`キーは現行のDocker Compose CLIでは
+# 不要（指定すると警告が出る）ため、あえて記載しない。
+#
+# 補足: 当初はOllamaコンテナ（llama3.2:3b）も含めていたが、docs/decisions.md ADR-013の
+# とおり廃止した。小型モデルではDocling抽出後の長いプロンプトに対しJSON整形の失敗率が高く
+# 実用に耐えなかったため、backendの既定AI経路はMockAIClientに戻している。
+
+services:
+  # ① フロントエンド (Vite + React)
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173" # Viteの開発サーバー既定ポート（package.json/vite.config.ts参照）
+    volumes:
+      - ./frontend:/app
+      # ホスト側のnode_modules(macOS向けバイナリ)でコンテナ内のnode_modules(Linux向け)を
+      # 上書きしないよう、無名ボリュームでコンテナ内のnode_modulesを保護する。
+      - /app/node_modules
+      # `npm run generate-types`はfrontendから見て`../backend/openapi.json`を相対参照するため
+      # （package.json参照）、backendコンテナが書き出すopenapi.jsonを同じ相対位置に読み取り専用で
+      # マウントし、コンテナが分かれていても型同期コマンドが動作するようにする。
+      - ./backend/openapi.json:/backend/openapi.json:ro
+    depends_on:
+      - backend
+
+  # ② バックエンド (FastAPI + Docling)
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      # ADR-013によりOllama経由の実生成は廃止。USE_MOCK_AI未設定時の既定（true）と同じだが、
+      # docker-compose環境の意図を明示するためあえて記載する。実Gemini APIを使いたい場合は
+      # USE_MOCK_AI=false/AI_PROVIDER=gemini/GEMINI_API_KEYを上書き設定する。
+      - USE_MOCK_AI=true
+
+  # ③ E2Eテスト (Playwright)
+  # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
+  # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
+  # として用意する（ADR-014）。frontend/backendのように常時起動する必要はないため、
+  # `profiles`でopt-in化し、明示的に指定した場合のみ起動する
+  # （例: `docker compose --profile e2e run --rm e2e`）。
+  e2e:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.e2e
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      # 起動済みのfrontendサービスに対してテストする（playwright.config.tsのwebServer自動起動を
+      # スキップし、コンテナ間のサービス名で疎通する）。
+      - PLAYWRIGHT_TEST_BASE_URL=http://frontend:5173
+    depends_on:
+      - frontend
+    profiles:
+      - e2e

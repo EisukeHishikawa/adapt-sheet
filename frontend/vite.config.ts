@@ -15,11 +15,20 @@ export default defineConfig({
     },
   },
   server: {
+    // 開発はDocker Composeのfrontendコンテナ内でのみ行う（ADR-014）。frontendコンテナ外
+    // （ホストPC）からアクセスする必要があるが、Viteの既定は127.0.0.1のみへのbindのため、
+    // 全interfaceでlistenする必要がある。
+    host: true,
+    // Viteのallowed hosts制限（DNSリバインディング対策）は既定でHostヘッダーの値を検証するが、
+    // Docker Compose上のe2eサービス（frontend/Dockerfile.e2e）はサービス名`frontend`で疎通する
+    // ため、Hostヘッダーが`frontend:5173`となり既定では403 Forbiddenになる。e2e疎通のために
+    // サービス名を明示的に許可する。
+    allowedHosts: ['frontend'],
     proxy: {
       // frontend/src/lib/api.ts は相対パス`/api/render`をfetchするため、
       // プロキシがないとViteの開発サーバー自身に届いてしまい疎通しない。
-      // バックエンド（uvicorn）はREADME/CLAUDE.mdの手順どおり8000番ポートで起動する前提。
-      '/api': 'http://localhost:8000',
+      // backendコンテナへはCompose上のサービス名で疎通する（docker-compose.yml参照）。
+      '/api': 'http://backend:8000',
     },
   },
   test: {

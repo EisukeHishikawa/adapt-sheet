@@ -36,9 +36,10 @@ export type HistoryEntry = {
 const MAX_HISTORY_LENGTH = 10
 
 // docs/spec.md 4章のエラーコード定義に沿った、ユーザー向けの日本語メッセージ。
-// バックエンドの例外メッセージ（英語や技術的な詳細を含みうる）をそのまま出さず、
-// ステータスコード単位で固定文言に丸めることで、ユーザーに次のアクション（再試行/入力確認等）を
-// 明確に伝える。定義外のステータスは500系の想定外エラーとして扱う。
+// ステップ14（ADR-017）でバックエンドが構造化エラーボディのmessageを返すようになったため、
+// 通常はそちらを優先表示する。この関数は「バックエンド不達・非JSONレスポンス等でmessageが
+// 得られない場合のフォールバック」として残す。バックエンド提供文言と齟齬が出ないよう、
+// バックエンドのapp/errors._ERROR_CATALOGと同じ文言に揃えている。定義外のステータスは想定外エラー扱い。
 function messageForStatus(status: number): string {
   switch (status) {
     case 400:
@@ -160,9 +161,14 @@ export const useSheetStore = create<SheetState>((set, get) => ({
         history: [newEntry, ...state.history].slice(0, MAX_HISTORY_LENGTH),
       }))
     } catch (err) {
-      // RenderApiErrorならステータスコードに対応する文言、それ以外（ネットワーク断や
+      // ステップ14（ADR-017）: バックエンドが返す構造化エラーの安全文言（backendMessage）を
+      // 最優先で表示する。バックエンド不達・非JS（backendMessageがnull）の場合のみ、
+      // ステータス別の既定文言へフォールバックする。RenderApiError以外（ネットワーク断や
       // JSON解釈失敗など）は想定外エラー扱い（messageForStatusのdefault）にする。
-      const message = err instanceof RenderApiError ? messageForStatus(err.status) : messageForStatus(0)
+      const message =
+        err instanceof RenderApiError
+          ? (err.backendMessage ?? messageForStatus(err.status))
+          : messageForStatus(0)
       set({
         error: message,
         successMessage: null,

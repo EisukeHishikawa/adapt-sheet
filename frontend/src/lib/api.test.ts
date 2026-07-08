@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderSheet } from './api'
+import { RenderApiError, renderSheet } from './api'
 import { dummyRenderResponse } from '@/mocks/handlers'
 
 // DEVELOPMENT.md ステップ7のTDD要件: PDFがrenderSheet経由でリクエストに正しく
@@ -37,5 +37,48 @@ describe('renderSheet', () => {
     const [, init] = fetchSpy.mock.calls[0]
     const formData = init?.body as FormData
     expect(formData.has('pdf')).toBe(false)
+  })
+})
+
+// DEVELOPMENT.md ステップ14（ADR-017）のTDD要件: バックエンドの構造化エラーボディ
+// `{"error": {code, message, request_id}}` を RenderApiError が保持できることを検証する。
+describe('renderSheet（構造化エラーレスポンスの伝播）', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('構造化エラーボディのcode/message/request_idをRenderApiErrorに保持する', async () => {
+    const errorBody = {
+      error: {
+        code: 'AI_GENERATION_ERROR',
+        message: 'AIによる生成に失敗しました。しばらくしてから再度お試しください。',
+        request_id: 'test-request-id-1234',
+      },
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(errorBody), {
+        status: 502,
+        headers: { 'X-Request-ID': 'test-request-id-1234' },
+      }),
+    )
+
+    // rejectされたRenderApiErrorのプロパティを検証する。
+    await expect(renderSheet({ html: '<p>x</p>' })).rejects.toMatchObject({
+      status: 502,
+      code: 'AI_GENERATION_ERROR',
+      backendMessage: 'AIによる生成に失敗しました。しばらくしてから再度お試しください。',
+      requestId: 'test-request-id-1234',
+    })
+  })
+
+  it('ボディが空（バックエンド不達等）の場合、backendMessageはnullでステータスのみ保持する', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }))
+
+    // 例外の型と、フォールバック用にstatusが取れることを確認する。
+    await expect(renderSheet({ html: '<p>x</p>' })).rejects.toBeInstanceOf(RenderApiError)
+    await expect(renderSheet({ html: '<p>x</p>' })).rejects.toMatchObject({
+      status: 500,
+      backendMessage: null,
+    })
   })
 })

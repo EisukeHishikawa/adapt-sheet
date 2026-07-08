@@ -195,6 +195,21 @@
 
 ---
 
+## ADR-018: バックエンドの「入口エンドポイント」と「Doclingコンテナ」への分離
+
+- **ステータス**: Accepted
+- **コンテキスト**: DEVELOPMENT.md ステップ15として追加。従来の`backend`コンテナは、リクエスト受付・バリデーション・AI呼び出しを担うAPIエンドポイントと、Docling（`torch`/`opencv-python`/`transformers`等の大容量ML依存を含む）によるPDF変換処理が同一プロセス・同一コンテナに同居していた。Doclingの依存関係はイメージサイズ・ビルド時間・コンテナ起動時間に大きく影響するため、PDFを伴わないリクエスト（大半のケース）でも常にこの重量級コンテナの起動を待つ必要があり、AWS Lambdaのコールドスタート対策（ADR-004）の方針とも整合しない状態だった。
+- **決定**:
+  - バックエンドを2つのコンテナ/プロセスに分離する。
+    - `backend`（入口エンドポイント）: `/api/render`のリクエスト受付・バリデーション・プロンプト構築・AI呼び出し・エラー整形（ADR-016/017）を担う軽量プロセス。Docling関連の依存を含まない。
+    - `docling-service`（Docling変換専用）: PDFバイト列を受け取りHTMLへ変換する処理のみを担うステートレスな内部サービス。Docling本体とその重量級依存はこちらにのみ含める。
+  - 通信方式は**HTTP**とする。`docling-service`が内部専用エンドポイント`POST /convert`（multipart、PDFファイル→`{"html": ...}`）を公開し、`backend`はDocker Compose内部ネットワーク経由（サービス名`docling`、環境変数`DOCLING_SERVICE_URL`）でこれを呼び出す。ホストへは公開しない。
+  - `backend`側の`PDFConverter`プロトコル（`app/services/docling_client.py`）はインターフェースを変更せず、実装のみをプロセス内呼び出し（`DoclingPDFConverter`）からHTTP呼び出し（`RemoteDoclingPDFConverter`）に差し替える。これにより`app/main.py`のDI配線・`docs/spec.md` 3.1の外部API契約（`/api/render`のリクエスト/レスポンス形式）は無変更のまま分離できる。`docling-service`からの非200応答・接続エラーは、既存の`PDFConversionError`（422、ADR-017）へマッピングする。
+- **理由**: gRPCやメッセージキューは本フェーズの要件（単一の同期変換呼び出し）に対して過剰であり、既存スタック（FastAPI/Docker Compose）と最も親和性が高いHTTPを選んだ。`PDFConverter`プロトコルを維持したままDIの実装差し替えのみで分離できるため、既存の`test_render.py`（`dependency_overrides`でフェイクに差し替え済み）がそのまま「分離後もAPI契約が変わらないことを検証するテスト」として機能し、変更不要となる。将来のAWS Lambda分離（ADR-004）でも、エンドポイント間通信をHTTP呼び出しとして踏襲しやすい。
+- **トレードオフ**: サービス間通信がネットワーク越しになるため、プロセス内呼び出しにはなかった接続エラー・タイムアウトのハンドリングが新たに必要になる（`PDFConversionError`へのマッピングで対応）。`docling-service`のリクエストログには現時点でADR-016の相関ID（`request_id`）を伝播しておらず、サービス間のログ突き合わせは将来課題として残る。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

@@ -34,7 +34,7 @@ docker compose up --build
 - フロントエンド: http://localhost:5173
 - バックエンド: http://localhost:8000
 
-backend/frontendはそれぞれ`./backend`・`./frontend`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。
+backend/frontend/doclingはそれぞれ`./backend`・`./frontend`・`./docling-service`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。PDF解析（Docling）はbackendとは別コンテナ（`docling`、ホスト非公開）に分離されており、backendから内部HTTPで呼び出す（[docs/decisions.md](./docs/decisions.md) ADR-018参照）。
 
 > 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-013参照）。
 
@@ -55,6 +55,8 @@ docker compose restart frontend
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
+docker compose exec docling pytest                       # doclingサービス（PDF変換専用）の全テスト実行
+docker compose exec docling ruff check .                  # doclingサービスの静的解析
 docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
 docker compose exec frontend npm run lint                # ESLint
 ```

@@ -18,17 +18,28 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 > フェーズ2以降、実装が進み次第このセクションを実コマンドで更新する。
 
-開発環境はDocker Composeのみを対象とし、ローカル（非Docker）での直接実行はサポートしない（ADR-014）。`docker compose up --build`でfrontend/backendを起動した上で、以下のコマンドは起動中のコンテナに対して実行する。
+開発環境はDocker Composeのみを対象とし、ローカル（非Docker）での直接実行はサポートしない（ADR-014）。`docker compose up --build`でfrontend/backend/doclingを起動した上で、以下のコマンドは起動中のコンテナに対して実行する。
 
-### バックエンド (Python / FastAPI)
+### バックエンド (Python / FastAPI、入口エンドポイント)
 
-> Python 3.9系で動作確認済み（`backend/Dockerfile`）。Docling 2.x系も同バージョンで動作する。
+> Python 3.9系で動作確認済み（`backend/Dockerfile`）。ADR-018によりDocling本体は含まない軽量コンテナ。
 
 ```bash
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
 docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-006）
+```
+
+### Doclingサービス (Python / FastAPI、PDF変換専用・ADR-018)
+
+> Python 3.9系で動作確認済み（`docling-service/Dockerfile`）。Docling 2.x系も同バージョンで動作する。backendからHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
+
+```bash
+docker compose exec docling pytest                     # 全テスト実行（実PDF変換の結合テストを含む）
+docker compose exec docling pytest path/to/test.py -v   # 単体テスト
+docker compose exec docling ruff check .                 # 静的解析
+docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
 ```
 
 ### フロントエンド (React / TypeScript)

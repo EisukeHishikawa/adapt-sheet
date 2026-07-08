@@ -1,26 +1,25 @@
-"""Docling によるPDF→HTML変換レイヤー（DEVELOPMENT.md ステップ7）。
+"""Docling変換の呼び出しレイヤー（DEVELOPMENT.md ステップ7→ステップ15）。
 
-ADR-003に基づきDoclingを既存PDF解析エンジンとして採用する。docs/architecture.md 2節の
-シーケンス図の通り、/api/render にPDFが送信された場合のみここでベースHTMLを抽出し、
-Claudeへのプロンプト構築のコンテキストとして利用する（app/main.py参照）。
+ADR-018に基づき、Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離した。
+本モジュールはHTTP経由でdocling-serviceの`POST /convert`を呼び出すクライアントのみを持つ。
+PDFConverterプロトコル自体はステップ7から変更していないため、app/main.pyのDI配線・
+docs/spec.md 3.1の外部API契約（/api/render）は無変更のまま分離できる。
 """
 
 from __future__ import annotations
 
-import io
-from typing import Protocol
+import os
+from typing import Optional, Protocol
 
-from docling.datamodel.base_models import ConversionStatus
-from docling.document_converter import DocumentConverter
-from docling.exceptions import ConversionError
-from docling_core.types.io import DocumentStream
+import httpx
 
 
 class PDFConversionError(Exception):
     """PDF解析に失敗した場合の例外。
 
     docs/spec.mdのエラーコード定義に合わせ、呼び出し側（app/main.py）で
-    422 Unprocessable Entityへ変換することを想定する。
+    422 Unprocessable Entityへ変換することを想定する。docling-serviceからの非200応答・
+    接続エラー（サービスダウン等）もここへマッピングする（ADR-018）。
     """
 
 
@@ -34,30 +33,54 @@ class PDFConverter(Protocol):
     def convert_to_html(self, filename: str, content: bytes) -> str: ...
 
 
-class DoclingPDFConverter:
-    """docling.DocumentConverterを用いた本番実装。"""
+# docker-compose.ymlのbackendサービスに設定される内部サービスURL（サービス名docling、ADR-018）。
+# 未設定時のデフォルトもcompose上のサービス名に合わせておくことで、環境変数を明示しない
+# 単体実行（スクリプト等）でも同じ既定値で動作する。
+_DEFAULT_DOCLING_SERVICE_URL = "http://docling:8100"
 
-    def __init__(self) -> None:
-        # モデルのロード自体はDocumentConverter初期化時ではなく初回convert時に行われるため、
-        # ここでは軽量なインスタンス生成のみ行う。
-        self._converter = DocumentConverter()
+
+class RemoteDoclingPDFConverter:
+    """docling-serviceへHTTPで変換を委譲する本番実装（ADR-018）。"""
+
+    def __init__(self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None) -> None:
+        # base_url/clientをコンストラクタ引数で受けられるようにし、テスト側がhttpx.MockTransportを
+        # 注入したClientやカスタムURLに差し替えられるようにする。
+        self._base_url = (
+            base_url or os.environ.get("DOCLING_SERVICE_URL", _DEFAULT_DOCLING_SERVICE_URL)
+        ).rstrip("/")
+        self._client = client or httpx.Client()
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
-        # ディスクへの一時ファイル書き出しを避けるため、DocumentStreamでメモリ上のbytesを直接渡す。
-        stream = DocumentStream(name=filename, stream=io.BytesIO(content))
-
         try:
-            result = self._converter.convert(stream)
-        except ConversionError as exc:
-            # 破損PDF・パスワード保護PDF等はここで例外化される（docs/spec.md 422の発生条件）。
-            raise PDFConversionError(f"PDFの解析に失敗しました: {exc}") from exc
+            # ローカル開発でdocling-serviceコンテナを起動した直後の初回変換は、OCRモデルの
+            # 初回ダウンロード（実測で60秒超）が発生しうるため、通常の推論時間（数秒〜十数秒）
+            # より大きめの120秒を設定する。モデルはコンテナ内にキャッシュされるため2回目以降は短い。
+            response = self._client.post(
+                f"{self._base_url}/convert",
+                files={"file": (filename, content, "application/pdf")},
+                timeout=120.0,
+            )
+        except httpx.RequestError as exc:
+            raise PDFConversionError(f"docling-serviceへの接続に失敗しました: {exc}") from exc
 
-        if result.status not in (ConversionStatus.SUCCESS, ConversionStatus.PARTIAL_SUCCESS):
-            raise PDFConversionError(f"PDFの解析に失敗しました（status={result.status.value}）")
+        if response.status_code != 200:
+            raise PDFConversionError(
+                f"PDFの解析に失敗しました（docling-service status={response.status_code}）: "
+                f"{_extract_detail(response)}"
+            )
 
-        return result.document.export_to_html()
+        return response.json()["html"]
+
+
+def _extract_detail(response: httpx.Response) -> str:
+    # docling-service側はFastAPIのHTTPExceptionで{"detail": ...}形式を返す（app/main.py参照）。
+    # 想定外の形式（ネットワーク機器のエラーページ等）が返った場合も落ちないようフォールバックする。
+    try:
+        return str(response.json().get("detail", response.text))
+    except ValueError:
+        return response.text
 
 
 def get_pdf_converter() -> PDFConverter:
     """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。"""
-    return DoclingPDFConverter()
+    return RemoteDoclingPDFConverter()

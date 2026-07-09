@@ -5,13 +5,14 @@ import type { components } from '@/types/api'
 // （CLAUDE.md「型安全」の規約）、この型定義を経由せずに/api/renderのレスポンスを扱わないこと。
 export type RenderResponse = components['schemas']['RenderResponse']
 
-// docs/spec.md 3.1はcss/json/promptも含む契約だが、対応するエディタ（CSS/JSON/プロンプト入力）は
-// まだ未実装のため、CLAUDE.mdの型安全規約に沿って「実際に使うフィールドだけ」を手書きし、
-// 手書き範囲を最小に保つ。width_mm/height_mmはステップ8の定型サイズ自動入力機能で使うため追加。
-// 他フィールドをエディタに追加するタイミングで、生成された型
-// （frontend/src/types/api.ts の Body_render_api_render_post）に順次揃えていく。
+// docs/spec.md 3.1の契約に沿ったフィールドのみを手書きする（CLAUDE.mdの型安全規約）。
+// ADR-019により、cssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
+// 埋め込まれている前提のため）ので、ここにも追加しない。width_mm/height_mmはステップ8の
+// 定型サイズ自動入力機能で、json/promptはステップ16のJSON/プロンプト入力エディタで使う。
 export type RenderRequestFields = {
   html?: string
+  json?: string
+  prompt?: string
   pdf?: File
   width_mm?: number
   height_mm?: number

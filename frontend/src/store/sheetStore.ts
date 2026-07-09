@@ -24,10 +24,12 @@ export type Orientation = 'tate' | 'yoko'
 // ステップ8: 履歴スライド機能（docs/spec.md 2.2）で表示・保持する1件分の描画結果。
 // 再描画のたびにこの型のスナップショットをhistoryの先頭へ積む。サイズ（widthMm/heightMm）も
 // 含めるのは、履歴サムネイルを当時の縦横比で表示し直せるようにするため。
+// ステップ16: jsonはJSON入力エディタへそのまま復元できるよう、htmlContent/cssContentと同じく
+// 生のテキスト（string）として保持する（パース済みオブジェクトでは編集不可のtextareaに戻せないため）。
 export type HistoryEntry = {
   html: string
   css: string
-  json: Record<string, unknown>
+  json: string
   widthMm: number | null
   heightMm: number | null
 }
@@ -60,7 +62,13 @@ function messageForStatus(status: number): string {
 type SheetState = {
   htmlContent: string
   cssContent: string
-  jsonContent: Record<string, unknown>
+  // ステップ16: JSON入力エディタの生テキスト。htmlContentと同様、fetchRender成功時は
+  // レスポンスのjsonで上書きされ、次の編集の起点になる（docs/spec.md 2.2「リアルタイム双方向プレビュー」）。
+  // パース・妥当性検証はバックエンド（400 VALIDATION_ERROR）に委ね、フロントは生テキストのまま送信する。
+  jsonContent: string
+  // ステップ16: プロンプト入力エディタの内容。レスポンスに対応するフィールドが無いため、
+  // htmlContent/jsonContentと異なりfetchRender成功時にも上書きされず、ユーザーの入力のまま保持する。
+  promptContent: string
   pdfFile: File | null
   pdfFileName: string | null
   // ステップ8: 縦幅・横幅サイズ入力（docs/spec.md 2.1「コントロール」）。
@@ -74,6 +82,8 @@ type SheetState = {
   // エラーと同様にトースト表示用の文言のみを保持し、表示形式（Toastコンポーネント）とは分離する。
   successMessage: string | null
   setHtmlContent: (html: string) => void
+  setJsonContent: (json: string) => void
+  setPromptContent: (prompt: string) => void
   setPdfFile: (file: File | null) => void
   setWidthMm: (widthMm: number | null) => void
   setHeightMm: (heightMm: number | null) => void
@@ -87,7 +97,8 @@ type SheetState = {
 export const useSheetStore = create<SheetState>((set, get) => ({
   htmlContent: '',
   cssContent: '',
-  jsonContent: {},
+  jsonContent: '',
+  promptContent: '',
   pdfFile: null,
   pdfFileName: null,
   widthMm: null,
@@ -97,6 +108,8 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   error: null,
   successMessage: null,
   setHtmlContent: (html) => set({ htmlContent: html }),
+  setJsonContent: (json) => set({ jsonContent: json }),
+  setPromptContent: (prompt) => set({ promptContent: prompt }),
   setPdfFile: (file) => set({ pdfFile: file, pdfFileName: file?.name ?? null }),
   setWidthMm: (widthMm) => set({ widthMm }),
   setHeightMm: (heightMm) => set({ heightMm }),
@@ -131,29 +144,34 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     // ユーザーに誤解を与える表示になってしまうため。
     set({ isLoading: true, error: null, successMessage: null })
     try {
-      // 現時点のエディタ内容（htmlContent）とPDF（pdfFile、あれば）、
+      // 現時点のエディタ内容（htmlContent/jsonContent/promptContent）とPDF（pdfFile、あれば）、
       // サイズ指定（widthMm/heightMm、あれば）をリクエストとして送り、
       // レスポンスでストアの表示内容を丸ごと置き換える（docs/spec.md 3.1）。
-      const { htmlContent, pdfFile, widthMm, heightMm } = get()
+      // ADR-019によりcssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提のため）。
+      const { htmlContent, jsonContent, promptContent, pdfFile, widthMm, heightMm } = get()
       const result = await renderSheet({
         html: htmlContent,
+        json: jsonContent,
+        prompt: promptContent,
         pdf: pdfFile ?? undefined,
         width_mm: widthMm ?? undefined,
         height_mm: heightMm ?? undefined,
       })
-      const jsonContent = result.json ?? {}
+      // レスポンスのjsonはオブジェクトのため、JSON入力エディタへそのまま戻せるよう
+      // 整形済みテキストへ変換する（htmlContentと同様、次の編集の起点にする）。
+      const newJsonContent = JSON.stringify(result.json ?? {}, null, 2)
       // 描画時点のサイズも一緒にスナップショットしておく（後からwidthMmを変えても履歴は当時の値を保持）。
       const newEntry: HistoryEntry = {
         html: result.html,
         css: result.css,
-        json: jsonContent,
+        json: newJsonContent,
         widthMm,
         heightMm,
       }
       set((state) => ({
         htmlContent: result.html,
         cssContent: result.css,
-        jsonContent,
+        jsonContent: newJsonContent,
         isLoading: false,
         successMessage: '描画が完了しました',
         // 新しい履歴を先頭に積み、MAX_HISTORY_LENGTHを超えた分（最も古い履歴）は切り捨てる

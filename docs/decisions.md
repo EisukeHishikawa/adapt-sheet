@@ -210,6 +210,20 @@
 
 ---
 
+## ADR-019: `/api/render`リクエストからCSS入力（`css`フィールド・CSS入力エディタ）を廃止
+
+- **ステータス**: Accepted
+- **コンテキスト**: DEVELOPMENT.md ステップ16として追加。当初計画（docs/spec.md 2.1「4大入力エディタ」・3.1リクエスト仕様）はHTML/CSS/JSON/プロンプトの4つを独立した入力として扱う想定だったが、実際には「既存のCSS」を単独で保持・入力する場面がない。ユーザー（手書きHTML）・Docling（PDF変換結果）のどちらの経路でHTMLが供給される場合も、CSSは常にHTML側に埋め込まれる。これはdocling-service（`docling-service/app/converter.py`が呼ぶ`DoclingDocument.export_to_html()`）の出力を実際に調査して確認した：`docling_core/transforms/serializer/html.py`の`_build_head`は生成CSSを常に`<head>`内の`<style>`タグとしてHTML文字列へ埋め込み、外部`.css`ファイルや`<link>`参照は一切生成しない。したがって「既存CSS」を`html`と別立てで入力させても、実態はHTML内の`<style>`を手で複製・分岐させるだけで、CLAUDE.mdの「固定情報と業務データの分離」規約が想定するような意味のある分離にならない。
+- **決定**:
+  - `/api/render`のリクエストから`css`フィールドを廃止する（`backend/app/main.py`の`render()`から`css: str = Form("")`を削除、`app/services/ai_client.py`の`build_prompt()`から`css`引数とプロンプト内の「既存CSS」節を削除）。
+  - フロントエンドにCSS入力エディタは追加しない。ステップ16で追加するのはJSON入力・プロンプト入力の2エディタのみとする（`frontend/src/lib/api.ts`の`RenderRequestFields`に`css`は追加しない）。
+  - `docs/spec.md`の「4大入力エディタ」を「3大入力エディタ」（HTML入力/JSON入力/プロンプト入力）に、3.1のリクエスト表から`css`行を削除する。2.2「履歴スライド機能」の送信コンテキスト列挙からも`css`を除く。
+  - レスポンス側（`RenderResponse.css`、AIが生成する`RenderResult.css`）は本ADRの対象外とし、変更しない。これはAIが生成したスタイルシートをプレビュー（`PreviewPanel`が`<style>`として`htmlContent`の末尾に付与）に渡すための出力契約であり、「ユーザーが入力する既存CSS」とは別の関心事のため。
+- **理由**: 実際に使われない・意味のある分離を提供しない入力経路を持たないことで、UIの複雑さとAPIの契約面を必要最小限に保つ（CLAUDE.mdの「必要以上の書き換えを行わない」「最小機能から段階的に肉付けする」規約に沿う）。CSSを別入力として持たせないことで、HTML側の`<style>`とCSS入力欄の内容が食い違うという将来の不整合リスクも構造的に排除できる。
+- **トレードオフ**: 将来、HTMLから独立してCSSのみを差し替えたいユースケース（例: 複数帳票で共通スタイルシートを使い回す）が出た場合は、本ADRを再検討し`css`フィールドを復活させる必要がある。現時点ではdocs/spec.mdにそのような要件の記載がないため、必要になった時点で新たなADRとして再導入する。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

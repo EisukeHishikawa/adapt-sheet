@@ -96,6 +96,36 @@ def test_render_uses_docling_html_when_pdf_uploaded():
         app.dependency_overrides.pop(get_pdf_converter, None)
 
 
+def test_render_threads_json_and_prompt_into_ai_prompt():
+    # json/promptフィールドがbuild_prompt経由でAI呼び出しのプロンプトへ反映されることを検証する。
+    captured_prompts = []
+
+    class _RecordingAIClient:
+        def generate(self, prompt: str) -> RenderResult:
+            captured_prompts.append(prompt)
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    app.dependency_overrides[get_ai_client] = lambda: _RecordingAIClient()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"json": '{"customer": "田中"}', "prompt": "請求書レイアウトにして"},
+        )
+        assert response.status_code == 200
+        assert '"customer": "田中"' in captured_prompts[0]
+        assert "請求書レイアウトにして" in captured_prompts[0]
+    finally:
+        app.dependency_overrides.pop(get_ai_client, None)
+
+
+def test_render_ignores_css_field_if_sent():
+    # ADR-019: cssはリクエストの宣言済みフィールドではなくなったため、クライアントが送っても
+    # FastAPIが未知のフォームフィールドとして無視し、エラーにならないことを確認する。
+    response = client.post("/api/render", data={"css": "body { color: red; }"})
+
+    assert response.status_code == 200
+
+
 def test_render_returns_422_when_pdf_conversion_fails():
     # docs/spec.md エラーコード定義: Docling解析エラーは422 Unprocessable Entityとする。
     class _FailingPDFConverter:

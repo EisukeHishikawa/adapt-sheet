@@ -61,8 +61,9 @@ class RenderResponse(BaseModel):
 # ステップ6でモックから本実装へ差し替え、ステップ7でpdfフィールド（Docling統合）に対応。
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
 def render(
+    # ADR-019によりcssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
+    # 埋め込まれている前提のため）。
     html: str = Form(""),
-    css: str = Form(""),
     # 標準ライブラリのjsonモジュールと名前が衝突するため、パラメータ名はjson_fieldとし、
     # フォームのフィールド名のみalias="json"でdocs/spec.md 3.1の契約に合わせる。
     json_field: str = Form("{}", alias="json"),
@@ -97,7 +98,6 @@ def render(
 
     prompt_text = build_prompt(
         html=effective_html,
-        css=css,
         json_data=json_data,
         prompt=prompt,
         width_mm=width_mm,

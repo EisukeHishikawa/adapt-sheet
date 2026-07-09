@@ -51,7 +51,6 @@ class AIClient(Protocol):
 def build_prompt(
     *,
     html: str,
-    css: str,
     json_data: dict,
     prompt: str,
     width_mm: Optional[float],
@@ -59,9 +58,10 @@ def build_prompt(
 ) -> str:
     """docs/spec.md 3.1のリクエスト項目から、Claudeへの動的プロンプトを構築する。
 
-    既存のhtml/css/jsonをコンテキストとして渡し、固定テキストと業務データ（テンプレート変数）を
+    既存のhtml/jsonをコンテキストとして渡し、固定テキストと業務データ（テンプレート変数）を
     分離する規約（CLAUDE.md）をプロンプト内で明示することで、モック/本番の双方で
-    同じ形式のレスポンスが得られるようにする。
+    同じ形式のレスポンスが得られるようにする。ADR-019により、既存CSSは独立した引数として
+    受け取らない（既存htmlの`<style>`に埋め込まれている前提のため）。
     """
     size_line = ""
     if width_mm is not None and height_mm is not None:
@@ -71,8 +71,7 @@ def build_prompt(
         "あなたはHTML/CSS帳票の生成アシスタントです。"
         "以下の情報をもとに、保守しやすいHTML/CSSと、それに対応する業務データのJSONを生成してください。\n"
         f"{size_line}"
-        f"既存HTML:\n{html}\n\n"
-        f"既存CSS:\n{css}\n\n"
+        f"既存HTML（CSSは<style>として埋め込まれている想定）:\n{html}\n\n"
         f"既存の業務データJSON:\n{json.dumps(json_data, ensure_ascii=False)}\n\n"
         f"生成方針（自然言語指示）: {prompt}\n\n"
         "出力は次のJSON形式のみで返してください（説明文やコードブロック記法は不要）:\n"

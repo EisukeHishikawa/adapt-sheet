@@ -13,7 +13,8 @@ import { server } from '@/mocks/server'
 const initialSheetState = {
   htmlContent: '',
   cssContent: '',
-  jsonContent: {},
+  jsonContent: '',
+  promptContent: '',
   pdfFile: null,
   pdfFileName: null,
   // ステップ8で追加したフィールド。setStateは浅いマージのため、ここに列挙しないと
@@ -83,7 +84,9 @@ describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
       expect(preview.srcdoc).toContain(dummyRenderResponse.css)
     })
     expect(useSheetStore.getState().cssContent).toBe(dummyRenderResponse.css)
-    expect(useSheetStore.getState().jsonContent).toEqual(dummyRenderResponse.json)
+    // ステップ16: jsonContentはJSON入力エディタへ戻せる整形済みテキスト（htmlContentと同様、
+    // 次の編集の起点になる）として保持するため、レスポンスのオブジェクトを文字列化して比較する。
+    expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify(dummyRenderResponse.json, null, 2))
     expect(useSheetStore.getState().error).toBeNull()
   })
 

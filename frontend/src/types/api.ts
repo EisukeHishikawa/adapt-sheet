@@ -33,11 +33,6 @@ export interface components {
              */
             html: string;
             /**
-             * Css
-             * @default
-             */
-            css: string;
-            /**
              * Json
              * @default {}
              */

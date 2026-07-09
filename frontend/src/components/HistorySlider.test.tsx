@@ -10,7 +10,9 @@ function makeEntry(label: string): HistoryEntry {
   return {
     html: `<p>${label}</p>`,
     css: `/* ${label} */`,
-    json: { label },
+    // ステップ16: HistoryEntry.jsonはJSON入力エディタへ戻せる生テキストとして保持する
+    // （sheetStore.HistoryEntry参照）。
+    json: JSON.stringify({ label }),
     widthMm: 210,
     heightMm: 297,
   }
@@ -18,7 +20,7 @@ function makeEntry(label: string): HistoryEntry {
 
 describe('HistorySlider（履歴スライド機能）', () => {
   beforeEach(() => {
-    useSheetStore.setState({ history: [], htmlContent: '', cssContent: '', jsonContent: {} })
+    useSheetStore.setState({ history: [], htmlContent: '', cssContent: '', jsonContent: '' })
   })
 
   it('履歴が空のときは何も表示しない（プレースホルダのみ）', () => {
@@ -46,6 +48,6 @@ describe('HistorySlider（履歴スライド機能）', () => {
 
     expect(useSheetStore.getState().htmlContent).toBe('<p>old</p>')
     expect(useSheetStore.getState().cssContent).toBe('/* old */')
-    expect(useSheetStore.getState().jsonContent).toEqual({ label: 'old' })
+    expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify({ label: 'old' }))
   })
 })

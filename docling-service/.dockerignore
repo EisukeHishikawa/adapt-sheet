@@ -1,0 +1,9 @@
+# backend/Dockerfileのビルドコンテキストから、macOS用の.venvやキャッシュ類を除外する。
+# これらはコンテナ内では使われず(コンテナはrequirements.txtからLinux用に再インストールする)、
+# 除外しないとビルドコンテキストの転送だけで無駄に時間がかかる。
+.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc

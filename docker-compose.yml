@@ -1,5 +1,5 @@
 # 開発環境用のDocker Compose定義。開発はこの構成のみを対象とし、ローカル（非Docker）での
-# 直接実行はサポートしない（ADR-014）。frontend/backendの2コンテナを連携させ、
+# 直接実行はサポートしない（ADR-014）。frontend/backend/doclingの3コンテナを連携させ、
 # `docker compose up --build` 一発で開発環境を構築する。
 # 本番デプロイ（AWS Lambda等）はdocs/deployment.mdのTerraform経由の別構成であり、本ファイルの対象外。
 #
@@ -28,7 +28,8 @@ services:
     depends_on:
       - backend
 
-  # ② バックエンド (FastAPI + Docling)
+  # ② バックエンド (FastAPI、入口エンドポイント)
+  # ADR-018により、Docling本体（重量級ML依存）は③のdoclingコンテナへ分離した。
   backend:
     build: ./backend
     ports:
@@ -44,8 +45,21 @@ services:
       # 既定（USE_MOCK_AI=true）では未使用だが、上記のとおりモックを無効化した際に
       # そのまま実Gemini APIを呼び出せるよう、キー自体は常に注入しておく。
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # ADR-018: PDF変換をdoclingサービスへHTTP委譲するための接続先。Compose内部DNS
+      # （サービス名docling）で解決するため、ホストへは公開しない。
+      - DOCLING_SERVICE_URL=http://docling:8100
+    depends_on:
+      - docling
 
-  # ③ E2Eテスト (Playwright)
+  # ③ Docling変換専用の内部サービス（ADR-018、DEVELOPMENT.md ステップ15）
+  # torch/opencv-python等の重量級ML依存を含み、backendの起動速度に影響しないよう分離した。
+  # backendコンテナからのみHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
+  docling:
+    build: ./docling-service
+    volumes:
+      - ./docling-service:/app
+
+  # ④ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
   # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
   # として用意する（ADR-014）。frontend/backendのように常時起動する必要はないため、

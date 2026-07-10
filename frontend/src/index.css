@@ -128,3 +128,38 @@
     @apply font-sans;
     }
 }
+
+/* ステップ18: コードエディタ（CodeEditor.tsx）のシンタックスハイライト配色。
+   prismjsが付与する.tokenクラスに対して、GitHub Dark系のモダンな配色を当てる。
+   .code-editor配下に限定し、アプリ全体へ影響させない（prismのテーマCSSを丸ごと読み込むと
+   pre/codeの背景等まで上書きされるため、必要なトークン色だけを自前で定義している）。 */
+.code-editor .token.comment,
+.code-editor .token.prolog,
+.code-editor .token.doctype,
+.code-editor .token.cdata {
+  color: #8b949e;
+}
+.code-editor .token.punctuation {
+  color: #c9d1d9;
+}
+.code-editor .token.tag,
+.code-editor .token.keyword,
+.code-editor .token.selector {
+  color: #7ee787;
+}
+.code-editor .token.attr-name,
+.code-editor .token.property,
+.code-editor .token.boolean,
+.code-editor .token.number,
+.code-editor .token.constant {
+  color: #79c0ff;
+}
+.code-editor .token.attr-value,
+.code-editor .token.string {
+  color: #a5d6ff;
+}
+.code-editor .token.operator,
+.code-editor .token.entity,
+.code-editor .token.url {
+  color: #ff7b72;
+}

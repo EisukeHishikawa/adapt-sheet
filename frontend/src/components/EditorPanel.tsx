@@ -1,73 +1,62 @@
-import { Button } from '@/components/ui/button'
-import { PdfDropzone } from '@/components/PdfDropzone'
-import { SizeControls } from '@/components/SizeControls'
+import { useState } from 'react'
+import { cn } from '@/lib/utils'
+import { CodeEditor } from '@/components/CodeEditor'
 import { useSheetStore } from '@/store/sheetStore'
 
-// 左カラムの入力エディタ。ステップ4は「超最小」実装のためHTML入力のtextarea一つのみだったが、
-// ステップ16でJSON入力・プロンプト入力を追加し、docs/spec.md 2.1「3大入力エディタ」を実装した。
-// CSS入力エディタは追加しない：CSSは常にHTML側の<style>に埋め込まれる前提であり
-// （ユーザー入力・Docling変換結果のいずれでも同様であることを実装調査で確認済み）、独立した
-// 入力欄・APIフィールドを持つ意味がないと判断してADR-019として記録した。
-// 入力値をローカルstateに持たず、直接Zustandストアを更新することで
-// 右カラム（PreviewPanel）とのリアルタイム連動をストア経由の一方向データフローで実現する。
-// ステップ5で「描画」ボタンを追加し、押下時にfetchRender（バックエンドの/api/render）を呼び出す。
+// 右カラムのコード入力エディタ。ステップ16まではHTML/JSON/プロンプトを縦に並べて全て左カラムに
+// 置いていたが、レイアウト再設計（ステップ18）で以下のように役割を分割した。
+//   - このEditorPanelは右カラム専用とし、HTML入力とJSON入力を「タブ切り替え」で表示する。
+//     両方を常時縦積みするより、広い右カラムを1つの入力に使えて編集しやすいため。
+//   - サイズ/描画ボタン・PDF・プロンプト・プレビューは左カラム（App.tsx）へ移動した。
+// 「HTML入力」「JSON入力」の見出しテキストは画面から非表示にする指示のため、視覚的な<label>は
+// 置かず、タブ（HTML/JSON）で内容を示す。アクセシビリティ・テスト用の名前はtextareaの
+// aria-labelで従来どおり保持する（SizeControlsと同じ方針）。
+// CSS入力エディタは追加しない（ADR-019: CSSはHTML側の<style>に埋め込む前提）。
+type EditorTab = 'html' | 'json'
+
 export function EditorPanel() {
   const htmlContent = useSheetStore((state) => state.htmlContent)
   const setHtmlContent = useSheetStore((state) => state.setHtmlContent)
   const jsonContent = useSheetStore((state) => state.jsonContent)
   const setJsonContent = useSheetStore((state) => state.setJsonContent)
-  const promptContent = useSheetStore((state) => state.promptContent)
-  const setPromptContent = useSheetStore((state) => state.setPromptContent)
-  const isLoading = useSheetStore((state) => state.isLoading)
-  const fetchRender = useSheetStore((state) => state.fetchRender)
+
+  // どちらのタブを表示中か。既定はHTML（帳票の骨組みが主入力のため）。
+  // タブ切り替えで非表示側のtextareaはアンマウントされるが、入力値はZustandストアが
+  // 保持しているため、タブを戻せば内容はそのまま復元される（ローカルstateを持たない設計）。
+  const [activeTab, setActiveTab] = useState<EditorTab>('html')
 
   return (
-    <div className="flex h-full w-1/2 flex-col gap-2 overflow-y-auto p-4">
-      <div className="flex items-center justify-between">
-        <label htmlFor="html-editor" className="text-sm font-medium">
-          HTML入力
-        </label>
-        <Button onClick={() => fetchRender()} disabled={isLoading}>
-          {isLoading ? '描画中...' : '描画'}
-        </Button>
+    <div className="flex h-full w-1/2 flex-col gap-2 p-4">
+      {/* HTML/JSONのタブ。role=tab/aria-selectedでアクセシビリティとテスト（getByRole('tab')）に対応する。 */}
+      <div role="tablist" aria-label="入力形式" className="flex gap-1 border-b border-input">
+        {(['html', 'json'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            onClick={() => setActiveTab(tab)}
+            // 選択中タブは下線（border-b-2）と濃い文字色で示す。-mb-pxでtablistの下罫線に重ねる。
+            className={cn(
+              '-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors',
+              activeTab === tab
+                ? 'border-foreground text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tab.toUpperCase()}
+          </button>
+        ))}
       </div>
-      {/* ステップ8: 定型サイズ自動入力・手動サイズ指定（docs/spec.md 2.1/2.2）。 */}
-      <SizeControls />
-      {/* ステップ7: 既存PDFをベースにしたい場合のアップロード導線（docs/spec.md 2.1）。 */}
-      <PdfDropzone />
-      <textarea
-        id="html-editor"
-        aria-label="HTML入力"
-        className="min-h-48 w-full flex-1 resize-none rounded-md border border-input bg-background p-2 font-mono text-sm"
-        value={htmlContent}
-        onChange={(event) => setHtmlContent(event.target.value)}
-      />
-      {/* ステップ16: 業務データJSON入力。バリデーション（JSON構文チェック）はフロントで
-          重複実装せず、バックエンドの既存の400 VALIDATION_ERROR（docs/spec.md 4章）に委ねる。 */}
-      <label htmlFor="json-editor" className="text-sm font-medium">
-        JSON入力
-      </label>
-      <textarea
-        id="json-editor"
-        aria-label="JSON入力"
-        className="h-32 w-full resize-none rounded-md border border-input bg-background p-2 font-mono text-sm"
-        value={jsonContent}
-        onChange={(event) => setJsonContent(event.target.value)}
-      />
-      {/* ステップ16: 生成方針の自然言語指示。レスポンスに対応するフィールドが無いため、
-          描画後もユーザーが入力した文言をそのまま保持する（sheetStore.fetchRender参照）。 */}
-      <label htmlFor="prompt-editor" className="text-sm font-medium">
-        プロンプト入力
-      </label>
-      <textarea
-        id="prompt-editor"
-        aria-label="プロンプト入力"
-        className="h-24 w-full resize-none rounded-md border border-input bg-background p-2 text-sm"
-        value={promptContent}
-        onChange={(event) => setPromptContent(event.target.value)}
-      />
-      {/* ステップ8: エラー/成功の表示はMessageToast（App直下）へ集約したため、
-          ここでのインライン表示は撤去した。role="alert"が二重にならないようにする狙いもある。 */}
+
+      {activeTab === 'html' ? (
+        // ステップ18: シンタックスハイライト・コピー付きのコードエディタUIで入力する（CodeEditor）。
+        <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
+      ) : (
+        // ステップ16: 業務データJSON入力。JSON構文チェックはフロントで重複実装せず、
+        // バックエンドの既存の400 VALIDATION_ERROR（docs/spec.md 4章）に委ねる。
+        <CodeEditor id="json-editor" ariaLabel="JSON入力" language="json" value={jsonContent} onChange={setJsonContent} />
+      )}
     </div>
   )
 }

@@ -73,6 +73,8 @@ type SheetState = {
   pdfFileName: string | null
   // ステップ8: 縦幅・横幅サイズ入力（docs/spec.md 2.1「コントロール」）。
   // nullは「未入力」を表し、fetchRenderではAPIへ送らない（Optional[float] = Form(None)と対応）。
+  // ステップ17: サイズ選択UIの初期値をA4よこに統一するため、ストア生成時点からnullではなく
+  // A4よこの寸法を初期値として持たせる。
   widthMm: number | null
   heightMm: number | null
   history: HistoryEntry[]
@@ -101,8 +103,11 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   promptContent: '',
   pdfFile: null,
   pdfFileName: null,
-  widthMm: null,
-  heightMm: null,
+  // ステップ17: SIZE_PRESETS.A4（たて）を初期値にする。applySizePreset('A4', 'tate')と
+  // 同じ変換（幅=yoko側の210、高さ=tate側の297）をリテラルで書くと二重管理になるため、
+  // SIZE_PRESETSを直接参照して定義する。
+  widthMm: SIZE_PRESETS.A4.yoko,
+  heightMm: SIZE_PRESETS.A4.tate,
   history: [],
   isLoading: false,
   error: null,

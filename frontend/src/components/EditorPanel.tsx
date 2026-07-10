@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { CodeEditor } from '@/components/CodeEditor'
 import { useSheetStore } from '@/store/sheetStore'
 
 // 右カラムのコード入力エディタ。ステップ16まではHTML/JSON/プロンプトを縦に並べて全て左カラムに
@@ -49,23 +50,12 @@ export function EditorPanel() {
       </div>
 
       {activeTab === 'html' ? (
-        <textarea
-          id="html-editor"
-          aria-label="HTML入力"
-          className="w-full flex-1 resize-none rounded-md border border-input bg-background p-2 font-mono text-sm"
-          value={htmlContent}
-          onChange={(event) => setHtmlContent(event.target.value)}
-        />
+        // ステップ18: コードエディタ風UI（行番号・暗色配色・横スクロール）で入力する（CodeEditor）。
+        <CodeEditor id="html-editor" ariaLabel="HTML入力" value={htmlContent} onChange={setHtmlContent} />
       ) : (
         // ステップ16: 業務データJSON入力。JSON構文チェックはフロントで重複実装せず、
         // バックエンドの既存の400 VALIDATION_ERROR（docs/spec.md 4章）に委ねる。
-        <textarea
-          id="json-editor"
-          aria-label="JSON入力"
-          className="w-full flex-1 resize-none rounded-md border border-input bg-background p-2 font-mono text-sm"
-          value={jsonContent}
-          onChange={(event) => setJsonContent(event.target.value)}
-        />
+        <CodeEditor id="json-editor" ariaLabel="JSON入力" value={jsonContent} onChange={setJsonContent} />
       )}
     </div>
   )

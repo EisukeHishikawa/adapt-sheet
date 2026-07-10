@@ -50,12 +50,12 @@ export function EditorPanel() {
       </div>
 
       {activeTab === 'html' ? (
-        // ステップ18: コードエディタ風UI（行番号・暗色配色・横スクロール）で入力する（CodeEditor）。
-        <CodeEditor id="html-editor" ariaLabel="HTML入力" value={htmlContent} onChange={setHtmlContent} />
+        // ステップ18: シンタックスハイライト・コピー付きのコードエディタUIで入力する（CodeEditor）。
+        <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
       ) : (
         // ステップ16: 業務データJSON入力。JSON構文チェックはフロントで重複実装せず、
         // バックエンドの既存の400 VALIDATION_ERROR（docs/spec.md 4章）に委ねる。
-        <CodeEditor id="json-editor" ariaLabel="JSON入力" value={jsonContent} onChange={setJsonContent} />
+        <CodeEditor id="json-editor" ariaLabel="JSON入力" language="json" value={jsonContent} onChange={setJsonContent} />
       )}
     </div>
   )

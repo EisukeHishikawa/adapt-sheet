@@ -97,7 +97,7 @@ describe('SizeControls（1つのSelect・縦一列・紙イラストへのラベ
     expect(useSheetStore.getState().widthMm).toBeNull()
   })
 
-  it('手動入力でどのプリセットとも一致しないサイズにすると、トリガーのイラストはA4/B5/A5等の表記が無い無印になる', () => {
+  it('手動入力でどのプリセットとも一致しないサイズにすると、トリガーのイラストはA4/B5/A5等の表記が無い固定の正方形になる', () => {
     useSheetStore.setState({ widthMm: 150, heightMm: 100 })
     render(<SizeControls />)
 
@@ -106,8 +106,21 @@ describe('SizeControls（1つのSelect・縦一列・紙イラストへのラベ
     expect(trigger).not.toHaveTextContent('B5')
     expect(trigger).not.toHaveTextContent('A5')
     const swatch = trigger.querySelector('[data-slot="paper-swatch"]')
-    // ラベルは無くても、形（縦横比）は実際に入力された150×100mmをそのまま反映する
-    expect(swatch).toHaveAttribute('data-orientation', 'yoko')
-    expect(swatch).toHaveStyle({ aspectRatio: '150 / 100' })
+    // 手動入力値（150×100mm）は反映せず、常に1:1の固定正方形にする
+    // （入力のたびにトリガーの縦横比が変わらないようにするため）
+    expect(swatch).toHaveStyle({ aspectRatio: '1 / 1' })
+  })
+
+  it('プリセット一致からプリセット非一致（手動編集）に変わると、トリガーのイラストは固定の正方形に戻る', async () => {
+    const user = userEvent.setup()
+    render(<SizeControls />)
+
+    const widthInput = screen.getByLabelText('横幅 (mm)')
+    await user.clear(widthInput)
+    await user.type(widthInput, '123')
+
+    const trigger = screen.getByRole('combobox', { name: 'サイズ選択' })
+    const swatch = trigger.querySelector('[data-slot="paper-swatch"]')
+    expect(swatch).toHaveStyle({ aspectRatio: '1 / 1' })
   })
 })

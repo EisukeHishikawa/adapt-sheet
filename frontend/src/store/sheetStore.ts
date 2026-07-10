@@ -103,11 +103,11 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   promptContent: '',
   pdfFile: null,
   pdfFileName: null,
-  // ステップ17: SIZE_PRESETS.A4（よこ）を初期値にする。applySizePreset('A4', 'yoko')と
-  // 同じ変換（幅=tate側の297、高さ=yoko側の210）をリテラルで書くと二重管理になるため、
+  // ステップ17: SIZE_PRESETS.A4（たて）を初期値にする。applySizePreset('A4', 'tate')と
+  // 同じ変換（幅=yoko側の210、高さ=tate側の297）をリテラルで書くと二重管理になるため、
   // SIZE_PRESETSを直接参照して定義する。
-  widthMm: SIZE_PRESETS.A4.tate,
-  heightMm: SIZE_PRESETS.A4.yoko,
+  widthMm: SIZE_PRESETS.A4.yoko,
+  heightMm: SIZE_PRESETS.A4.tate,
   history: [],
   isLoading: false,
   error: null,

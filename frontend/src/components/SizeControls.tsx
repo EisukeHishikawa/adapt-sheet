@@ -5,16 +5,12 @@ import { SIZE_PRESETS, useSheetStore } from '@/store/sheetStore'
 import type { Orientation, SizePresetName } from '@/store/sheetStore'
 
 // ステップ17: docs/spec.md 2.2「定型サイズ自動入力」のUI再設計。
-// 従来は「A4 たて」等の日本語ラベル付きボタンを6つ並べていたが、1つのSelect（トリガー+
-// ドロップダウン）へ統合する。
-// ユーザーレビューでの複数回のフィードバックを反映した最終形:
-// - トリガーはフォーム部品然とした枠線・シェブロンを持たず、選択中の紙のイラストそのものがボタン。
-// - ドロップダウンは2列グリッドではなく、6択（A4たて/A4よこ/B5たて/B5よこ/A5たて/A5よこ）を
-//   縦一列に並べる。
-// - 「たて」「よこ」の文字ラベル、mm表記は画面上から排除し、方向は紙のイラストの縦横比のみで
-//   表現する。A4/B5/A5の表記はイラスト（紙のスウォッチ）の中に描く。
-// - アクセシビリティ用の名前（スクリーンリーダー向け）はaria-labelで別途保持し、視覚的な
-//   文字表記の削除とアクセシブルネームの維持を両立させる。
+// 従来は「A4 たて」等の日本語ラベル付きボタンを6つ並べていたが、1つのSelect（`ui/select.tsx`の
+// 標準的なBase UI Select）へ統合する。選択肢は6択（A4たて/A4よこ/B5たて/B5よこ/A5たて/A5よこ）。
+// 「たて」「よこ」の文字ラベル、mm表記は画面上から排除し、方向は紙のイラスト（`PaperSwatch`、
+// 実寸mmの縦横比をそのまま`aspect-ratio`に反映）の縦横比のみで表現する。A4/B5/A5の表記は
+// イラストの中に描く。視覚的な文字表記を削除した分、アクセシビリティ用の名前は
+// トリガー・各選択肢のaria-labelで別途保持する。
 const SIZE_ORDER: readonly { size: SizePresetName; orientation: Orientation }[] = [
   { size: 'A4', orientation: 'tate' },
   { size: 'A4', orientation: 'yoko' },
@@ -46,6 +42,13 @@ const SIZE_AREA_SCALE: Record<SizePresetName, number> = {
   B5: 1,
   A4: 1.08,
 }
+
+// トリガー・ドロップダウン内の選択肢で共通のスウォッチ基準サイズ。
+// 以前はトリガー側を大きめ(56)にしていたが、ユーザーレビュー（「外に表示しているアイコンは
+// 中のアイコンと同じサイズにしてほしい」「アイコンを半分に小さくしてほしい」）を受け、
+// 両方とも同じ値にし、以前の選択肢側の基準(40)からさらに半分程度(20)に縮小した。
+// その後「アイコンを1.25倍程度大きくしてほしい」との追加レビューを受け、20→25に調整。
+const SWATCH_BASE_SIZE = 25
 
 // 紙のスウォッチの実ピクセルサイズ(px)を計算する。
 // aspect-ratioと高さ(または幅)だけを固定する方式だと、よこ(横長)はたて(縦長)より
@@ -107,7 +110,7 @@ function PaperSwatch({
         className,
       )}
     >
-      {label && <span className="text-[0.7rem] leading-none font-semibold tracking-tight text-foreground/70">{label}</span>}
+      {label && <span className="text-[0.5rem] leading-none font-semibold tracking-tight text-foreground/70">{label}</span>}
     </span>
   )
 }
@@ -137,11 +140,10 @@ export function SizeControls() {
   const selectedMatch = SIZE_ORDER.find(({ size, orientation }) => presetKey(size, orientation) === selectedKey)
 
   return (
-    // items-start: 親のflex-colは既定でstretchのため、指定しないとSelectTrigger（ボタン）が
-    // 横幅いっぱいに伸び、見た目のイラストは中央寄せで小さいままポップアップの位置決めの
-    // 基準（アンカー）だけが横幅いっぱいの見えない領域になってしまう
-    // （ポップアップがイラストから離れた位置に開くバグの原因だった）。
-    <div className="flex flex-col items-start gap-2">
+    // items-center + flex-row: Selectと横幅・縦幅の入力欄をユーザーレビューに沿って
+    // 横並びにする。items-centerを外すとSelectTrigger（ボタン）が縦方向に伸びて
+    // 入力欄と高さが揃わなくなるため、中央揃えにしている。
+    <div className="flex flex-row items-center gap-3">
       <Select
         value={selectedKey}
         onValueChange={(value) => {
@@ -160,18 +162,23 @@ export function SizeControls() {
           {/* SelectValueはBase UI上のアクセシビリティ配線（現在値の保持）のために挟むが、
               見た目は常にchildren（紙のスウォッチ）を描画する。
               手動入力等でプリセットに一致しない場合（selectedMatchがundefined）は、
-              実際の横幅・縦幅（未入力時は1:1の暫定表示）をそのまま形に反映しつつ、
-              A4/B5/A5等の実際と異なるラベルは表示しない（無印）。 */}
+              実際の横幅・縦幅を反映せず固定の1:1（正方形）にし、ラベルも表示しない（無表記）。
+              手動入力値をそのまま形に反映すると、入力のたびにトリガーの縦横比・大きさが
+              変わってしまう（過去のレビューで指摘された「ボタンが動的に変わる」問題の再発）ため、
+              プリセット非一致時は常に同じ見た目に固定する。 */}
           <SelectValue>
-            {() => (
-              <PaperSwatch
-                widthMm={widthMm ?? 1}
-                heightMm={heightMm ?? 1}
-                label={selectedMatch?.size}
-                areaScale={selectedMatch ? SIZE_AREA_SCALE[selectedMatch.size] : undefined}
-                baseSize={56}
-              />
-            )}
+            {() => {
+              const dimensions = selectedMatch ? dimensionsOf(selectedMatch.size, selectedMatch.orientation) : { widthMm: 1, heightMm: 1 }
+              return (
+                <PaperSwatch
+                  widthMm={dimensions.widthMm}
+                  heightMm={dimensions.heightMm}
+                  label={selectedMatch?.size}
+                  areaScale={selectedMatch ? SIZE_AREA_SCALE[selectedMatch.size] : undefined}
+                  baseSize={SWATCH_BASE_SIZE}
+                />
+              )
+            }}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -183,15 +190,15 @@ export function SizeControls() {
                 value={presetKey(size, orientation)}
                 aria-label={`${size} ${orientationLabelOf(orientation)}`}
               >
-                <PaperSwatch {...dimensions} label={size} areaScale={SIZE_AREA_SCALE[size]} baseSize={40} />
+                <PaperSwatch {...dimensions} label={size} areaScale={SIZE_AREA_SCALE[size]} baseSize={SWATCH_BASE_SIZE} />
               </SelectItem>
             )
           })}
         </SelectContent>
       </Select>
       <div className="flex gap-3">
-        <label className="flex items-center gap-1 text-sm">
-          <span>横幅 (mm)</span>
+        <label className="flex items-center gap-1">
+          <span className="text-xs">横幅 (mm)</span>
           <input
             type="number"
             aria-label="横幅 (mm)"
@@ -201,8 +208,8 @@ export function SizeControls() {
             onChange={handleNumberChange(setWidthMm)}
           />
         </label>
-        <label className="flex items-center gap-1 text-sm">
-          <span>縦幅 (mm)</span>
+        <label className="flex items-center gap-1">
+          <span className="text-xs">縦幅 (mm)</span>
           <input
             type="number"
             aria-label="縦幅 (mm)"

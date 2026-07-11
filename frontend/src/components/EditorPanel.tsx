@@ -26,7 +26,9 @@ export function EditorPanel() {
   const [activeTab, setActiveTab] = useState<EditorTab>('html')
 
   return (
-    <div className="flex h-full w-1/2 flex-col gap-2 p-4">
+    // ステップ20: モバイル(md未満)は左カラムの下に縦積みされるため、h-full(祖先の固定高さ依存)
+    // ではなくmin-h-[60vh]で自身の高さを確保する。md以上は既存どおり右カラム固定幅(w-1/2)＋h-full。
+    <div className="flex min-h-[60vh] w-full flex-col gap-2 p-4 md:h-full md:min-h-0 md:w-1/2">
       {/* HTML/JSONのタブ。role=tab/aria-selectedでアクセシビリティとテスト（getByRole('tab')）に対応する。 */}
       <div role="tablist" aria-label="入力形式" className="flex gap-1 border-b border-input">
         {(['html', 'json'] as const).map((tab) => (

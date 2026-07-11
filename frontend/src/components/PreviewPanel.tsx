@@ -72,7 +72,12 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
   const displayHeight = pageHeightPx * scale
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+    // ステップ20: モバイル(md未満)ではflex-1の高さの元になる祖先の固定高さが無いため、
+    // min-h-[50vh]で表示領域を確保する。md以上は既存どおりflex-1で残り高さいっぱいに広げる。
+    <div
+      ref={containerRef}
+      className="flex min-h-[50vh] items-center justify-center overflow-hidden md:min-h-0 md:flex-1"
+    >
       {/* ページ枠自体を押下ボタンにして拡大/縮小をトグルする。iframeはpointer-events-noneにして
           クリックを親button側へ通す（帳票内リンクではなく「拡大」操作として扱う）。 */}
       <button

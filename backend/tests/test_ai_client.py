@@ -48,6 +48,41 @@ def test_mock_client_returns_valid_render_result():
     validate_render_result(result)
 
 
+# ADR-020: MockAIClientはbuild_promptが埋め込んだ帳票サイズから用紙の向きを判定し、
+# 縦（高さ>=幅）なら納品書、横（幅>高さ）なら請求書のモックを返す。
+
+
+def test_mock_client_returns_delivery_note_for_portrait_size():
+    client = MockAIClient()
+    prompt = build_prompt(html="", json_data={}, prompt="x", width_mm=210, height_mm=297)
+    result = client.generate(prompt)
+
+    validate_render_result(result)
+    assert "納品書" in result.html
+    assert "請求書" not in result.html
+
+
+def test_mock_client_returns_invoice_for_landscape_size():
+    client = MockAIClient()
+    prompt = build_prompt(html="", json_data={}, prompt="x", width_mm=297, height_mm=210)
+    result = client.generate(prompt)
+
+    validate_render_result(result)
+    assert "請求書" in result.html
+    assert "納品書" not in result.html
+
+
+def test_mock_client_defaults_to_delivery_note_when_size_is_unspecified():
+    # サイズ未指定時は、フロント（sheetStore）の既定サイズがA4縦であることに合わせ、
+    # 納品書（縦のモック）をデフォルトにする。
+    client = MockAIClient()
+    prompt = build_prompt(html="", json_data={}, prompt="x", width_mm=None, height_mm=None)
+    result = client.generate(prompt)
+
+    validate_render_result(result)
+    assert "納品書" in result.html
+
+
 def test_validate_render_result_rejects_empty_html():
     bad = RenderResult(html="", css="body{}", data={})
     with pytest.raises(AIGenerationError):

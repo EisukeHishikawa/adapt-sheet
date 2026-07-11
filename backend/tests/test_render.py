@@ -126,6 +126,23 @@ def test_render_ignores_css_field_if_sent():
     assert response.status_code == 200
 
 
+def test_render_mock_returns_delivery_note_for_portrait_size():
+    # ADR-020: 既定のMockAIClient（USE_MOCK_AI未設定時）が、width_mm/height_mmから
+    # 用紙の向きを判定して縦=納品書のモックを返すことをエンドツーエンドで検証する。
+    response = client.post("/api/render", data={"width_mm": "210", "height_mm": "297"})
+
+    assert response.status_code == 200
+    assert "納品書" in response.json()["html"]
+
+
+def test_render_mock_returns_invoice_for_landscape_size():
+    # 同様に、横=請求書のモックを返すことを検証する。
+    response = client.post("/api/render", data={"width_mm": "297", "height_mm": "210"})
+
+    assert response.status_code == 200
+    assert "請求書" in response.json()["html"]
+
+
 def test_render_returns_422_when_pdf_conversion_fails():
     # docs/spec.md エラーコード定義: Docling解析エラーは422 Unprocessable Entityとする。
     class _FailingPDFConverter:

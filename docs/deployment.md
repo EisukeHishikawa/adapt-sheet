@@ -69,7 +69,7 @@
 
 ---
 
-## 5. CI/CDの構築（フェーズ4 ステップ22）
+## 5. CI/CDの構築（フェーズ4 ステップ25）
 
 - PR作成時・mainマージ時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）を自動実行するワークフローを構築する。
 - 「CIが100%成功しなければマージ不可」をBranch Protection Ruleに設定する（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2, Moon, Sparkles, Sun } from 'lucide-react'
 import { EditorPanel } from '@/components/EditorPanel'
 import { PreviewPanel } from '@/components/PreviewPanel'
@@ -131,9 +131,34 @@ function RenderButton() {
   const fetchRender = useSheetStore((state) => state.fetchRender)
   return (
     <Button onClick={() => fetchRender()} disabled={isLoading}>
-      {isLoading ? <Loader2 className="animate-spin" /> : <Sparkles />}
-      {isLoading ? '描画中...' : '描画'}
+      {isLoading ? (
+        <RenderingProgress />
+      ) : (
+        <>
+          <Sparkles />
+          描画
+        </>
+      )}
     </Button>
+  )
+}
+
+// ステップ22: Docling解析（PDFアップロード時）は数秒〜十数秒かかることがあり、
+// 「操作が固まっている」と誤解されやすいため、経過秒数を1秒ごとに表示する（ユーザー要望）。
+// RenderButtonはisLoading=trueの間だけ本コンポーネントをマウントする。マウントのたびに
+// useStateの初期値(0)から数え直されるため、「isLoadingがfalseに戻ったら0にリセットする」処理を
+// 別途持つ必要がない（アンマウント→次回マウントで自然に0から始まる）。
+function RenderingProgress() {
+  const [seconds, setSeconds] = useState(0)
+  useEffect(() => {
+    const intervalId = setInterval(() => setSeconds((prev) => prev + 1), 1000)
+    return () => clearInterval(intervalId)
+  }, [])
+  return (
+    <>
+      <Loader2 className="animate-spin" />
+      {`描画中...(${seconds}秒)`}
+    </>
   )
 }
 

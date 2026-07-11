@@ -37,6 +37,32 @@ export type HistoryEntry = {
 // docs/spec.md 2.2「履歴スライド機能」: 最大10件までスタックし、11件目以降は最古を破棄する。
 const MAX_HISTORY_LENGTH = 10
 
+// ステップ21: 履歴クリックで「編集中の未保存入力」が失われる問題への対策で使う比較・退避ヘルパ。
+// 履歴/ドラフトはいずれもHistoryEntry（html/css/json/サイズ）のスナップショットなので、
+// 全フィールドの一致でエントリの同一性を判定する。
+function entriesEqual(a: HistoryEntry | null, b: HistoryEntry | null): boolean {
+  if (a === null || b === null) return a === b
+  return (
+    a.html === b.html &&
+    a.css === b.css &&
+    a.json === b.json &&
+    a.widthMm === b.widthMm &&
+    a.heightMm === b.heightMm
+  )
+}
+
+// 現在のエディタ状態（html/css/json + サイズ）を1件のHistoryEntryスナップショットに切り出す。
+// fetchRenderの履歴追加・restoreFromHistoryのドラフト退避で同じ形を使うため関数化する。
+function snapshotEntry(state: Pick<SheetState, 'htmlContent' | 'cssContent' | 'jsonContent' | 'widthMm' | 'heightMm'>): HistoryEntry {
+  return {
+    html: state.htmlContent,
+    css: state.cssContent,
+    json: state.jsonContent,
+    widthMm: state.widthMm,
+    heightMm: state.heightMm,
+  }
+}
+
 // docs/spec.md 4章のエラーコード定義に沿った、ユーザー向けの日本語メッセージ。
 // ステップ14（ADR-017）でバックエンドが構造化エラーボディのmessageを返すようになったため、
 // 通常はそちらを優先表示する。この関数は「バックエンド不達・非JSONレスポンス等でmessageが
@@ -78,6 +104,12 @@ type SheetState = {
   widthMm: number | null
   heightMm: number | null
   history: HistoryEntry[]
+  // ステップ21: 「編集中（未描画・未保存）」の入力を退避しておくスロット。
+  // 履歴サムネイルを押すと従来はエディタ内容がその履歴で上書きされ、直前まで入力していた
+  // 内容が失われていた（ユーザー報告のバグ）。復元の直前に現在の内容をここへ退避し、
+  // HistorySliderに「編集中」カードとして出して戻せるようにする（restoreDraft）。
+  // nullは「退避すべき未保存入力が無い」状態。描画に成功すると新しい基準になるためクリアする。
+  draft: HistoryEntry | null
   isLoading: boolean
   error: string | null
   // ステップ8: docs/spec.md 2.2「インテリジェントメッセージ表示」の成功メッセージ側。
@@ -91,6 +123,8 @@ type SheetState = {
   setHeightMm: (heightMm: number | null) => void
   applySizePreset: (size: SizePresetName, orientation: Orientation) => void
   restoreFromHistory: (index: number) => void
+  // ステップ21: 「編集中」カードから、履歴クリック直前に退避した未保存入力へ戻す。
+  restoreDraft: () => void
   dismissError: () => void
   dismissSuccessMessage: () => void
   fetchRender: () => Promise<void>
@@ -109,6 +143,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   widthMm: SIZE_PRESETS.A4.yoko,
   heightMm: SIZE_PRESETS.A4.tate,
   history: [],
+  draft: null,
   isLoading: false,
   error: null,
   successMessage: null,
@@ -130,15 +165,40 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   },
   // docs/spec.md 2.2「履歴スライド機能」: 履歴サムネイルの選択で、その時点の描画結果を
   // プレビュー（htmlContent/cssContent/jsonContent）へ復元する。範囲外indexは無視する。
+  // ステップ21（バグ修正）: 復元は破壊的にしない。現在エディタに入っている内容が「まだ履歴にも
+  // ドラフトにも保存されていない意味のある入力」なら、上書きで失わないようdraftへ退避してから復元する。
+  // これにより「履歴を押すと入力したデータが消える」問題を解消し、HistorySliderの「編集中」カードで
+  // いつでも元の入力へ戻せる。
   restoreFromHistory: (index) => {
-    const entry = get().history[index]
+    const state = get()
+    const entry = state.history[index]
     if (!entry) return
+    const current = snapshotEntry(state)
+    // 空（初期状態や描画前の空欄）は退避不要。html/json/cssのいずれかに内容があれば「意味のある入力」とみなす。
+    const currentIsMeaningful = current.html !== '' || current.json !== '' || current.css !== ''
+    // すでに履歴やドラフトとして保存済みの内容（＝以前復元したもの等）は、重複退避しない。
+    const alreadyPreserved =
+      state.history.some((h) => entriesEqual(h, current)) || entriesEqual(state.draft, current)
     set({
+      draft: currentIsMeaningful && !alreadyPreserved ? current : state.draft,
       htmlContent: entry.html,
       cssContent: entry.css,
       jsonContent: entry.json,
       widthMm: entry.widthMm,
       heightMm: entry.heightMm,
+    })
+  },
+  // ステップ21: 履歴クリック直前に退避した「編集中」の未保存入力をエディタへ戻す。
+  // restoreFromHistoryと対になる操作で、退避が無ければ何もしない。
+  restoreDraft: () => {
+    const draft = get().draft
+    if (!draft) return
+    set({
+      htmlContent: draft.html,
+      cssContent: draft.css,
+      jsonContent: draft.json,
+      widthMm: draft.widthMm,
+      heightMm: draft.heightMm,
     })
   },
   dismissError: () => set({ error: null }),
@@ -182,6 +242,9 @@ export const useSheetStore = create<SheetState>((set, get) => ({
         // 新しい履歴を先頭に積み、MAX_HISTORY_LENGTHを超えた分（最も古い履歴）は切り捨てる
         // （docs/spec.md 2.2「履歴スライド機能」: 11件目以降は最も古い履歴を破棄）。
         history: [newEntry, ...state.history].slice(0, MAX_HISTORY_LENGTH),
+        // ステップ21: 描画成功時点の内容が新しい基準になるため、「編集中」の退避はクリアする
+        // （描画前の入力に戻す「編集中」カードを残し続けると混乱するため）。
+        draft: null,
       }))
     } catch (err) {
       // ステップ14（ADR-017）: バックエンドが返す構造化エラーの安全文言（backendMessage）を

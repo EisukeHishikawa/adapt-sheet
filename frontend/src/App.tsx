@@ -20,20 +20,24 @@ function App() {
   const [previewExpanded, setPreviewExpanded] = useState(false)
 
   return (
-    <main className="flex h-screen w-screen flex-col bg-background text-foreground">
+    // ステップ20: レスポンシブ対応。md未満（モバイル）ではh-screen固定を外してページ全体を
+    // 縦スクロールさせ、2カラムを縦積みに変える。md以上（デスクトップ）は既存のh-screen＋
+    // 内部スクロールの1画面完結レイアウトを維持する（TypeScriptロジックは変更しない）。
+    <main className="flex min-h-screen w-full flex-col bg-background text-foreground md:h-screen md:w-screen">
       {/* サイト名。ブラウザタブ（index.htmlのtitle）と揃えて画面上にも常時表示する。 */}
       <header className="border-b border-input px-4 py-2">
         <h1 className="text-sm font-semibold">AdaptSheet AI</h1>
       </header>
 
-      {/* 2カラムの主要領域。flex-1で縦方向の残り高さを占有し、はみ出しは各パネル内で処理する。 */}
-      <div className="flex min-h-0 flex-1">
+      {/* 2カラムの主要領域。モバイルは縦積み（flex-col）、md以上は横並び（flex-row）＋
+          flex-1で縦方向の残り高さを占有し、はみ出しは各パネル内で処理する。 */}
+      <div className="flex flex-col gap-4 md:min-h-0 md:flex-1 md:flex-row md:gap-0">
         {/* 左カラム: 操作系 + プロンプト + プレビュー。拡大時は上部要素を隠してプレビューを最大化する。 */}
-        <div className="flex h-full w-1/2 flex-col gap-2 p-4">
+        <div className="flex w-full flex-col gap-2 p-4 md:h-full md:w-1/2">
           {!previewExpanded && (
             <>
-              {/* 上段: サイズ操作を左、描画ボタンを右端に寄せる（justify-between）。 */}
-              <div className="flex items-center justify-between gap-2">
+              {/* 上段: サイズ操作を左、描画ボタンを右端に寄せる（justify-between）。狭幅では折り返す。 */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <SizeControls />
                 <RenderButton />
               </div>

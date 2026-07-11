@@ -143,7 +143,9 @@ export function SizeControls() {
     // items-center + flex-row: Selectと横幅・縦幅の入力欄をユーザーレビューに沿って
     // 横並びにする。items-centerを外すとSelectTrigger（ボタン）が縦方向に伸びて
     // 入力欄と高さが揃わなくなるため、中央揃えにしている。
-    <div className="flex flex-row items-center gap-3">
+    // ステップ20: flex-wrapを追加し、狭幅(モバイル)で横幅が足りないときは折り返す
+    // （デスクトップでは元々収まる幅があるため見た目は変わらない）。
+    <div className="flex flex-row flex-wrap items-center gap-3">
       <Select
         value={selectedKey}
         onValueChange={(value) => {

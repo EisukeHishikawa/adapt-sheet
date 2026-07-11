@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { FileText, Maximize2, Minimize2 } from 'lucide-react'
 import { SIZE_PRESETS, useSheetStore } from '@/store/sheetStore'
+import { renderTemplate } from '@/lib/template'
 
 // 左カラム下部のリアルタイムプレビュー。iframeを使うのは、生成されたHTML/CSSを
 // 親ページのスタイルから隔離した状態で描画し、帳票の見た目をそのまま確認できるようにするため
@@ -25,13 +26,21 @@ const PX_PER_MM = 96 / 25.4
 export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
   const htmlContent = useSheetStore((state) => state.htmlContent)
   const cssContent = useSheetStore((state) => state.cssContent)
+  const jsonContent = useSheetStore((state) => state.jsonContent)
   const widthMm = useSheetStore((state) => state.widthMm)
   const heightMm = useSheetStore((state) => state.heightMm)
 
+  // CLAUDE.md「固定情報と業務データの分離」/ docs/spec.md 2.2「リアルタイム双方向プレビュー」:
+  // HTML内のテンプレート変数 {{key}} を、JSON入力エディタの値で置換してから描画する。
+  // これによりJSON入力を編集すると、該当箇所（例: {{customer_name}} → モック太郎）が
+  // プレビューに即時反映される。jsonContentはZustandストア経由で1文字ごとに更新されるため、
+  // 別途の再描画（/api/render）を待たずにリアルタイム連動する。
+  const renderedHtml = renderTemplate(htmlContent, jsonContent)
+
   // cssContentは/api/renderのレスポンスから来る（docs/spec.md 3.1）。<style>として末尾に足すだけで
   // <head>の有無に関わらず適用されるため、htmlの構造を解析・書き換えする必要がない。cssContentが
-  // 空のとき（ステップ4時点の挙動）はhtmlContentのみを使い、既存の見た目を変えない。
-  const srcDoc = cssContent ? `${htmlContent}\n<style>${cssContent}</style>` : htmlContent
+  // 空のとき（ステップ4時点の挙動）はrenderedHtmlのみを使い、既存の見た目を変えない。
+  const srcDoc = cssContent ? `${renderedHtml}\n<style>${cssContent}</style>` : renderedHtml
 
   // 用紙サイズ。手動入力等で未指定（null）のときはA4たてを既定にする。
   const paperWidthMm = widthMm ?? SIZE_PRESETS.A4.yoko

@@ -20,16 +20,18 @@ pytest/vitest等のテストスイートは実行しない。
 
 ## 起動コマンド
 
-既に起動中でないか、先にコンテナの状態を確認する。
+まずコンテナの状態を確認する。
 
 ```bash
 docker compose ps
 ```
 
-未起動なら、バックグラウンドで起動する（`-d`でデタッチ起動。ソースはvolumeマウントのためホットリロードが効き、依存関係を変更しない限り`--build`は初回のみでよい）。
+アプリは**常に同じポート**（frontend=5173 / backend=8000）で起動する。ルートCLAUDE.md「起動ポリシー」に従い、**既に起動済みでも再起動して**同一ポートのクリーンな単一インスタンスを保証する（別ポートの古いインスタンスが残るのを防ぐ）。
 
 ```bash
-docker compose up --build -d frontend backend
+# --force-recreateで既存コンテナを作り直す（未起動なら通常起動と同じ）。
+# ソースはvolumeマウントのためホットリロードが効き、依存関係を変更しない限り--buildは初回のみでよい。
+docker compose up --build -d --force-recreate frontend backend
 ```
 
 ## 起動確認（テストではなく疎通確認のみ）

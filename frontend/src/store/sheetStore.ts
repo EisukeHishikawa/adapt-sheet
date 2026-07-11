@@ -34,7 +34,15 @@ export type HistoryEntry = {
   heightMm: number | null
 }
 
-// docs/spec.md 2.2「履歴スライド機能」: 最大10件までスタックし、11件目以降は最古を破棄する。
+// 履歴に積む1件。HistoryEntry（内容）に、描画ごとの通し番号seqを付けたもの。
+// seqは描画のたびに1,2,3…と単調増加し、10件を超えても振り直さずカウントアップし続ける
+// （ユーザー要望: 履歴番号は10を超えても加算を続ける）。表示ラベル・削除順の基準にする。
+// draftは「番号を持たない編集中スナップショット」なのでseqを持たず、HistoryEntryのまま扱う。
+export type HistoryItem = HistoryEntry & { seq: number }
+
+// docs/spec.md 2.2「履歴スライド機能」: 最大10件までスタックする。上限を超えたら、
+// 番号（seq）が最も小さい＝最も古い履歴から削除する（ユーザー要望）。配列は新しい順で持つため、
+// これは末尾（最古）の切り捨てと一致する。
 const MAX_HISTORY_LENGTH = 10
 
 // ステップ21: 履歴クリックで「編集中の未保存入力」が失われる問題への対策で使う比較・退避ヘルパ。
@@ -103,7 +111,10 @@ type SheetState = {
   // A4よこの寸法を初期値として持たせる。
   widthMm: number | null
   heightMm: number | null
-  history: HistoryEntry[]
+  history: HistoryItem[]
+  // 履歴の通し番号カウンタ。直近に割り当てたseqを保持し、描画のたびに+1する。
+  // 履歴から古い件が削除されても振り直さない（番号を単調増加させ続けるため独立して持つ）。
+  historySeq: number
   // ステップ21: 「編集中（未描画・未保存）」の入力を退避しておくスロット。
   // 履歴サムネイルを押すと従来はエディタ内容がその履歴で上書きされ、直前まで入力していた
   // 内容が失われていた（ユーザー報告のバグ）。復元の直前に現在の内容をここへ退避し、
@@ -143,6 +154,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   widthMm: SIZE_PRESETS.A4.yoko,
   heightMm: SIZE_PRESETS.A4.tate,
   history: [],
+  historySeq: 0,
   draft: null,
   isLoading: false,
   error: null,
@@ -233,19 +245,25 @@ export const useSheetStore = create<SheetState>((set, get) => ({
         widthMm,
         heightMm,
       }
-      set((state) => ({
-        htmlContent: result.html,
-        cssContent: result.css,
-        jsonContent: newJsonContent,
-        isLoading: false,
-        successMessage: '描画が完了しました',
-        // 新しい履歴を先頭に積み、MAX_HISTORY_LENGTHを超えた分（最も古い履歴）は切り捨てる
-        // （docs/spec.md 2.2「履歴スライド機能」: 11件目以降は最も古い履歴を破棄）。
-        history: [newEntry, ...state.history].slice(0, MAX_HISTORY_LENGTH),
-        // ステップ21: 描画成功時点の内容が新しい基準になるため、「編集中」の退避はクリアする
-        // （描画前の入力に戻す「編集中」カードを残し続けると混乱するため）。
-        draft: null,
-      }))
+      set((state) => {
+        // 通し番号を1つ進め、この描画の履歴に割り当てる（10を超えても振り直さず加算し続ける）。
+        const nextSeq = state.historySeq + 1
+        const newItem: HistoryItem = { ...newEntry, seq: nextSeq }
+        return {
+          htmlContent: result.html,
+          cssContent: result.css,
+          jsonContent: newJsonContent,
+          isLoading: false,
+          successMessage: '描画が完了しました',
+          historySeq: nextSeq,
+          // 新しい履歴を先頭に積み、MAX_HISTORY_LENGTHを超えた分は末尾（＝seqが最も小さい最古）を
+          // 切り捨てる（ユーザー要望: 番号が低いものから削除。docs/spec.md 2.2「履歴スライド機能」）。
+          history: [newItem, ...state.history].slice(0, MAX_HISTORY_LENGTH),
+          // ステップ21: 描画成功時点の内容が新しい基準になるため、「編集中」の退避はクリアする
+          // （描画前の入力に戻す「編集中」カードを残し続けると混乱するため）。
+          draft: null,
+        }
+      })
     } catch (err) {
       // ステップ14（ADR-017）: バックエンドが返す構造化エラーの安全文言（backendMessage）を
       // 最優先で表示する。バックエンド不達・非JS（backendMessageがnull）の場合のみ、

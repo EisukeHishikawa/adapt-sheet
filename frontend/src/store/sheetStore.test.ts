@@ -18,6 +18,9 @@ const initialSheetState = {
   widthMm: null,
   heightMm: null,
   history: [],
+  // 履歴の通し番号カウンタ。setStateは浅いマージのため、リセットに含めないとテスト間で
+  // seqが漏れて番号検証がずれる。
+  historySeq: 0,
   // ステップ21: 履歴クリック時の未保存入力の退避スロット。setStateは浅いマージのため、
   // ここに含めないとテスト間でdraftが漏れる。
   draft: null,
@@ -92,6 +95,25 @@ describe('sheetStore（履歴スライド機能）', () => {
     expect(history[0].html).toBe('<p>10</p>')
     expect(history.at(-1)?.html).toBe('<p>1</p>')
   })
+
+  it('履歴番号(seq)は10を超えても振り直さず加算し続け、番号が小さい古い履歴から削除される', async () => {
+    for (let i = 1; i <= 11; i += 1) {
+      server.use(
+        http.post('/api/render', () =>
+          HttpResponse.json({ ...dummyRenderResponse, html: `<p>${i}</p>` }),
+        ),
+      )
+      await useSheetStore.getState().fetchRender()
+    }
+
+    const history = useSheetStore.getState().history
+    // 11回描画したので通し番号は11まで進む（10で頭打ちにならない）。
+    expect(useSheetStore.getState().historySeq).toBe(11)
+    // 先頭は最新（seq=11）、末尾は残っている中で最古（seq=2）。番号が最小のseq=1は削除済み。
+    expect(history[0].seq).toBe(11)
+    expect(history.at(-1)?.seq).toBe(2)
+    expect(history.some((h) => h.seq === 1)).toBe(false)
+  })
 })
 
 // ステップ21のバグ修正TDD要件:
@@ -104,7 +126,7 @@ describe('sheetStore（履歴クリックで未保存入力を失わない・ス
 
   it('未保存の入力があるまま履歴を復元すると、その入力がdraftへ退避される', () => {
     useSheetStore.setState({
-      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 }],
+      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297, seq: 1 }],
       // ユーザーが描画せずに編集中の内容（未保存）
       htmlContent: '<p>editing</p>',
       jsonContent: '{"wip":true}',
@@ -123,7 +145,7 @@ describe('sheetStore（履歴クリックで未保存入力を失わない・ス
 
   it('restoreDraftで退避した未保存入力を元に戻せる', () => {
     useSheetStore.setState({
-      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 }],
+      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297, seq: 1 }],
       htmlContent: '<p>editing</p>',
       jsonContent: '{"wip":true}',
     })
@@ -138,8 +160,8 @@ describe('sheetStore（履歴クリックで未保存入力を失わない・ス
   it('復元中の内容（すでに履歴と一致）を再度クリックしても、draftを重複更新しない', () => {
     useSheetStore.setState({
       history: [
-        { html: '<p>a</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 },
-        { html: '<p>b</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 },
+        { html: '<p>a</p>', css: '', json: '{}', widthMm: 210, heightMm: 297, seq: 2 },
+        { html: '<p>b</p>', css: '', json: '{}', widthMm: 210, heightMm: 297, seq: 1 },
       ],
       htmlContent: '',
       jsonContent: '',

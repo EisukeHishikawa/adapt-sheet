@@ -22,6 +22,8 @@ const initialSheetState = {
   widthMm: null,
   heightMm: null,
   history: [],
+  // 履歴の通し番号カウンタ。リセット漏れ防止のため初期値を明示する。
+  historySeq: 0,
   // ステップ21で追加した「編集中」退避スロット。リセット漏れ防止のため初期値を明示する。
   draft: null,
   isLoading: false,
@@ -62,6 +64,31 @@ describe('App（2カラム最小画面）', () => {
     const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
     expect(preview.srcdoc).toBe('<p>更新後</p>')
   })
+
+  // ユーザー報告バグの再現・回帰防止: HTMLの {{customer_name}} が生のまま表示され、
+  // JSONと連動しなかった。HTMLのテンプレート変数がJSONの値で置換され、JSONを編集すると
+  // プレビューが即時に追従することを検証する（CLAUDE.md「固定情報と業務データの分離」）。
+  it('JSON入力を編集すると、HTMLのテンプレート変数が置換されてプレビューにリアルタイム反映される', () => {
+    render(<App />)
+
+    // 描画結果を模したHTML（固定テキスト＋テンプレート変数）とJSONをストアへ直接投入する。
+    act(() => {
+      useSheetStore.getState().setHtmlContent('<h1>帳票タイトル</h1><p>{{customer_name}}</p>')
+      useSheetStore.getState().setJsonContent(JSON.stringify({ customer_name: 'モック太郎' }))
+    })
+
+    const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
+    // {{customer_name}} が消え、JSONの値（モック太郎）に置換されている。
+    expect(preview.srcdoc).toContain('モック太郎')
+    expect(preview.srcdoc).not.toContain('{{customer_name}}')
+
+    // JSONだけを書き換えると、再描画(API)を挟まずにプレビューが追従する。
+    act(() => {
+      useSheetStore.getState().setJsonContent(JSON.stringify({ customer_name: '山田花子' }))
+    })
+    expect(preview.srcdoc).toContain('山田花子')
+    expect(preview.srcdoc).not.toContain('モック太郎')
+  })
 })
 
 // DEVELOPMENT.md ステップ5のTDD要件：
@@ -79,10 +106,13 @@ describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
     await user.click(screen.getByRole('button', { name: '描画' }))
 
     const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
-    // PreviewPanelはhtmlContentの末尾にcssContentを<style>として付与するため、
-    // 両方がsrcDocに含まれていることを検証する（PreviewPanel.tsx参照）。
+    // PreviewPanelはHTMLのテンプレート変数 {{dummy}} をJSON値（sample）で置換したうえで、
+    // 末尾にcssContentを<style>として付与する（renderTemplate / PreviewPanel.tsx参照）。
+    // よってsrcDocには置換後HTML（{{dummy}}が消えsampleになったもの）とcssが含まれる。
+    const expectedRenderedHtml = dummyRenderResponse.html.replace('{{dummy}}', 'sample')
     await waitFor(() => {
-      expect(preview.srcdoc).toContain(dummyRenderResponse.html)
+      expect(preview.srcdoc).toContain(expectedRenderedHtml)
+      expect(preview.srcdoc).not.toContain('{{dummy}}')
       expect(preview.srcdoc).toContain(dummyRenderResponse.css)
     })
     expect(useSheetStore.getState().cssContent).toBe(dummyRenderResponse.css)
@@ -133,8 +163,9 @@ describe('PDFアップロード時のAPI疎通（ステップ7）', () => {
     await user.click(screen.getByRole('button', { name: '描画' }))
 
     const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
+    // 上と同様、テンプレート変数 {{dummy}} はJSON値（sample）へ置換されて反映される。
     await waitFor(() => {
-      expect(preview.srcdoc).toContain(dummyRenderResponse.html)
+      expect(preview.srcdoc).toContain(dummyRenderResponse.html.replace('{{dummy}}', 'sample'))
     })
     expect(useSheetStore.getState().error).toBeNull()
   })

@@ -19,6 +19,12 @@ export default defineConfig({
     // （ホストPC）からアクセスする必要があるが、Viteの既定は127.0.0.1のみへのbindのため、
     // 全interfaceでlistenする必要がある。
     host: true,
+    // 起動ポートを5173に固定する（docker-compose.ymlの5173:5173マッピングと一致）。
+    // strictPort:trueにより、5173が使用中のときViteが別ポート（5174…）へ自動退避せず起動失敗する。
+    // 自動退避を許すと「コンテナが公開している5173には実アプリが居ない」というポートずれが起き、
+    // ユーザーが別ポートの古いインスタンスを見てしまう事故につながるため、常に同一ポートで固定する。
+    port: 5173,
+    strictPort: true,
     // Viteのallowed hosts制限（DNSリバインディング対策）は既定でHostヘッダーの値を検証するが、
     // Docker Compose上のe2eサービス（frontend/Dockerfile.e2e）はサービス名`frontend`で疎通する
     // ため、Hostヘッダーが`frontend:5173`となり既定では403 Forbiddenになる。e2e疎通のために

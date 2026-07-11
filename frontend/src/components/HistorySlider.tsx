@@ -50,25 +50,26 @@ export function HistorySlider() {
           const srcDoc = entry.css ? `${entry.html}\n<style>${entry.css}</style>` : entry.html
           return (
             <button
-              key={index}
+              // keyは位置(index)ではなく描画ごとに一意なseqにする（削除・並び替えでの再利用を避ける）。
+              key={entry.seq}
               type="button"
-              // aria-labelは「履歴 1」（＝最新）から始まる連番にして、スクリーンリーダーや
-              // E2Eテストから順序込みで一意に選択できるようにする。
-              aria-label={`履歴 ${index + 1}`}
+              // 番号は位置ではなく描画ごとの通し番号(seq)を用いる。10を超えても振り直さず、
+              // 大きいほど新しい描画を表す（ユーザー要望）。復元は配列位置(index)で引く。
+              aria-label={`履歴 ${entry.seq}`}
               onClick={() => restoreFromHistory(index)}
               className="group relative h-24 w-20 shrink-0 overflow-hidden rounded-lg border border-input bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-ring hover:shadow-md focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
               {/* iframeはpointer-events-noneにして、クリックを親button側へ通す
                   （サムネイル内のリンク等ではなく「履歴選択」として扱うため）。 */}
               <iframe
-                title={`履歴プレビュー ${index + 1}`}
+                title={`履歴プレビュー ${entry.seq}`}
                 srcDoc={srcDoc}
                 className="pointer-events-none h-full w-full"
                 tabIndex={-1}
               />
               {/* 通し番号バッジ。ホバー時にわずかに濃くして「押せる」ことを補強する。 */}
               <span className="absolute bottom-1 right-1 rounded bg-foreground/70 px-1 text-[10px] font-medium text-background transition-colors group-hover:bg-foreground/85">
-                {index + 1}
+                {entry.seq}
               </span>
             </button>
           )

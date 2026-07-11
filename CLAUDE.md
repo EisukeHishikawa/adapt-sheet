@@ -20,6 +20,11 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 開発環境はDocker Composeのみを対象とし、ローカル（非Docker）での直接実行はサポートしない（ADR-014）。`docker compose up --build`でfrontend/backend/doclingを起動した上で、以下のコマンドは起動中のコンテナに対して実行する。
 
+### 起動ポリシー（ポート固定・既存起動時は再起動）
+
+- アプリは**常に同じポート**で起動する。frontend=`5173`、backend=`8000`（`docker-compose.yml`のマッピング、`frontend/vite.config.ts`の`port`/`strictPort`で固定）。別ポートへ自動退避させない（ポートずれで古いインスタンスを誤認する事故を防ぐため）。
+- 起動時に**既に起動済みの場合は再起動してよい**（同一ポートでのクリーンな単一インスタンスを保証する）。`docker compose up -d --force-recreate frontend backend` 等で作り直す。複数インスタンスを別ポートで並行起動しない。
+
 ### バックエンド (Python / FastAPI、入口エンドポイント)
 
 > Python 3.9系で動作確認済み（`backend/Dockerfile`）。ADR-018によりDocling本体は含まない軽量コンテナ。

@@ -58,6 +58,18 @@ services:
     build: ./docling-service
     volumes:
       - ./docling-service:/app
+      # レイアウト解析・OCRモデルは初回変換時にインターネットから自動ダウンロードされる
+      # （DEVELOPMENT.md ステップ23で予定しているDockerイメージへの事前焼き込みは未実施）。
+      # 名前付きボリュームでダウンロード先を永続化し、`--force-recreate`等でコンテナを
+      # 作り直しても再ダウンロードが発生しないようにする（初回のみ数十秒〜数分かかる）。
+      - docling_hf_cache:/root/.cache/huggingface
+      - docling_rapidocr_models:/usr/local/lib/python3.9/site-packages/rapidocr/models
+    environment:
+      # hf-xet（HuggingFaceの高速転送バックエンド）が使うCDN（*.cdn.hf.co）への名前解決が
+      # 環境によっては不安定になり、レイアウト解析モデル（docling-layout-heron）のダウンロードが
+      # 進まなくなる事象を確認した。huggingface.co自体への到達性はあるため、hf-xet経路を無効化して
+      # 標準HTTPSダウンロードへフォールバックさせる。
+      - HF_HUB_DISABLE_XET=1
 
   # ④ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
@@ -80,3 +92,8 @@ services:
       - frontend
     profiles:
       - e2e
+
+# doclingサービスが初回PDF変換時にダウンロードするMLモデルの永続化用（上記docling.volumes参照）。
+volumes:
+  docling_hf_cache:
+  docling_rapidocr_models:

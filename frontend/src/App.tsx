@@ -26,16 +26,17 @@ function App() {
 
       <div className="flex flex-col gap-4 md:min-h-0 md:flex-1 md:flex-row md:gap-0">
         <div className="flex w-full flex-col gap-3 p-4 md:h-full md:w-1/2 md:border-r md:border-input">
-          {!previewExpanded && (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <SizeControls />
-                <RenderButton />
-              </div>
-              <PdfDropzone />
-              <PromptInput />
-            </>
-          )}
+          {/* 条件付きレンダリングで隠すとRenderingProgressごとアンマウントされ、拡大・縮小のたびに
+              経過秒数が0へ戻ってしまう。display:contents（子要素は親のflexレイアウトへ直接参加する）で
+              マウントを保ったまま見た目だけ隠す。 */}
+          <div className={previewExpanded ? 'hidden' : 'contents'}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <SizeControls />
+              <RenderButton />
+            </div>
+            <PdfDropzone />
+            <PromptInput />
+          </div>
           <PreviewPanel expanded={previewExpanded} onToggleExpand={() => setPreviewExpanded((prev) => !prev)} />
         </div>
 

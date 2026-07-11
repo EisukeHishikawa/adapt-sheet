@@ -1,6 +1,6 @@
 import { Pencil } from 'lucide-react'
 import { useSheetStore } from '@/store/sheetStore'
-import { composePreviewDocument } from '@/lib/template'
+import { composePreviewDocument, renderTemplate } from '@/lib/template'
 
 // docs/spec.md 2.2「履歴スライド機能」のUI。過去の描画結果を新しい順に横並びで表示し、
 // クリックでプレビューへ復元する。先頭の「編集中」カードは、履歴クリックで上書きされる直前の
@@ -51,7 +51,9 @@ export function HistorySlider() {
             {/* pointer-events-noneで、サムネイル内のリンクではなく親button（履歴選択）へクリックを通す。 */}
             <iframe
               title={`履歴プレビュー ${entry.seq}`}
-              srcDoc={composePreviewDocument(entry.html, entry.css)}
+              // entry.htmlは{{key}}を含んだままのHTMLで実際の値はentry.json側にあるため、
+              // プレビュー本体と同じくrenderTemplateで置換してからサムネイル化する。
+              srcDoc={composePreviewDocument(renderTemplate(entry.html, entry.json), entry.css)}
               className="pointer-events-none h-full w-full"
               tabIndex={-1}
             />

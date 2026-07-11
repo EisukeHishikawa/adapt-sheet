@@ -55,6 +55,27 @@ describe('HistorySlider（履歴スライド機能）', () => {
     expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify({ label: 'old' }))
   })
 
+  // ユーザー報告バグの再現・回帰防止: サムネイルがentry.htmlをそのままiframeに渡していたため、
+  // {{key}}形式のテンプレート変数（バックエンドの生成HTMLに含まれる）が置換されずそのまま表示され、
+  // 「履歴の内容が表示されていない」ように見えていた。PreviewPanelと同じrenderTemplateで
+  // entry.jsonの値を埋め込んでから表示することを検証する。
+  it('サムネイルはHTMLのテンプレート変数をJSONの値で置換した内容を表示する', () => {
+    const entry: HistoryItem = {
+      html: '<p>{{label}}</p>',
+      css: '',
+      json: JSON.stringify({ label: '請求書' }),
+      widthMm: 210,
+      heightMm: 297,
+      seq: 1,
+    }
+    useSheetStore.setState({ history: [entry] })
+    render(<HistorySlider />)
+
+    const iframe = screen.getByTitle('履歴プレビュー 1') as HTMLIFrameElement
+    expect(iframe.srcdoc).toContain('請求書')
+    expect(iframe.srcdoc).not.toContain('{{label}}')
+  })
+
   // ステップ21: 履歴クリックで消えた未保存入力へ戻るための「編集中」カード。
   it('draftがあるときは「編集中」カードを先頭に表示し、クリックでその内容へ戻せる', async () => {
     useSheetStore.setState({

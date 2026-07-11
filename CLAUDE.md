@@ -81,7 +81,14 @@ docker compose --profile e2e run --rm e2e            # Playwright（frontend/Doc
 - PR作成時・main merge時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）のCIを自動実行する運用を予定している。ただし2026-07-05時点でCIワークフローは未構築のため、それまではローカルでのテスト・静的解析結果をPR本文に記載する。CI構築後は100%成功しないとマージ不可とする。
 - レビュー承認必須（Require approvals）は、ソロ開発期間中は無効化している（PR作成者本人は自分のPRを承認できないGitHub仕様のため）。共同開発者が加わった時点で再度有効化を検討する。
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
-- ブランチを切る前に `main` ブランチを `git pull origin main` で最新化する（サブモジュールがある場合は `git submodule update --remote` も実行）。
+- **ブランチの切り方**: プライマリの作業ディレクトリで `main` を**チェックアウトしない**。`docs-space`（後述、ADR-015）が `main` を保持しており、Gitは同一ブランチを複数のワークツリーで同時にチェックアウトできないため、`git checkout main` は `fatal: 'main' is already used by worktree at ...` で失敗する。最新の`main`から直接ブランチを切ること。
+
+  ```bash
+  git fetch origin                                  # リモートの最新をローカルへ取り込む
+  git switch -c feat/step{N}-{概要} origin/main      # 最新のmainを起点に新しいブランチを作成
+  ```
+
+  そのため、プライマリの作業ディレクトリがブランチ作業の合間に detached HEAD になっているのは**この構成では正常な状態**であり、異常ではない（`main`を載せられないため）。detached HEAD のまま古くなっている場合は `git fetch origin` の後に上記の `git switch -c ... origin/main` を実行すれば、そのまま最新のmainを起点に作業を開始できる。
 - マージ済みのローカルブランチを見つけた場合は削除を提案する。
 - **`docs-space`では作業しない**: プロジェクトルート直下の `docs-space`（シンボリックリンク先 `/Users/mina/docs-space`）は `main` ブランチ専用のGit Worktreeであり、常時最新の`main`を読み取り専用で参照するためのものである（ADR-015）。実装作業・ブランチ作成・コミットはプライマリの作業ディレクトリ（このリポジトリ本体）側で行い、`main`をチェックアウトしている`docs-space`配下では行わない。
 

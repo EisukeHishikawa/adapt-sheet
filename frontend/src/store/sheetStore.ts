@@ -221,14 +221,15 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     // ユーザーに誤解を与える表示になってしまうため。
     set({ isLoading: true, error: null, successMessage: null })
     try {
-      // 現時点のエディタ内容（htmlContent/jsonContent/promptContent）とPDF（pdfFile、あれば）、
+      // 現時点のエディタ内容（htmlContent/promptContent）とPDF（pdfFile、あれば）、
       // サイズ指定（widthMm/heightMm、あれば）をリクエストとして送り、
       // レスポンスでストアの表示内容を丸ごと置き換える（docs/spec.md 3.1）。
       // ADR-019によりcssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提のため）。
-      const { htmlContent, jsonContent, promptContent, pdfFile, widthMm, heightMm } = get()
+      // jsonContent（業務データJSON）はGeminiへの入力として不要なため送らない
+      // （backend側もjson_fieldパラメータを廃止済み）。レスポンスのjsonのみを使う。
+      const { htmlContent, promptContent, pdfFile, widthMm, heightMm } = get()
       const result = await renderSheet({
         html: htmlContent,
-        json: jsonContent,
         prompt: promptContent,
         pdf: pdfFile ?? undefined,
         width_mm: widthMm ?? undefined,

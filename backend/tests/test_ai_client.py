@@ -19,7 +19,6 @@ from app.services.ai_client import (
 def test_build_prompt_includes_context():
     prompt = build_prompt(
         html="<p>old</p>",
-        json_data={"a": 1},
         prompt="請求書のレイアウトにして",
         width_mm=210,
         height_mm=297,
@@ -33,14 +32,21 @@ def test_build_prompt_excludes_css_section():
     # ADR-019: CSSは独立した入力を持たず、既存htmlの<style>に埋め込まれている前提のため、
     # プロンプトに「既存CSS」の節を生成しないことを回帰テストとして固定する。
     prompt = build_prompt(
-        html="<style>body{}</style>", json_data={}, prompt="x", width_mm=None, height_mm=None
+        html="<style>body{}</style>", prompt="x", width_mm=None, height_mm=None
     )
     assert "既存CSS" not in prompt
 
 
+def test_build_prompt_excludes_business_json_section():
+    # 業務データJSONはGeminiへの入力として不要（レスポンス側でのみ必要）なため、
+    # プロンプトに業務データJSONの節を含めないことを回帰テストとして固定する。
+    prompt = build_prompt(html="", prompt="x", width_mm=None, height_mm=None)
+    assert "業務データJSON" not in prompt
+
+
 def test_mock_client_returns_valid_render_result():
     client = MockAIClient()
-    prompt = build_prompt(html="", json_data={}, prompt="サンプル", width_mm=None, height_mm=None)
+    prompt = build_prompt(html="", prompt="サンプル", width_mm=None, height_mm=None)
     result = client.generate(prompt)
 
     assert isinstance(result, RenderResult)
@@ -54,7 +60,7 @@ def test_mock_client_returns_valid_render_result():
 
 def test_mock_client_returns_delivery_note_for_portrait_size():
     client = MockAIClient()
-    prompt = build_prompt(html="", json_data={}, prompt="x", width_mm=210, height_mm=297)
+    prompt = build_prompt(html="", prompt="x", width_mm=210, height_mm=297)
     result = client.generate(prompt)
 
     validate_render_result(result)
@@ -64,7 +70,7 @@ def test_mock_client_returns_delivery_note_for_portrait_size():
 
 def test_mock_client_returns_invoice_for_landscape_size():
     client = MockAIClient()
-    prompt = build_prompt(html="", json_data={}, prompt="x", width_mm=297, height_mm=210)
+    prompt = build_prompt(html="", prompt="x", width_mm=297, height_mm=210)
     result = client.generate(prompt)
 
     validate_render_result(result)
@@ -76,7 +82,7 @@ def test_mock_client_defaults_to_delivery_note_when_size_is_unspecified():
     # サイズ未指定時は、フロント（sheetStore）の既定サイズがA4縦であることに合わせ、
     # 納品書（縦のモック）をデフォルトにする。
     client = MockAIClient()
-    prompt = build_prompt(html="", json_data={}, prompt="x", width_mm=None, height_mm=None)
+    prompt = build_prompt(html="", prompt="x", width_mm=None, height_mm=None)
     result = client.generate(prompt)
 
     validate_render_result(result)

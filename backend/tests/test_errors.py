@@ -26,8 +26,8 @@ def _assert_error_envelope(body: dict, expected_code: str) -> str:
 
 
 def test_validation_error_returns_structured_body():
-    # JSON構文エラー → 400 VALIDATION_ERROR（docs/spec.md 4章）。
-    response = client.post("/api/render", data={"json": "{invalid"})
+    # サイズ指定の型不正（width_mmが数値でない）→ 400 VALIDATION_ERROR（docs/spec.md 4章）。
+    response = client.post("/api/render", data={"width_mm": "not-a-number"})
 
     assert response.status_code == 400
     request_id = _assert_error_envelope(response.json(), "VALIDATION_ERROR")

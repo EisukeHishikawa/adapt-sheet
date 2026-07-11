@@ -39,21 +39,23 @@ describe('renderSheet', () => {
     expect(formData.has('pdf')).toBe(false)
   })
 
-  // DEVELOPMENT.md ステップ16のTDD要件: json/promptフィールドがFormDataに正しく含まれること、
+  // DEVELOPMENT.md ステップ16のTDD要件: promptフィールドがFormDataに正しく含まれること、
   // およびADR-019に基づきcssフィールドを持たないRenderRequestFieldsからは
-  // cssが送信されようがないことを検証する。
-  it('json/promptフィールドが渡された場合、FormDataにそのまま含めて送信する', async () => {
+  // cssが送信されようがないことを検証する。jsonは業務データがGeminiへの入力として
+  // 不要になったためRenderRequestFieldsから削除済みで、そもそも送信されようがない
+  // （backend/app/main.pyのjson_fieldパラメータ廃止と対）。
+  it('promptフィールドが渡された場合、FormDataにそのまま含めて送信する', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
 
-    await renderSheet({ html: '<p>x</p>', json: '{"a":1}', prompt: '請求書レイアウトにして' })
+    await renderSheet({ html: '<p>x</p>', prompt: '請求書レイアウトにして' })
 
     const [, init] = fetchSpy.mock.calls[0]
     const formData = init?.body as FormData
-    expect(formData.get('json')).toBe('{"a":1}')
     expect(formData.get('prompt')).toBe('請求書レイアウトにして')
     expect(formData.has('css')).toBe(false)
+    expect(formData.has('json')).toBe(false)
   })
 })
 

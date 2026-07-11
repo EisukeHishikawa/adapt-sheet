@@ -1,7 +1,6 @@
-import json as json_lib
 from typing import Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, UploadFile
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -64,9 +63,6 @@ def render(
     # ADR-019によりcssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
     # 埋め込まれている前提のため）。
     html: str = Form(""),
-    # 標準ライブラリのjsonモジュールと名前が衝突するため、パラメータ名はjson_fieldとし、
-    # フォームのフィールド名のみalias="json"でdocs/spec.md 3.1の契約に合わせる。
-    json_field: str = Form("{}", alias="json"),
     prompt: str = Form(""),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
@@ -77,17 +73,6 @@ def render(
     # 同様にDocling変換もDependsで注入し、テスト側で高速なフェイクに差し替え可能にする。
     pdf_converter: PDFConverter = Depends(get_pdf_converter),
 ) -> RenderResponse:
-    try:
-        json_data = json_lib.loads(json_field)
-    except json_lib.JSONDecodeError as exc:
-        # docs/spec.md エラーコード定義: JSON構文エラーは400 Bad Request。
-        raise HTTPException(
-            status_code=400, detail=f"json フィールドの解析に失敗しました: {exc}"
-        ) from exc
-
-    if not isinstance(json_data, dict):
-        raise HTTPException(status_code=400, detail="json フィールドはオブジェクト形式である必要があります")
-
     # docs/architecture.md 2節のシーケンス図: PDFが存在する場合、Doclingで抽出したHTMLを
     # 既存htmlフィールドの代わりにプロンプト構築のベースコンテキストとして使う。
     # ADR-017に基づき、PDFConversionErrorはここで捕捉せずそのまま送出し、
@@ -98,7 +83,6 @@ def render(
 
     prompt_text = build_prompt(
         html=effective_html,
-        json_data=json_data,
         prompt=prompt,
         width_mm=width_mm,
         height_mm=height_mm,

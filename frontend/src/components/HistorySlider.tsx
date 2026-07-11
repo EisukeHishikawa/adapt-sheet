@@ -1,5 +1,6 @@
 import { Pencil } from 'lucide-react'
 import { useSheetStore } from '@/store/sheetStore'
+import { renderTemplate } from '@/lib/template'
 
 // ステップ8: docs/spec.md 2.2「履歴スライド機能」のUI。
 // 過去の描画結果（最大10件、ストア側で管理）を新しい順に横並びで表示し、
@@ -46,8 +47,14 @@ export function HistorySlider() {
         )}
 
         {history.map((entry, index) => {
-          // PreviewPanelと同じ方法でhtml+cssを合成し、当時の見た目をそのままサムネイル化する。
-          const srcDoc = entry.css ? `${entry.html}\n<style>${entry.css}</style>` : entry.html
+          // バグ修正: entry.htmlはバックエンドが返す{{key}}プレースホルダを含んだままのHTMLで、
+          // 実際の値はentry.json側にある（CLAUDE.md「固定情報と業務データの分離」）。
+          // 従来はentry.htmlをそのままsrcDocにしていたため、サムネイルに{{customer_name}}等の
+          // プレースホルダがそのまま表示され「内容が表示されていない」ように見えていた
+          // （ユーザー報告バグ）。PreviewPanelと同じrenderTemplateでentry.jsonの値を埋め込んでから
+          // html+cssを合成し、当時の見た目をそのままサムネイル化する。
+          const renderedHtml = renderTemplate(entry.html, entry.json)
+          const srcDoc = entry.css ? `${renderedHtml}\n<style>${entry.css}</style>` : renderedHtml
           return (
             <button
               // keyは位置(index)ではなく描画ごとに一意なseqにする（削除・並び替えでの再利用を避ける）。

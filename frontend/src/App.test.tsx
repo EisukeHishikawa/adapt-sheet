@@ -214,4 +214,32 @@ describe('描画中の経過秒数表示（ステップ22）', () => {
     })
     expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(0秒)')
   })
+
+  // ユーザー報告バグの再現・回帰防止: 描画中にプレビューを全画面（拡大）表示すると、
+  // RenderButtonを含む上段一帯が{!previewExpanded && (...)}でアンマウントされ、
+  // 縮小して戻したときに経過秒数が0秒に戻ってしまっていた。App.tsxの修正で
+  // 「display:contentsで見た目だけ隠しマウントは維持する」形に変え、拡大表示中も
+  // 経過秒数のstateが失われないことを検証する。
+  it('描画中にプレビューを拡大→縮小しても、経過秒数はリセットされない', () => {
+    render(<App />)
+
+    act(() => {
+      useSheetStore.setState({ isLoading: true })
+    })
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(2秒)')
+
+    // プレビューを拡大表示する（従来はここでRenderButtonごとアンマウントされていた）。
+    fireEvent.click(screen.getByRole('button', { name: 'プレビューを拡大' }))
+
+    act(() => {
+      vi.advanceTimersByTime(3000)
+    })
+
+    // 縮小して戻すと、拡大表示中も進み続けていた秒数（2+3=5秒）がそのまま表示される。
+    fireEvent.click(screen.getByRole('button', { name: 'プレビューを縮小' }))
+    expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(5秒)')
+  })
 })

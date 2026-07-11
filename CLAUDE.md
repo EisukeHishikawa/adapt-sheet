@@ -18,12 +18,7 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 > フェーズ2以降、実装が進み次第このセクションを実コマンドで更新する。
 
-開発環境はDocker Composeのみを対象とし、ローカル（非Docker）での直接実行はサポートしない（ADR-014）。`docker compose up --build`でfrontend/backend/doclingを起動した上で、以下のコマンドは起動中のコンテナに対して実行する。
-
-### 起動ポリシー（ポート固定・既存起動時は再起動）
-
-- アプリは**常に同じポート**で起動する。frontend=`5173`、backend=`8000`（`docker-compose.yml`のマッピング、`frontend/vite.config.ts`の`port`/`strictPort`で固定）。別ポートへ自動退避させない（ポートずれで古いインスタンスを誤認する事故を防ぐため）。
-- 起動時に**既に起動済みの場合は再起動してよい**（同一ポートでのクリーンな単一インスタンスを保証する）。`docker compose up -d --force-recreate frontend backend` 等で作り直す。複数インスタンスを別ポートで並行起動しない。
+起動手順（`docker compose up --build`、ポート固定、既存起動時の再作成方法等）は [`README.md`](./README.md) の「クイックスタート」に一本化している。ClaudeCodeがアプリを起動・再起動する際は必ずそちらの手順に従うこと。以下は起動中のコンテナに対して実行するテスト・静的解析コマンド。
 
 ### バックエンド (Python / FastAPI、入口エンドポイント)
 
@@ -85,6 +80,7 @@ docker compose --profile e2e run --rm e2e            # Playwright（frontend/Doc
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
 - ブランチを切る前に `main` ブランチを `git pull origin main` で最新化する（サブモジュールがある場合は `git submodule update --remote` も実行）。
 - マージ済みのローカルブランチを見つけた場合は削除を提案する。
+- **`docs-space`では作業しない**: プロジェクトルート直下の `docs-space`（シンボリックリンク先 `/Users/mina/docs-space`）は `main` ブランチ専用のGit Worktreeであり、常時最新の`main`を読み取り専用で参照するためのものである（ADR-015）。実装作業・ブランチ作成・コミットはプライマリの作業ディレクトリ（このリポジトリ本体）側で行い、`main`をチェックアウトしている`docs-space`配下では行わない。
 
 ## GitHub MCP / ギットハブ運用ルール
 

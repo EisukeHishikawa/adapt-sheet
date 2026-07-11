@@ -119,6 +119,21 @@ def test_render_ignores_json_field_if_sent():
     assert response.status_code == 200
 
 
+def test_render_rejects_prompt_exceeding_max_length():
+    # セキュリティ対策: promptはプロンプトインジェクション・過大トークン消費のリスクを
+    # 抑えるため100文字を上限とし、超過時はdocs/spec.md 4章の400 VALIDATION_ERRORとする。
+    response = client.post("/api/render", data={"prompt": "あ" * 101})
+
+    assert response.status_code == 400
+
+
+def test_render_accepts_prompt_at_max_length():
+    # 上限ちょうど（100文字）は拒否されないことを境界値として確認する。
+    response = client.post("/api/render", data={"prompt": "あ" * 100})
+
+    assert response.status_code == 200
+
+
 def test_render_ignores_css_field_if_sent():
     # ADR-019: cssはリクエストの宣言済みフィールドではなくなったため、クライアントが送っても
     # FastAPIが未知のフォームフィールドとして無視し、エラーにならないことを確認する。

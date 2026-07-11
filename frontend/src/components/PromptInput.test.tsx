@@ -26,4 +26,14 @@ describe('PromptInput（プロンプト入力・左カラム）', () => {
 
     expect(screen.getByPlaceholderText('プロンプトを入力してください。')).toBeInTheDocument()
   })
+
+  it('プロンプトインジェクション対策として、入力は100文字までに制限される', async () => {
+    const user = userEvent.setup()
+    render(<PromptInput />)
+
+    const promptEditor = screen.getByRole('textbox', { name: 'プロンプト入力' })
+    await user.type(promptEditor, 'あ'.repeat(105))
+
+    expect(useSheetStore.getState().promptContent).toHaveLength(100)
+  })
 })

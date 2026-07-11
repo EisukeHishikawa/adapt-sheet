@@ -22,6 +22,8 @@ const initialSheetState = {
   widthMm: null,
   heightMm: null,
   history: [],
+  // ステップ21で追加した「編集中」退避スロット。リセット漏れ防止のため初期値を明示する。
+  draft: null,
   isLoading: false,
   error: null,
   successMessage: null,

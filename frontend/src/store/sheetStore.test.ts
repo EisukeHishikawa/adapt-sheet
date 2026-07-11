@@ -18,6 +18,9 @@ const initialSheetState = {
   widthMm: null,
   heightMm: null,
   history: [],
+  // ステップ21: 履歴クリック時の未保存入力の退避スロット。setStateは浅いマージのため、
+  // ここに含めないとテスト間でdraftが漏れる。
+  draft: null,
   isLoading: false,
   error: null,
   successMessage: null,
@@ -88,6 +91,76 @@ describe('sheetStore（履歴スライド機能）', () => {
     // 最新（10番目, html=<p>10</p>）が先頭、最古（0番目, html=<p>0</p>）は破棄されている
     expect(history[0].html).toBe('<p>10</p>')
     expect(history.at(-1)?.html).toBe('<p>1</p>')
+  })
+})
+
+// ステップ21のバグ修正TDD要件:
+// 「履歴サムネイルを押すと、直前まで入力していた未保存の内容が消える」不具合の再発防止。
+// 復元前に現在の入力をdraftへ退避し、restoreDraftで元へ戻せることをストアのロジックとして固定する。
+describe('sheetStore（履歴クリックで未保存入力を失わない・ステップ21）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+  })
+
+  it('未保存の入力があるまま履歴を復元すると、その入力がdraftへ退避される', () => {
+    useSheetStore.setState({
+      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 }],
+      // ユーザーが描画せずに編集中の内容（未保存）
+      htmlContent: '<p>editing</p>',
+      jsonContent: '{"wip":true}',
+    })
+
+    useSheetStore.getState().restoreFromHistory(0)
+
+    // エディタは履歴の内容に切り替わる
+    expect(useSheetStore.getState().htmlContent).toBe('<p>past</p>')
+    // 直前の未保存入力はdraftとして退避され、失われない
+    expect(useSheetStore.getState().draft).toMatchObject({
+      html: '<p>editing</p>',
+      json: '{"wip":true}',
+    })
+  })
+
+  it('restoreDraftで退避した未保存入力を元に戻せる', () => {
+    useSheetStore.setState({
+      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 }],
+      htmlContent: '<p>editing</p>',
+      jsonContent: '{"wip":true}',
+    })
+
+    useSheetStore.getState().restoreFromHistory(0)
+    useSheetStore.getState().restoreDraft()
+
+    expect(useSheetStore.getState().htmlContent).toBe('<p>editing</p>')
+    expect(useSheetStore.getState().jsonContent).toBe('{"wip":true}')
+  })
+
+  it('復元中の内容（すでに履歴と一致）を再度クリックしても、draftを重複更新しない', () => {
+    useSheetStore.setState({
+      history: [
+        { html: '<p>a</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 },
+        { html: '<p>b</p>', css: '', json: '{}', widthMm: 210, heightMm: 297 },
+      ],
+      htmlContent: '',
+      jsonContent: '',
+    })
+
+    // 空の状態から履歴aを復元（未保存の意味ある入力が無いのでdraftはnullのまま）
+    useSheetStore.getState().restoreFromHistory(0)
+    expect(useSheetStore.getState().draft).toBeNull()
+
+    // 復元済み（=履歴と一致）の状態から別の履歴bを復元してもdraftは作られない
+    useSheetStore.getState().restoreFromHistory(1)
+    expect(useSheetStore.getState().draft).toBeNull()
+    expect(useSheetStore.getState().htmlContent).toBe('<p>b</p>')
+  })
+
+  it('描画に成功するとdraft（編集中の退避）はクリアされる', async () => {
+    useSheetStore.setState({ draft: { html: '<p>old</p>', css: '', json: '{}', widthMm: null, heightMm: null } })
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().draft).toBeNull()
   })
 })
 

@@ -204,7 +204,7 @@ export function SizeControls() {
           <input
             type="number"
             aria-label="横幅 (mm)"
-            className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm"
+            className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             // controlled入力: nullのときは空文字にして「未入力」を表現する
             value={widthMm ?? ''}
             onChange={handleNumberChange(setWidthMm)}
@@ -215,7 +215,7 @@ export function SizeControls() {
           <input
             type="number"
             aria-label="縦幅 (mm)"
-            className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm"
+            className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             value={heightMm ?? ''}
             onChange={handleNumberChange(setHeightMm)}
           />

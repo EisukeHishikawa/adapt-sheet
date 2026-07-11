@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { FileText, Maximize2, Minimize2 } from 'lucide-react'
 import { SIZE_PRESETS, useSheetStore } from '@/store/sheetStore'
 
 // 左カラム下部のリアルタイムプレビュー。iframeを使うのは、生成されたHTML/CSSを
@@ -71,6 +72,10 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
   const displayWidth = pageWidthPx * scale
   const displayHeight = pageHeightPx * scale
 
+  // ステップ21: まだ描画・入力していない空の状態。用紙が真っ白なだけだと「準備中/壊れている」と
+  // 誤解されやすいため、プレースホルダ（アイコン＋説明）を用紙の上に薄く重ねて用途を示す。
+  const isEmpty = htmlContent.trim() === '' && cssContent.trim() === ''
+
   return (
     // ステップ20: モバイル(md未満)ではflex-1の高さの元になる祖先の固定高さが無いため、
     // min-h-[50vh]で表示領域を確保する。md以上は既存どおりflex-1で残り高さいっぱいに広げる。
@@ -86,7 +91,7 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
         onClick={onToggleExpand}
         // 表示ページと同じ寸法にする（用紙比率を保った収まりサイズ）。未測定の間は100%で仮表示する。
         style={{ width: displayWidth || '100%', height: displayHeight || '100%' }}
-        className="relative overflow-hidden rounded-md border border-input bg-white transition-colors hover:border-ring"
+        className="group relative overflow-hidden rounded-md border border-input bg-white shadow-sm ring-0 transition-all hover:border-ring hover:shadow-md"
       >
         <iframe
           title="プレビュー"
@@ -102,6 +107,23 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
             transformOrigin: 'top left',
           }}
         />
+        {/* 空状態プレースホルダ。iframeの上に薄く重ねる。クリックは親buttonへ通すためpointer-events-none。 */}
+        {isEmpty && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/70"
+          >
+            <FileText className="size-8" strokeWidth={1.5} />
+            <span className="text-xs">描画するとここに帳票が表示されます</span>
+          </div>
+        )}
+        {/* 拡大/縮小アイコン。右上に控えめに置き、ホバーで明確化する（押下で親buttonがトグル）。 */}
+        <span
+          aria-hidden="true"
+          className="absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-md border border-input bg-background/85 text-muted-foreground opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100"
+        >
+          {expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+        </span>
       </button>
     </div>
   )

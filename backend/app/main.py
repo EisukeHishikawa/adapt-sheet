@@ -26,30 +26,26 @@ from app.services.docling_client import (
     get_pdf_converter,
 )
 
-# アプリ生成前にログ設定を行い、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-016）。
+# アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-016）。
 configure_logging()
 
 app = FastAPI()
 
-# リクエスト相関ID採番・アクセスログ・想定外例外の500化（ADR-016/017、app/middleware.py）。
+# リクエスト相関ID採番・アクセスログ・想定外例外の500化（ADR-016/017）。
 app.add_middleware(RequestContextMiddleware)
 
-# 例外→構造化エラーレスポンスの整形をハンドラへ集約する（ADR-017）。
-# StarletteHTTPExceptionで登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
+# 例外→構造化エラーレスポンスの整形はハンドラへ集約する（ADR-017）。StarletteHTTPExceptionで
+# 登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-# 入力バリデーション失敗はdocs/spec.md 4章に合わせ400へ寄せる（FastAPI既定の422はDocling専用のため）。
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-# ドメイン例外はmain.py内でHTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
 app.add_exception_handler(PDFConversionError, pdf_conversion_error_handler)
 app.add_exception_handler(AIGenerationError, ai_generation_error_handler)
 
 
-# response_modelとして明示することで、openapi.json（フロントの型生成元。docs/spec.md 3.2）に
-# html/css/jsonの型が正しく出力されるようにする。dictの直接returnだとFastAPIが
-# 型情報を推論できずopenapi.jsonのレスポンススキーマがobject止まりになるため。
+# response_modelを明示しないと、FastAPIが型を推論できずopenapi.json（フロントの型生成元。ADR-006）の
+# レスポンススキーマがobject止まりになる。
 class RenderResponse(BaseModel):
-    # docs/spec.md 3.1のレスポンス例に合わせ、Python予約語と衝突する`json`キー名を
-    # エイリアスとして公開する（内部属性名はjson_）。
+    # Python予約語と衝突する`json`キー名をエイリアスとして公開する（docs/spec.md 3.1のレスポンス例）。
     model_config = ConfigDict(populate_by_name=True)
 
     html: str
@@ -57,29 +53,24 @@ class RenderResponse(BaseModel):
     json_: dict = Field(default_factory=dict, alias="json")
 
 
-# ステップ6でモックから本実装へ差し替え、ステップ7でpdfフィールド（Docling統合）に対応。
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
 def render(
-    # ADR-019によりcssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
-    # 埋め込まれている前提のため）。
     html: str = Form(""),
     # セキュリティ対策: promptはプロンプトインジェクションの温床になり得る自由入力のため、
-    # フロント（PromptInput.tsxのmaxLength）と合わせてバックエンド側でも100文字を厳格な上限とする。
-    # 超過時はFastAPIのRequestValidationError経由でapp/errors.pyが400 VALIDATION_ERRORへ変換する。
+    # フロント（PromptInput.tsxのmaxLength）と合わせて長さを二重に制限する。超過時は
+    # RequestValidationError経由でapp/errors.pyが400 VALIDATION_ERRORへ変換する。
     prompt: str = Form("", max_length=100),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
     pdf: Optional[UploadFile] = File(None),
-    # FastAPIのDependsで注入することで、テスト側がdependency_overridesにより
-    # AIクライアントの成功/失敗を差し替えられるようにする（ADR-007）。
+    # Dependsで注入することで、テスト側がdependency_overridesにより成功/失敗や高速なフェイクへ
+    # 差し替えられるようにする（ADR-007）。
     ai_client: AIClient = Depends(get_ai_client),
-    # 同様にDocling変換もDependsで注入し、テスト側で高速なフェイクに差し替え可能にする。
     pdf_converter: PDFConverter = Depends(get_pdf_converter),
 ) -> RenderResponse:
-    # docs/architecture.md 2節のシーケンス図: PDFが存在する場合、Doclingで抽出したHTMLを
-    # 既存htmlフィールドの代わりにプロンプト構築のベースコンテキストとして使う。
-    # ADR-017に基づき、PDFConversionErrorはここで捕捉せずそのまま送出し、
-    # app/errors.pyのハンドラで422構造化エラーへ一元変換する。
+    # PDFがある場合は、Doclingで抽出したHTMLをhtmlフィールドの代わりにプロンプトのベースにする
+    # （docs/architecture.md 2節のシーケンス図）。
+    # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う（ADR-017）。
     effective_html = html
     if pdf is not None:
         effective_html = pdf_converter.convert_to_html(pdf.filename or "uploaded.pdf", pdf.file.read())
@@ -91,7 +82,6 @@ def render(
         height_mm=height_mm,
     )
 
-    # ADR-017に基づき、AIGenerationErrorもここでは捕捉せず、ハンドラで502構造化エラーへ変換する。
     result = ai_client.generate(prompt_text)
     validate_render_result(result)
 

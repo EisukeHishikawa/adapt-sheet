@@ -1,12 +1,7 @@
-"""Docling変換の呼び出しレイヤー（DEVELOPMENT.md ステップ7→ステップ15）。
+"""Docling変換の呼び出しレイヤー（ADR-018）。
 
-ADR-018に基づき、Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離した。
-本モジュールはHTTP経由でdocling-serviceの`POST /convert`を呼び出すクライアントのみを持つ。
-PDFConverterプロトコル自体はステップ7から変更していないため、app/main.pyのDI配線・
-docs/spec.md 3.1の外部API契約（/api/render）は無変更のまま分離できる。
-
-adapt-sheetの帳票テンプレートは1ページ完結が前提のため、docling-serviceへ転送する前に
-`_first_page_only`で2ページ目以降を破棄する（Docling側の処理時間を1ページ分に抑えるため）。
+Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離したため、本モジュールは
+HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。
 """
 
 from __future__ import annotations
@@ -20,27 +15,19 @@ from pypdf import PdfReader, PdfWriter
 
 
 class PDFConversionError(Exception):
-    """PDF解析に失敗した場合の例外。
+    """PDF解析の失敗。app/errors.pyのハンドラが422へ変換する（docs/spec.md 4章）。
 
-    docs/spec.mdのエラーコード定義に合わせ、呼び出し側（app/main.py）で
-    422 Unprocessable Entityへ変換することを想定する。docling-serviceからの非200応答・
-    接続エラー（サービスダウン等）もここへマッピングする（ADR-018）。
+    docling-serviceからの非200応答・接続エラー（サービスダウン等）もここへマッピングする（ADR-018）。
     """
 
 
 class PDFConverter(Protocol):
-    """本番/テストで差し替え可能にするための共通インターフェース。
-
-    ai_client.AIClientと同様、FastAPIのDependsで注入し、
-    テスト側がdependency_overridesで高速なフェイクに差し替えられるようにする。
-    """
+    """本番/テストで差し替え可能にするための共通インターフェース（ai_client.AIClientと同じ方針）。"""
 
     def convert_to_html(self, filename: str, content: bytes) -> str: ...
 
 
-# docker-compose.ymlのbackendサービスに設定される内部サービスURL（サービス名docling、ADR-018）。
-# 未設定時のデフォルトもcompose上のサービス名に合わせておくことで、環境変数を明示しない
-# 単体実行（スクリプト等）でも同じ既定値で動作する。
+# 未設定時の既定をcompose上のサービス名に合わせ、環境変数を明示しない単体実行でも動くようにする。
 _DEFAULT_DOCLING_SERVICE_URL = "http://docling:8100"
 
 
@@ -48,8 +35,7 @@ class RemoteDoclingPDFConverter:
     """docling-serviceへHTTPで変換を委譲する本番実装（ADR-018）。"""
 
     def __init__(self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None) -> None:
-        # base_url/clientをコンストラクタ引数で受けられるようにし、テスト側がhttpx.MockTransportを
-        # 注入したClientやカスタムURLに差し替えられるようにする。
+        # テスト側がhttpx.MockTransportを注入したClientやカスタムURLへ差し替えられるよう引数で受ける。
         self._base_url = (
             base_url or os.environ.get("DOCLING_SERVICE_URL", _DEFAULT_DOCLING_SERVICE_URL)
         ).rstrip("/")
@@ -58,9 +44,8 @@ class RemoteDoclingPDFConverter:
     def convert_to_html(self, filename: str, content: bytes) -> str:
         content = _first_page_only(content)
         try:
-            # ローカル開発でdocling-serviceコンテナを起動した直後の初回変換は、OCRモデルの
-            # 初回ダウンロード（実測で60秒超）が発生しうるため、通常の推論時間（数秒〜十数秒）
-            # より大きめの120秒を設定する。モデルはコンテナ内にキャッシュされるため2回目以降は短い。
+            # コンテナ起動直後の初回変換ではOCRモデルのダウンロード（実測60秒超）が発生しうるため、
+            # 通常の推論時間（数秒〜十数秒）より大きめのタイムアウトを取る。
             response = self._client.post(
                 f"{self._base_url}/convert",
                 files={"file": (filename, content, "application/pdf")},
@@ -79,12 +64,11 @@ class RemoteDoclingPDFConverter:
 
 
 def _first_page_only(content: bytes) -> bytes:
-    """PDFの1ページ目のみを残したバイト列を返す。
+    """PDFの1ページ目のみを残したバイト列を返す（ADR-021）。
 
-    adapt-sheetの帳票テンプレートは1ページ完結が前提のため、2ページ目以降をDoclingへ
-    送っても解析コスト（処理時間）が増えるだけで使われない。docling-serviceへ転送する前に
-    ここで切り詰める。PDFとして解析できない場合（壊れている等）は、そのままの検証・422化を
-    docling-service側の既存エラーハンドリングに委ねるため、元のバイト列を無変更で返す。
+    帳票テンプレートは1ページ完結が前提のため、2ページ目以降はDoclingの解析コストを増やすだけで
+    使われない。PDFとして解析できない場合は元のバイト列をそのまま返し、検証と422化は
+    docling-service側の既存エラーハンドリングに委ねる。
     """
     try:
         reader = PdfReader(BytesIO(content))
@@ -100,8 +84,8 @@ def _first_page_only(content: bytes) -> bytes:
 
 
 def _extract_detail(response: httpx.Response) -> str:
-    # docling-service側はFastAPIのHTTPExceptionで{"detail": ...}形式を返す（app/main.py参照）。
-    # 想定外の形式（ネットワーク機器のエラーページ等）が返った場合も落ちないようフォールバックする。
+    # docling-serviceはFastAPIのHTTPExceptionで{"detail": ...}を返すが、想定外の形式
+    # （ネットワーク機器のエラーページ等）が返っても落ちないようフォールバックする。
     try:
         return str(response.json().get("detail", response.text))
     except ValueError:

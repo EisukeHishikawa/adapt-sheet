@@ -3,15 +3,9 @@ import { cn } from '@/lib/utils'
 import { CodeEditor } from '@/components/CodeEditor'
 import { useSheetStore } from '@/store/sheetStore'
 
-// 右カラムのコード入力エディタ。ステップ16まではHTML/JSON/プロンプトを縦に並べて全て左カラムに
-// 置いていたが、レイアウト再設計（ステップ18）で以下のように役割を分割した。
-//   - このEditorPanelは右カラム専用とし、HTML入力とJSON入力を「タブ切り替え」で表示する。
-//     両方を常時縦積みするより、広い右カラムを1つの入力に使えて編集しやすいため。
-//   - サイズ/描画ボタン・PDF・プロンプト・プレビューは左カラム（App.tsx）へ移動した。
-// 「HTML入力」「JSON入力」の見出しテキストは画面から非表示にする指示のため、視覚的な<label>は
-// 置かず、タブ（HTML/JSON）で内容を示す。アクセシビリティ・テスト用の名前はtextareaの
-// aria-labelで従来どおり保持する（SizeControlsと同じ方針）。
-// CSS入力エディタは追加しない（ADR-019: CSSはHTML側の<style>に埋め込む前提）。
+// 右カラムのコード入力。HTMLとJSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
+// 1つの入力に使えて編集しやすくする。CSS入力は持たない（ADR-019）。
+// 見出しは画面に出さないため、名前はtextareaのaria-labelで保持する（SizeControlsと同じ方針）。
 type EditorTab = 'html' | 'json'
 
 export function EditorPanel() {
@@ -20,16 +14,13 @@ export function EditorPanel() {
   const jsonContent = useSheetStore((state) => state.jsonContent)
   const setJsonContent = useSheetStore((state) => state.setJsonContent)
 
-  // どちらのタブを表示中か。既定はHTML（帳票の骨組みが主入力のため）。
-  // タブ切り替えで非表示側のtextareaはアンマウントされるが、入力値はZustandストアが
-  // 保持しているため、タブを戻せば内容はそのまま復元される（ローカルstateを持たない設計）。
+  // 非表示側のtextareaはアンマウントされるが、入力値はストアが保持しているためタブを戻せば復元される。
   const [activeTab, setActiveTab] = useState<EditorTab>('html')
 
   return (
-    // ステップ20: モバイル(md未満)は左カラムの下に縦積みされるため、h-full(祖先の固定高さ依存)
-    // ではなくmin-h-[60vh]で自身の高さを確保する。md以上は既存どおり右カラム固定幅(w-1/2)＋h-full。
+    // md未満（左カラムの下に縦積みされる）ではmin-h-[60vh]で自身の高さを確保する。祖先に固定高さが
+    // 無いためh-fullでは潰れてしまう。md以上は右カラム固定幅＋h-full。
     <div className="flex min-h-[60vh] w-full flex-col gap-2 p-4 md:h-full md:min-h-0 md:w-1/2">
-      {/* HTML/JSONのタブ。role=tab/aria-selectedでアクセシビリティとテスト（getByRole('tab')）に対応する。 */}
       <div role="tablist" aria-label="入力形式" className="flex gap-1 border-b border-input">
         {(['html', 'json'] as const).map((tab) => (
           <button
@@ -38,8 +29,8 @@ export function EditorPanel() {
             role="tab"
             aria-selected={activeTab === tab}
             onClick={() => setActiveTab(tab)}
-            // 選択中タブは下線（border-b-2）と濃い文字色で示す。-mb-pxでtablistの下罫線に重ねる。
             className={cn(
+              // -mb-pxで選択中タブの下線をtablistの罫線に重ねる。
               '-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition-colors',
               activeTab === tab
                 ? 'border-foreground text-foreground'
@@ -52,11 +43,9 @@ export function EditorPanel() {
       </div>
 
       {activeTab === 'html' ? (
-        // ステップ18: シンタックスハイライト・コピー付きのコードエディタUIで入力する（CodeEditor）。
         <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
       ) : (
-        // ステップ16: 業務データJSON入力。JSON構文チェックはフロントで重複実装せず、
-        // バックエンドの既存の400 VALIDATION_ERROR（docs/spec.md 4章）に委ねる。
+        // JSON構文チェックはフロントで重複実装せず、バックエンドの400 VALIDATION_ERRORに委ねる。
         <CodeEditor id="json-editor" ariaLabel="JSON入力" language="json" value={jsonContent} onChange={setJsonContent} />
       )}
     </div>

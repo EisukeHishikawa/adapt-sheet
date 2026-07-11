@@ -1,22 +1,16 @@
 import { useSheetStore } from '@/store/sheetStore'
 
-// セキュリティ対策: promptはそのままGeminiへの動的プロンプトに埋め込まれるため、
-// プロンプトインジェクション・過大な入力によるトークン濫用を防ぐ目的でバックエンド
-// （app/main.pyのForm(max_length=100)）と同じ上限を設け、二重に制限する。
+// promptはそのままGeminiへの動的プロンプトに埋め込まれるため、プロンプトインジェクション・
+// トークン濫用への対策としてバックエンド（app/main.pyのForm(max_length=100)）と同じ上限を設け、
+// 二重に制限する。
 const MAX_PROMPT_LENGTH = 100
 
-// 左カラムのプロンプト入力欄。ステップ18のレイアウト再設計でEditorPanel（右カラム）から
-// 独立させ、サイズ操作・PDF・プレビューと同じ左カラムに配置する。
-// 「プロンプト入力」という見出しテキストは非表示にする指示のため、視覚的な<label>は置かず、
-// プレースホルダ「プロンプトを入力してください。」で用途を示す。名前（アクセシビリティ・テスト用）は
-// aria-labelで保持する。レスポンスに対応するフィールドが無いため、描画後も入力値は保持される
-// （sheetStore.fetchRender参照）。
+// 生成方針の自然言語指示。見出しは画面に出さずプレースホルダで用途を示すため、名前はaria-labelで保持する。
 export function PromptInput() {
   const promptContent = useSheetStore((state) => state.promptContent)
   const setPromptContent = useSheetStore((state) => state.setPromptContent)
 
   return (
-    // ステップ21: フォーカス時のリング・プレースホルダ色・余白を整え、他の入力欄と質感を揃える。
     <textarea
       id="prompt-editor"
       aria-label="プロンプト入力"

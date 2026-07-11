@@ -1,17 +1,11 @@
 import { create } from 'zustand'
 import { RenderApiError, renderSheet } from '@/lib/api'
 
-// 2カラム画面（左：入力エディタ / 右：プレビュー）を疎結合に連動させるためのグローバルストア。
-// props経由のバケツリレーを避け、どのコンポーネントからも同じ状態を参照・更新できるようにする。
-// ステップ5で「描画ボタン→API疎通」を追加するため、レスポンスのcss/json、
-// 通信中/エラー状態も併せて持たせる。
-// ステップ7でPDFドラッグ＆ドロップ（docs/spec.md 2.1 ファイル操作）に対応するため、
-// アップロード済みPDFをpdfFile/pdfFileNameとして持たせる。実体（File）とファイル名を分けるのは、
-// PreviewPanel等ではファイル名の表示のみ必要でFileオブジェクト自体は不要なケースがあるため。
-
-// ステップ8: docs/spec.md 2.2「定型サイズ自動入力」の寸法表。
-// 表のカラム見出し「たて (mm)」「よこ (mm)」をそのままキー名(tate/yoko)にして、
-// 仕様書とコードの対応関係を1対1で追えるようにする。tateは長辺、yokoは短辺。
+// 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
+// グローバルストア（ADR-009）。
+//
+// 用紙寸法の表（docs/spec.md 2.2「定型サイズ自動入力」）。仕様書のカラム見出し「たて (mm)」
+// 「よこ (mm)」をそのままキー名にして1対1で追えるようにする。tateは長辺、yokoは短辺。
 export const SIZE_PRESETS = {
   A4: { tate: 297, yoko: 210 },
   A5: { tate: 210, yoko: 148 },
@@ -20,12 +14,20 @@ export const SIZE_PRESETS = {
 
 export type SizePresetName = keyof typeof SIZE_PRESETS
 export type Orientation = 'tate' | 'yoko'
+export type Dimensions = { widthMm: number; heightMm: number }
 
-// ステップ8: 履歴スライド機能（docs/spec.md 2.2）で表示・保持する1件分の描画結果。
-// 再描画のたびにこの型のスナップショットをhistoryの先頭へ積む。サイズ（widthMm/heightMm）も
-// 含めるのは、履歴サムネイルを当時の縦横比で表示し直せるようにするため。
-// ステップ16: jsonはJSON入力エディタへそのまま復元できるよう、htmlContent/cssContentと同じく
-// 生のテキスト（string）として保持する（パース済みオブジェクトでは編集不可のtextareaに戻せないため）。
+// たて（ポートレート）は短辺が幅・長辺が高さ。よこ（ランドスケープ）は用紙を90度回すため入れ替わる。
+// ストアのサイズ適用とSizeControlsの選択肢表示が同じ変換を二重に持たないよう、ここへ集約する。
+export function dimensionsFor(size: SizePresetName, orientation: Orientation): Dimensions {
+  const preset = SIZE_PRESETS[size]
+  return orientation === 'tate'
+    ? { widthMm: preset.yoko, heightMm: preset.tate }
+    : { widthMm: preset.tate, heightMm: preset.yoko }
+}
+
+// 1回の描画結果のスナップショット。widthMm/heightMmを含めるのは、後からサイズを変えても履歴
+// サムネイルを当時の縦横比のまま再現するため。jsonは入力エディタへそのまま戻せるよう、パース済み
+// オブジェクトではなく生テキストで持つ。
 export type HistoryEntry = {
   html: string
   css: string
@@ -34,20 +36,15 @@ export type HistoryEntry = {
   heightMm: number | null
 }
 
-// 履歴に積む1件。HistoryEntry（内容）に、描画ごとの通し番号seqを付けたもの。
-// seqは描画のたびに1,2,3…と単調増加し、10件を超えても振り直さずカウントアップし続ける
-// （ユーザー要望: 履歴番号は10を超えても加算を続ける）。表示ラベル・削除順の基準にする。
-// draftは「番号を持たない編集中スナップショット」なのでseqを持たず、HistoryEntryのまま扱う。
+// seqは描画ごとの通し番号。古い履歴が消えても振り直さず単調増加させる（ユーザー要望）。
+// draftは番号を持たない編集中スナップショットのため、seqを持たないHistoryEntryのまま扱う。
 export type HistoryItem = HistoryEntry & { seq: number }
 
-// docs/spec.md 2.2「履歴スライド機能」: 最大10件までスタックする。上限を超えたら、
-// 番号（seq）が最も小さい＝最も古い履歴から削除する（ユーザー要望）。配列は新しい順で持つため、
-// これは末尾（最古）の切り捨てと一致する。
+// docs/spec.md 2.2「履歴スライド機能」の上限。超過分はseqが最小＝最古のものから削除する。
 const MAX_HISTORY_LENGTH = 10
 
-// ステップ21: 履歴クリックで「編集中の未保存入力」が失われる問題への対策で使う比較・退避ヘルパ。
-// 履歴/ドラフトはいずれもHistoryEntry（html/css/json/サイズ）のスナップショットなので、
-// 全フィールドの一致でエントリの同一性を判定する。
+type EditorState = Pick<SheetState, 'htmlContent' | 'cssContent' | 'jsonContent' | 'widthMm' | 'heightMm'>
+
 function entriesEqual(a: HistoryEntry | null, b: HistoryEntry | null): boolean {
   if (a === null || b === null) return a === b
   return (
@@ -59,9 +56,7 @@ function entriesEqual(a: HistoryEntry | null, b: HistoryEntry | null): boolean {
   )
 }
 
-// 現在のエディタ状態（html/css/json + サイズ）を1件のHistoryEntryスナップショットに切り出す。
-// fetchRenderの履歴追加・restoreFromHistoryのドラフト退避で同じ形を使うため関数化する。
-function snapshotEntry(state: Pick<SheetState, 'htmlContent' | 'cssContent' | 'jsonContent' | 'widthMm' | 'heightMm'>): HistoryEntry {
+function snapshotEntry(state: EditorState): HistoryEntry {
   return {
     html: state.htmlContent,
     css: state.cssContent,
@@ -71,11 +66,19 @@ function snapshotEntry(state: Pick<SheetState, 'htmlContent' | 'cssContent' | 'j
   }
 }
 
-// docs/spec.md 4章のエラーコード定義に沿った、ユーザー向けの日本語メッセージ。
-// ステップ14（ADR-017）でバックエンドが構造化エラーボディのmessageを返すようになったため、
-// 通常はそちらを優先表示する。この関数は「バックエンド不達・非JSONレスポンス等でmessageが
-// 得られない場合のフォールバック」として残す。バックエンド提供文言と齟齬が出ないよう、
-// バックエンドのapp/errors._ERROR_CATALOGと同じ文言に揃えている。定義外のステータスは想定外エラー扱い。
+function toEditorState(entry: HistoryEntry): EditorState {
+  return {
+    htmlContent: entry.html,
+    cssContent: entry.css,
+    jsonContent: entry.json,
+    widthMm: entry.widthMm,
+    heightMm: entry.heightMm,
+  }
+}
+
+// バックエンドが構造化エラーの安全文言を返す（ADR-017）ため通常はそちらを表示する。これは
+// バックエンド不達・非JSONレスポンスでその文言が得られない場合のフォールバックで、
+// バックエンド（app/errors._ERROR_CATALOG）と同じ文言に揃える（docs/spec.md 4章）。
 function messageForStatus(status: number): string {
   switch (status) {
     case 400:
@@ -96,35 +99,23 @@ function messageForStatus(status: number): string {
 type SheetState = {
   htmlContent: string
   cssContent: string
-  // ステップ16: JSON入力エディタの生テキスト。htmlContentと同様、fetchRender成功時は
-  // レスポンスのjsonで上書きされ、次の編集の起点になる（docs/spec.md 2.2「リアルタイム双方向プレビュー」）。
-  // パース・妥当性検証はバックエンド（400 VALIDATION_ERROR）に委ね、フロントは生テキストのまま送信する。
+  // JSON入力エディタの生テキスト。描画リクエストには送らず（AIへの入力として不要）、
+  // レスポンスのjsonで上書きされる。プレビューのテンプレート置換にのみ使う。
   jsonContent: string
-  // ステップ16: プロンプト入力エディタの内容。レスポンスに対応するフィールドが無いため、
-  // htmlContent/jsonContentと異なりfetchRender成功時にも上書きされず、ユーザーの入力のまま保持する。
+  // レスポンスに対応するフィールドが無いため、html/jsonと違い描画成功時にも上書きしない。
   promptContent: string
   pdfFile: File | null
   pdfFileName: string | null
-  // ステップ8: 縦幅・横幅サイズ入力（docs/spec.md 2.1「コントロール」）。
-  // nullは「未入力」を表し、fetchRenderではAPIへ送らない（Optional[float] = Form(None)と対応）。
-  // ステップ17: サイズ選択UIの初期値をA4よこに統一するため、ストア生成時点からnullではなく
-  // A4よこの寸法を初期値として持たせる。
+  // nullは「未入力」。fetchRenderではAPIへ送らない（backendのOptional[float] = Form(None)に対応）。
   widthMm: number | null
   heightMm: number | null
   history: HistoryItem[]
-  // 履歴の通し番号カウンタ。直近に割り当てたseqを保持し、描画のたびに+1する。
-  // 履歴から古い件が削除されても振り直さない（番号を単調増加させ続けるため独立して持つ）。
   historySeq: number
-  // ステップ21: 「編集中（未描画・未保存）」の入力を退避しておくスロット。
-  // 履歴サムネイルを押すと従来はエディタ内容がその履歴で上書きされ、直前まで入力していた
-  // 内容が失われていた（ユーザー報告のバグ）。復元の直前に現在の内容をここへ退避し、
-  // HistorySliderに「編集中」カードとして出して戻せるようにする（restoreDraft）。
-  // nullは「退避すべき未保存入力が無い」状態。描画に成功すると新しい基準になるためクリアする。
+  // 未描画・未保存の編集内容の退避スロット。履歴を選ぶとエディタが上書きされてしまうため、
+  // 復元の直前にここへ退避し、HistorySliderの「編集中」カードから戻せるようにする。
   draft: HistoryEntry | null
   isLoading: boolean
   error: string | null
-  // ステップ8: docs/spec.md 2.2「インテリジェントメッセージ表示」の成功メッセージ側。
-  // エラーと同様にトースト表示用の文言のみを保持し、表示形式（Toastコンポーネント）とは分離する。
   successMessage: string | null
   setHtmlContent: (html: string) => void
   setJsonContent: (json: string) => void
@@ -134,7 +125,6 @@ type SheetState = {
   setHeightMm: (heightMm: number | null) => void
   applySizePreset: (size: SizePresetName, orientation: Orientation) => void
   restoreFromHistory: (index: number) => void
-  // ステップ21: 「編集中」カードから、履歴クリック直前に退避した未保存入力へ戻す。
   restoreDraft: () => void
   dismissError: () => void
   dismissSuccessMessage: () => void
@@ -148,11 +138,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   promptContent: '',
   pdfFile: null,
   pdfFileName: null,
-  // ステップ17: SIZE_PRESETS.A4（たて）を初期値にする。applySizePreset('A4', 'tate')と
-  // 同じ変換（幅=yoko側の210、高さ=tate側の297）をリテラルで書くと二重管理になるため、
-  // SIZE_PRESETSを直接参照して定義する。
-  widthMm: SIZE_PRESETS.A4.yoko,
-  heightMm: SIZE_PRESETS.A4.tate,
+  ...dimensionsFor('A4', 'tate'),
   history: [],
   historySeq: 0,
   draft: null,
@@ -165,68 +151,38 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   setPdfFile: (file) => set({ pdfFile: file, pdfFileName: file?.name ?? null }),
   setWidthMm: (widthMm) => set({ widthMm }),
   setHeightMm: (heightMm) => set({ heightMm }),
-  // docs/spec.md 2.2「定型サイズ自動入力」: 「たて」（ポートレート）は短辺(yoko)が幅・長辺(tate)が高さ。
-  // 「よこ」（ランドスケープ）は用紙を90度回した状態なので、幅と高さが入れ替わる。
-  applySizePreset: (size, orientation) => {
-    const preset = SIZE_PRESETS[size]
-    if (orientation === 'tate') {
-      set({ widthMm: preset.yoko, heightMm: preset.tate })
-    } else {
-      set({ widthMm: preset.tate, heightMm: preset.yoko })
-    }
-  },
-  // docs/spec.md 2.2「履歴スライド機能」: 履歴サムネイルの選択で、その時点の描画結果を
-  // プレビュー（htmlContent/cssContent/jsonContent）へ復元する。範囲外indexは無視する。
-  // ステップ21（バグ修正）: 復元は破壊的にしない。現在エディタに入っている内容が「まだ履歴にも
-  // ドラフトにも保存されていない意味のある入力」なら、上書きで失わないようdraftへ退避してから復元する。
-  // これにより「履歴を押すと入力したデータが消える」問題を解消し、HistorySliderの「編集中」カードで
-  // いつでも元の入力へ戻せる。
+  applySizePreset: (size, orientation) => set(dimensionsFor(size, orientation)),
+  // 復元は破壊的にしない。エディタの内容がまだ履歴にもドラフトにも無い「意味のある入力」なら、
+  // 上書きで失わないようdraftへ退避してから復元する。
   restoreFromHistory: (index) => {
     const state = get()
     const entry = state.history[index]
     if (!entry) return
+
     const current = snapshotEntry(state)
-    // 空（初期状態や描画前の空欄）は退避不要。html/json/cssのいずれかに内容があれば「意味のある入力」とみなす。
-    const currentIsMeaningful = current.html !== '' || current.json !== '' || current.css !== ''
-    // すでに履歴やドラフトとして保存済みの内容（＝以前復元したもの等）は、重複退避しない。
+    const isMeaningful = current.html !== '' || current.json !== '' || current.css !== ''
     const alreadyPreserved =
-      state.history.some((h) => entriesEqual(h, current)) || entriesEqual(state.draft, current)
+      state.history.some((item) => entriesEqual(item, current)) || entriesEqual(state.draft, current)
+
     set({
-      draft: currentIsMeaningful && !alreadyPreserved ? current : state.draft,
-      htmlContent: entry.html,
-      cssContent: entry.css,
-      jsonContent: entry.json,
-      widthMm: entry.widthMm,
-      heightMm: entry.heightMm,
+      ...toEditorState(entry),
+      draft: isMeaningful && !alreadyPreserved ? current : state.draft,
     })
   },
-  // ステップ21: 履歴クリック直前に退避した「編集中」の未保存入力をエディタへ戻す。
-  // restoreFromHistoryと対になる操作で、退避が無ければ何もしない。
   restoreDraft: () => {
     const draft = get().draft
     if (!draft) return
-    set({
-      htmlContent: draft.html,
-      cssContent: draft.css,
-      jsonContent: draft.json,
-      widthMm: draft.widthMm,
-      heightMm: draft.heightMm,
-    })
+    set(toEditorState(draft))
   },
   dismissError: () => set({ error: null }),
   dismissSuccessMessage: () => set({ successMessage: null }),
   fetchRender: async () => {
-    // 前回の描画で表示していたメッセージを、新しいリクエスト開始時点で消しておく。
-    // 消さないと「エラー→再試行→通信中でもまだ前回のエラー文言が残る」という
-    // ユーザーに誤解を与える表示になってしまうため。
+    // ここで前回のメッセージを消さないと、再試行の通信中も前回のエラー文言が残り誤解を与える。
     set({ isLoading: true, error: null, successMessage: null })
+
     try {
-      // 現時点のエディタ内容（htmlContent/promptContent）とPDF（pdfFile、あれば）、
-      // サイズ指定（widthMm/heightMm、あれば）をリクエストとして送り、
-      // レスポンスでストアの表示内容を丸ごと置き換える（docs/spec.md 3.1）。
-      // ADR-019によりcssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提のため）。
-      // jsonContent（業務データJSON）はGeminiへの入力として不要なため送らない
-      // （backend側もjson_fieldパラメータを廃止済み）。レスポンスのjsonのみを使う。
+      // cssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提。ADR-019）。
+      // jsonContentも送らない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
       const { htmlContent, promptContent, pdfFile, widthMm, heightMm } = get()
       const result = await renderSheet({
         html: htmlContent,
@@ -235,50 +191,35 @@ export const useSheetStore = create<SheetState>((set, get) => ({
         width_mm: widthMm ?? undefined,
         height_mm: heightMm ?? undefined,
       })
-      // レスポンスのjsonはオブジェクトのため、JSON入力エディタへそのまま戻せるよう
-      // 整形済みテキストへ変換する（htmlContentと同様、次の編集の起点にする）。
-      const newJsonContent = JSON.stringify(result.json ?? {}, null, 2)
-      // 描画時点のサイズも一緒にスナップショットしておく（後からwidthMmを変えても履歴は当時の値を保持）。
+
       const newEntry: HistoryEntry = {
         html: result.html,
         css: result.css,
-        json: newJsonContent,
+        // レスポンスのjsonはオブジェクトのため、JSON入力エディタへ戻せる整形済みテキストにする。
+        json: JSON.stringify(result.json ?? {}, null, 2),
         widthMm,
         heightMm,
       }
+
       set((state) => {
-        // 通し番号を1つ進め、この描画の履歴に割り当てる（10を超えても振り直さず加算し続ける）。
         const nextSeq = state.historySeq + 1
-        const newItem: HistoryItem = { ...newEntry, seq: nextSeq }
         return {
-          htmlContent: result.html,
-          cssContent: result.css,
-          jsonContent: newJsonContent,
+          ...toEditorState(newEntry),
           isLoading: false,
           successMessage: '描画が完了しました',
           historySeq: nextSeq,
-          // 新しい履歴を先頭に積み、MAX_HISTORY_LENGTHを超えた分は末尾（＝seqが最も小さい最古）を
-          // 切り捨てる（ユーザー要望: 番号が低いものから削除。docs/spec.md 2.2「履歴スライド機能」）。
-          history: [newItem, ...state.history].slice(0, MAX_HISTORY_LENGTH),
-          // ステップ21: 描画成功時点の内容が新しい基準になるため、「編集中」の退避はクリアする
-          // （描画前の入力に戻す「編集中」カードを残し続けると混乱するため）。
+          history: [{ ...newEntry, seq: nextSeq }, ...state.history].slice(0, MAX_HISTORY_LENGTH),
+          // 描画成功時点の内容が新しい基準になるため、退避していた「編集中」は破棄する。
           draft: null,
         }
       })
     } catch (err) {
-      // ステップ14（ADR-017）: バックエンドが返す構造化エラーの安全文言（backendMessage）を
-      // 最優先で表示する。バックエンド不達・非JS（backendMessageがnull）の場合のみ、
-      // ステータス別の既定文言へフォールバックする。RenderApiError以外（ネットワーク断や
-      // JSON解釈失敗など）は想定外エラー扱い（messageForStatusのdefault）にする。
+      // バックエンド提供の安全文言（ADR-017）を最優先し、得られない場合のみ既定文言へ落とす。
       const message =
         err instanceof RenderApiError
           ? (err.backendMessage ?? messageForStatus(err.status))
           : messageForStatus(0)
-      set({
-        error: message,
-        successMessage: null,
-        isLoading: false,
-      })
+      set({ error: message, successMessage: null, isLoading: false })
     }
   },
 }))

@@ -63,7 +63,10 @@ def render(
     # ADR-019によりcssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
     # 埋め込まれている前提のため）。
     html: str = Form(""),
-    prompt: str = Form(""),
+    # セキュリティ対策: promptはプロンプトインジェクションの温床になり得る自由入力のため、
+    # フロント（PromptInput.tsxのmaxLength）と合わせてバックエンド側でも100文字を厳格な上限とする。
+    # 超過時はFastAPIのRequestValidationError経由でapp/errors.pyが400 VALIDATION_ERRORへ変換する。
+    prompt: str = Form("", max_length=100),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
     pdf: Optional[UploadFile] = File(None),

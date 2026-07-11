@@ -93,6 +93,20 @@ services:
     profiles:
       - e2e
 
+  # ⑤ pdf2htmlEXによるPDF→HTML変換の品質評価（ADR-023）
+  # DoclingのHTML出力（レイアウトが再現されない）の代替候補を、実装へ組み込む前に目視評価するための
+  # 検証専用コンテナ。frontend/backendとは独立して単発実行するため、e2eと同様にprofilesでopt-in化する
+  # （例: `docker compose --profile pdf2htmlex run --rm pdf2htmlex`）。
+  pdf2htmlex:
+    build: ./tools/pdf2htmlex
+    # 公式イメージはx86_64ビルドのみ公開されており、Apple Silicon上ではエミュレーション実行になる。
+    platform: linux/amd64
+    volumes:
+      - ./tools/pdf2htmlex/input:/input:ro
+      - ./tools/pdf2htmlex/output:/output
+    profiles:
+      - pdf2htmlex
+
 # doclingサービスが初回PDF変換時にダウンロードするMLモデルの永続化用（上記docling.volumes参照）。
 volumes:
   docling_hf_cache:

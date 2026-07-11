@@ -96,6 +96,16 @@ docker compose cp docling:/tmp/output.html "/path/to/output.html"
 
 `export_to_html()`の代わりに`export_to_markdown()`・`export_to_text()`を使うとMarkdown・プレーンテキストとしても出力できる（`export_to_text()`は`scripts/verify_docling.py`と同じ形式）。
 
+### pdf2htmlEXによるPDF→HTML変換の品質評価（検証用）
+
+DoclingのHTML出力は見た目（座標・罫線・フォント）を再現しないため、代替候補のpdf2htmlEXを実装へ組み込む前に手元のPDFで目視評価する（[docs/decisions.md](./docs/decisions.md) ADR-023参照）。検証専用コンテナのため`profiles`でopt-in化している。詳細は [`tools/pdf2htmlex/README.md`](./tools/pdf2htmlex/README.md)。
+
+```bash
+cp /path/to/請求書.pdf tools/pdf2htmlex/input/       # 1. 評価したいPDFを置く
+docker compose --profile pdf2htmlex run --rm pdf2htmlex  # 2. 変換する
+open tools/pdf2htmlex/output/請求書.html               # 3. 単一HTML（CSS/フォント/画像埋め込み済み）を開く
+```
+
 ### 型同期
 
 バックエンドの`openapi.json`からフロント用TypeScript型（`frontend/src/types/api.ts`）を再生成する場合は以下を実行する（スキーマ変更時に都度実行する運用。ADR-006）。

@@ -21,6 +21,12 @@ dist/
 .env
 .env.local
 
+# pdf2htmlEX品質評価（ADR-023）の入出力。評価対象のPDF・生成HTMLは成果物ではないためコミットしない。
+tools/pdf2htmlex/input/*
+tools/pdf2htmlex/output/*
+!tools/pdf2htmlex/input/.gitkeep
+!tools/pdf2htmlex/output/.gitkeep
+
 # Editor / local notes
 # .claude/CLAUDE.md（個人メモ）・settings.local.json・scheduled_tasks.lock等は非公開のまま維持しつつ、
 # チームで共有すべき.claude/skills/配下のみ例外的にGit管理対象にする。

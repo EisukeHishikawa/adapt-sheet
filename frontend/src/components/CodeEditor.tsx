@@ -5,27 +5,20 @@ import 'prismjs/components/prism-json'
 import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// ステップ18: HTML/JSON入力を「今風のモダンなコードエディタUI」にするコンポーネント。
-// 参考: shadcnドキュメントのコードブロック（シンタックスハイライト＋コピーボタン）。
-// 編集可能なまま色分けするため、prismjsでハイライトした<pre>を背面に敷き、その上に
-// 文字色を透明にした<textarea>を重ねる定番のオーバーレイ方式にした（外部エディタライブラリは足さない）。
-//   - 背面<pre>: prismでトークン化した色付きコードを表示（クリック不可・スクロールはtextareaへ同期）。
-//   - 前面<textarea>: 実際の入力を受ける。文字色は透明・キャレットのみ明色にして、背面の色付き文字が透けて見える。
-//   - 左に行番号ガター、右上にコピーボタンを配置。折り返しなし(wrap=off)で横スクロールする。
-// アクセシビリティ・テスト用の名前は非表示ラベル(sr-only)＋textareaのaria-labelで保持する。
+// シンタックスハイライト付きのコード入力欄。編集可能なまま色分けするため、外部エディタライブラリを
+// 足さず、prismでハイライトした<pre>を背面に敷き、文字色を透明にした<textarea>を前面に重ねる方式にした。
+// 見出しは画面に出さないため、アクセシビリティ・テスト用の名前はtextareaのaria-labelで保持する。
 type CodeLanguage = 'html' | 'json'
 
 type CodeEditorProps = {
   value: string
   onChange: (value: string) => void
-  // getByRole('textbox', { name }) 等で参照する識別名。見出しは非表示のため唯一の名前になる。
   ariaLabel: string
-  // ハイライトに使う文法。HTMLはmarkup、JSONはjsonのPrism文法を割り当てる。
   language: CodeLanguage
   id?: string
 }
 
-// 行番号・コード行・ハイライト層で共有する行の高さ(px)。全層で一致させないと表示がずれるため定数化する。
+// 背面<pre>・行番号ガター・前面<textarea>で一致させないと表示がずれるため定数化する。
 const LINE_HEIGHT_PX = 20
 
 export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEditorProps) {
@@ -33,16 +26,14 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
   const preRef = useRef<HTMLPreElement>(null)
   const [copied, setCopied] = useState(false)
 
-  // 行番号は改行数から算出する。空文字でも1行目は表示する。
-  // wrap=offで折り返さないため「論理行＝表示行」となり、この単純なカウントで行番号が正しく揃う。
+  // wrap=offで折り返さないため「論理行＝表示行」となり、改行数の単純なカウントで行番号が揃う。
   const lineCount = Math.max(1, value.split('\n').length)
 
-  // prismでトークン化したHTML文字列。背面<pre>へdangerouslySetInnerHTMLで流し込む。
-  // 末尾が改行の場合、<pre>だと最終空行の高さが出ずtextareaと1行ぶんずれるため、末尾に空白を補う。
+  // 末尾が改行の場合、<pre>では最終空行の高さが出ずtextareaと1行ぶんずれるため末尾に空白を補う。
   const grammar = language === 'json' ? Prism.languages.json : Prism.languages.markup
   const highlighted = Prism.highlight(value.endsWith('\n') ? `${value} ` : value, grammar, language)
 
-  // textareaの縦横スクロール量を背面<pre>と行番号ガターへ転写し、スクロールしても各層を揃え続ける。
+  // textareaのスクロール量を背面<pre>と行番号ガターへ転写し、スクロールしても各層を揃え続ける。
   const handleScroll = (event: UIEvent<HTMLTextAreaElement>) => {
     const { scrollTop, scrollLeft } = event.currentTarget
     if (preRef.current) {
@@ -50,12 +41,11 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
       preRef.current.scrollLeft = scrollLeft
     }
     if (gutterRef.current) {
-      // ガターは横スクロールさせず縦位置のみ合わせる。
       gutterRef.current.scrollTop = scrollTop
     }
   }
 
-  // Tabキー: 既定のフォーカス移動を止め、コードエディタらしくキャレット位置へ2スペースを挿入する。
+  // Tabキーの既定のフォーカス移動を止め、コードエディタらしく2スペースを挿入する。
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Tab') return
     event.preventDefault()
@@ -68,26 +58,22 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
     })
   }
 
-  // コピー: クリップボードへ全文をコピーし、一定時間だけ「コピー済み」表示に切り替える。
-  // navigator.clipboardが無い環境（一部テスト環境等）では黙って何もしない。
   const handleCopy = async () => {
     try {
       await navigator.clipboard?.writeText(value)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      // クリップボード権限が無い場合等はコピー状態にしない（機能の失敗をUIに波及させない）。
+      // クリップボード非対応・権限なしの環境では、機能の失敗をUIへ波及させず黙って何もしない。
     }
   }
 
-  // 背面<pre>・前面<textarea>で厳密に一致させるべき行のメトリクス。ズレ防止のため一箇所にまとめる。
+  // 背面<pre>と前面<textarea>で厳密に一致させるべき行のメトリクス。
   const sharedTextStyle = { lineHeight: `${LINE_HEIGHT_PX}px`, tabSize: 2 } as const
 
   return (
-    // GitHub Dark系のエディタ配色を固定で当て、明確に「コード入力エリア」と分かるようにする。
-    // groupにしてホバー時のみコピーボタンを強調表示する。
+    // 配色はGitHub Dark系で固定し、テーマに関わらず「コード入力エリア」と分かるようにする。
     <div className="group relative flex flex-1 overflow-hidden rounded-md border border-input bg-[#0d1117] font-mono text-sm">
-      {/* 行番号ガター。overflow-hiddenにしてtextarea側のscrollTopを転写し縦スクロールへ追従させる。 */}
       <div
         ref={gutterRef}
         aria-hidden="true"
@@ -100,9 +86,8 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
         ))}
       </div>
 
-      {/* コード領域。背面ハイライト<pre>と前面<textarea>を重ねる。 */}
       <div className="relative flex-1">
-        {/* 背面: prismで色付けしたコード。code-editorクラス配下のトークン配色はindex.cssで定義。 */}
+        {/* トークンの配色はindex.cssの.code-editor配下で定義する。 */}
         <pre
           ref={preRef}
           aria-hidden="true"
@@ -111,7 +96,7 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
         >
           <code dangerouslySetInnerHTML={{ __html: highlighted }} />
         </pre>
-        {/* 前面: 実入力用textarea。文字は透明にして背面の色付き文字を見せ、キャレットのみ明色にする。 */}
+        {/* 文字は透明にして背面の色付き文字を見せ、キャレットのみ明色にする。 */}
         <textarea
           id={id}
           aria-label={ariaLabel}
@@ -126,7 +111,6 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
         />
       </div>
 
-      {/* コピーボタン。右上に固定し、通常は控えめ・ホバー/フォーカスで明確化する（モダンなコードブロック風）。 */}
       <button
         type="button"
         onClick={handleCopy}

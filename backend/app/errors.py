@@ -1,17 +1,13 @@
-"""API通信の構造化エラーレスポンス設計（ADR-017、DEVELOPMENT.md ステップ14）。
+"""API通信の構造化エラーレスポンス（ADR-017）。
 
-エラー応答を `{"error": {"code", "message", "request_id"}}` の一貫したエンベロープへ統一する。
-- code: 機械可読な識別子（フロントの分岐にも使える）
-- message: ユーザーへ表示する安全な日本語文言（生の例外メッセージは載せない）
-- request_id: ADR-016で採番した相関ID（X-Request-IDヘッダー・サーバーログと同値）
-
-生の例外メッセージ（英語・内部情報を含みうる）はサーバーログにのみ残し、
-レスポンスには漏らさないことで、情報漏えいなくユーザーへ状況を伝える。
+エラー応答を `{"error": {"code", "message", "request_id"}}` のエンベロープへ統一する。
+生の例外メッセージ（英語・内部情報を含みうる）はサーバーログにのみ残し、レスポンスへは漏らさない。
 """
 
 from __future__ import annotations
 
 import logging
+from typing import Awaitable, Callable
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
@@ -19,14 +15,12 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.request_context import get_request_id
-from app.services.ai_client import AIGenerationError
-from app.services.docling_client import PDFConversionError
 
 logger = logging.getLogger("app.errors")
 
 # docs/spec.md 4章のエラーコード定義と1対1で対応させる。ステータス→(code, 安全な日本語文言)。
-# フロントの静的フォールバック（frontend/src/store/sheetStore.ts messageForStatus）と
-# 同じ文言に揃え、バックエンドを「文言の一次ソース」としつつ齟齬が出ないようにする。
+# 文言はフロントの静的フォールバック（frontend/src/store/sheetStore.ts）と揃え、バックエンドを
+# 一次ソースとしつつ齟齬が出ないようにする。
 _ERROR_CATALOG: dict[int, tuple[str, str]] = {
     400: ("VALIDATION_ERROR", "リクエスト内容に誤りがあります。入力値をご確認ください。"),
     413: ("PAYLOAD_TOO_LARGE", "PDFファイルのサイズが上限を超えています。"),
@@ -36,7 +30,7 @@ _ERROR_CATALOG: dict[int, tuple[str, str]] = {
     500: ("INTERNAL_ERROR", "サーバーで想定外のエラーが発生しました。"),
 }
 
-# カタログに無いステータス（想定外）のときの既定。code/statusの齟齬を避けるための保険。
+# カタログに無いステータスでもcode/statusの齟齬が起きないようにするための保険。
 _FALLBACK = ("HTTP_ERROR", "エラーが発生しました。")
 
 
@@ -59,10 +53,7 @@ def error_response(status_code: int) -> JSONResponse:
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    """HTTPException（主にバリデーションの400等）を構造化エラーへ変換する。
-
-    生のdetail（原因の技術詳細）はレスポンスには出さず、調査用にサーバーログへ残す。
-    """
+    """HTTPExceptionを構造化エラーへ変換する。生のdetailはレスポンスに出さずログにのみ残す。"""
     logger.warning(
         "HTTPException",
         extra={"status_code": exc.status_code, "detail": str(exc.detail), "request_id": get_request_id()},
@@ -71,10 +62,10 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """FastAPIのリクエストバリデーション失敗を、docs/spec.md 4章に合わせ400へ寄せる。
+    """リクエストバリデーション失敗を400へ寄せる。
 
-    FastAPI既定は422だが、本APIでは422をDocling解析エラー専用に割り当てているため、
-    型不正等の入力バリデーションは400 VALIDATION_ERRORへ統一する。
+    FastAPI既定は422だが、本APIでは422をDocling解析エラー専用に割り当てているため
+    （docs/spec.md 4章）、入力バリデーションは400 VALIDATION_ERRORへ統一する。
     """
     logger.warning(
         "RequestValidationError",
@@ -83,13 +74,24 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return error_response(400)
 
 
-async def pdf_conversion_error_handler(request: Request, exc: PDFConversionError) -> JSONResponse:
-    """Docling解析エラー→422（docs/spec.md 4章）。整形をハンドラへ集約する（ADR-017）。"""
-    logger.warning("PDF conversion failed: %s", exc, extra={"status_code": 422, "request_id": get_request_id()})
-    return error_response(422)
+def _domain_error_handler(
+    status_code: int, log_message: str
+) -> Callable[[Request, Exception], Awaitable[JSONResponse]]:
+    """ドメイン例外→構造化エラーのハンドラを生成する（docs/spec.md 4章のステータス対応）。
+
+    例外種別ごとの違いはステータスとログ文言だけなので、ハンドラ本体を型ごとに書き分けない。
+    """
+
+    async def handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.warning(
+            "%s: %s", log_message, exc, extra={"status_code": status_code, "request_id": get_request_id()}
+        )
+        return error_response(status_code)
+
+    return handler
 
 
-async def ai_generation_error_handler(request: Request, exc: AIGenerationError) -> JSONResponse:
-    """AI生成エラー→502（docs/spec.md 4章）。整形をハンドラへ集約する（ADR-017）。"""
-    logger.warning("AI generation failed: %s", exc, extra={"status_code": 502, "request_id": get_request_id()})
-    return error_response(502)
+# app/main.pyがPDFConversionError / AIGenerationErrorに対して登録する。ドメイン例外はmain.py内で
+# HTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する（ADR-017）。
+pdf_conversion_error_handler = _domain_error_handler(422, "PDF conversion failed")
+ai_generation_error_handler = _domain_error_handler(502, "AI generation failed")

@@ -3,44 +3,39 @@ import { FileText, UploadCloud, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSheetStore } from '@/store/sheetStore'
 
-// docs/spec.md 2.1「ファイル操作」のPDFアップロードエリア（ドラッグ＆ドロップ対応）。
-// <input type="file">自体をドロップ先として重ねる実装にすることで、
-// クリックでのファイル選択（ブラウズ）とドラッグ＆ドロップの両方を単一要素・単一のaria-labelで
-// 扱える（キーボード操作・スクリーンリーダーの双方でも迷わずアクセスできる）。
-// ステップ21: ドラッグ中のハイライト、アイコン、選択済みPDFの削除ボタンを追加してUXを引き上げた。
+// docs/spec.md 2.1「ファイル操作」のPDFアップロードエリア。<input type="file">自体を透明にして
+// ドロップ先に重ねることで、クリックでのファイル選択とドラッグ＆ドロップを単一要素・単一の
+// aria-labelで扱える（キーボード・スクリーンリーダーからも迷わずアクセスできる）。
 export function PdfDropzone() {
   const pdfFileName = useSheetStore((state) => state.pdfFileName)
   const setPdfFile = useSheetStore((state) => state.setPdfFile)
 
-  // ドラッグ中かどうか。枠線・背景をハイライトして「ここにドロップできる」ことを視覚的に示す。
   const [isDragging, setIsDragging] = useState(false)
 
   const handleDragOver = (event: DragEvent<HTMLInputElement>) => {
-    // ブラウザ既定の「ファイルを新規タブで開く」動作を止め、dropイベントを発火させるために必須。
+    // ブラウザ既定の「ファイルを新規タブで開く」動作を止めないとdropイベントが発火しない。
     event.preventDefault()
     setIsDragging(true)
   }
 
-  // ドラッグがエリア外へ出た/ドロップ完了時はハイライトを解除する。
   const handleDragLeave = () => setIsDragging(false)
 
   const handleDrop = (event: DragEvent<HTMLInputElement>) => {
     event.preventDefault()
     setIsDragging(false)
     const file = event.dataTransfer.files[0]
-    // docs/spec.md 3.1のpdfフィールドはPDF専用のため、PDF以外のファイルは無視する。
+    // docs/spec.md 3.1のpdfフィールドはPDF専用のため、PDF以外は無視する。
     if (file && file.type === 'application/pdf') {
       setPdfFile(file)
     }
   }
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null
-    setPdfFile(file)
+    setPdfFile(event.target.files?.[0] ?? null)
   }
 
-  // 選択済みPDFの取り消し。ボタンはinput（ドロップ先）の上に重なるため、クリックがinputの
-  // ファイル選択ダイアログへ伝播しないようstopPropagationし、ストアのファイルをクリアする。
+  // 削除ボタンはinput（ドロップ先）の上に重なるため、クリックがファイル選択ダイアログへ
+  // 伝播しないよう止める。
   const handleRemove = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     event.preventDefault()
@@ -66,13 +61,11 @@ export function PdfDropzone() {
         onDrop={handleDrop}
         onChange={handleChange}
       />
-      {/* アイコン＋説明文。inputへクリックを通すためpointer-events-noneにする。
-          ファイル選択済みなら書類アイコン＋ファイル名、未選択ならアップロード導線を表示する。 */}
+      {/* pointer-events-noneで、この表示部分へのクリックを背面のinputへ通す。 */}
       <div aria-hidden="true" className="pointer-events-none flex items-center gap-2">
         {pdfFileName ? <FileText className="size-4 shrink-0" /> : <UploadCloud className="size-5 shrink-0" />}
         <span className="truncate">{pdfFileName ?? 'PDFをドラッグ＆ドロップ、またはクリックして選択'}</span>
       </div>
-      {/* 削除ボタンは選択済みのときだけ出す。inputより前面(z-10)に置き、クリックの伝播を止める。 */}
       {pdfFileName && (
         <button
           type="button"

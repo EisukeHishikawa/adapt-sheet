@@ -1,16 +1,12 @@
 import type { components } from '@/types/api'
 
-// バックエンドのopenapi.jsonから自動生成した型（frontend/src/types/api.ts）を
-// そのまま公開レスポンス型として再エクスポートする。フロント側でキー名を手書きしないため
-// （CLAUDE.md「型安全」の規約）、この型定義を経由せずに/api/renderのレスポンスを扱わないこと。
+// バックエンドのopenapi.jsonから自動生成した型（ADR-006）。フロント側でキー名を手書きしないため、
+// /api/renderのレスポンスはこの型を経由してのみ扱う。
 export type RenderResponse = components['schemas']['RenderResponse']
 
-// docs/spec.md 3.1の契約に沿ったフィールドのみを手書きする（CLAUDE.mdの型安全規約）。
-// ADR-019により、cssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
-// 埋め込まれている前提のため）ので、ここにも追加しない。width_mm/height_mmはステップ8の
-// 定型サイズ自動入力機能で、promptはステップ16のプロンプト入力エディタで使う。
-// jsonは業務データがGeminiへの入力として不要（レスポンス側でのみ返る）なため、
-// リクエストフィールドとして持たない（backend/app/main.pyのjson_fieldパラメータ廃止と対）。
+// docs/spec.md 3.1の契約に沿ったリクエスト項目。
+// cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提。ADR-019）。
+// jsonも持たない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
 export type RenderRequestFields = {
   html?: string
   prompt?: string
@@ -19,23 +15,17 @@ export type RenderRequestFields = {
   height_mm?: number
 }
 
-// ステップ14（ADR-017）: バックエンドが返す構造化エラーボディ
-// `{"error": {"code", "message", "request_id"}}` から取り出した情報。
-// バックエンドを一次ソースとしてユーザー向けメッセージを画面表示するために保持する。
+// バックエンドの構造化エラーボディ（ADR-017）から取り出した情報。
 export type RenderErrorInfo = {
-  // 機械可読なエラー識別子（VALIDATION_ERROR等）。将来のフロント分岐用に保持する。
   code: string | null
-  // バックエンドが返すユーザー向けの安全な日本語文言。画面表示に用いる。
+  // ユーザーへ表示する安全な日本語文言。
   backendMessage: string | null
-  // ログと突き合わせるための相関ID（X-Request-IDと同値）。問い合わせ時の参照用に保持する。
+  // サーバーログと突き合わせるための相関ID（X-Request-IDと同値）。
   requestId: string | null
 }
 
-// docs/spec.md 4章のエラーコード定義（400/413/422/429/502/500）をストア側で
-// 判定できるよう、HTTPステータスコードを保持したまま呼び出し側に伝播させるための専用エラー型。
-// 通常のErrorだとステータスコードがmessage文字列に埋め込まれ、呼び出し側での判定が
-// 文字列パースに頼ってしまうため、専用クラスとして分離する。
-// ステップ14（ADR-017）で、バックエンド提供のcode/message/request_idも合わせて運ぶよう拡張した。
+// ステータスコードをmessage文字列に埋め込むと呼び出し側の判定が文字列パースに頼ることになるため、
+// docs/spec.md 4章のエラーコード判定用に専用のエラー型として分離する。
 export class RenderApiError extends Error {
   readonly status: number
   readonly code: string | null
@@ -52,9 +42,8 @@ export class RenderApiError extends Error {
   }
 }
 
-// 構造化エラーボディ（docs/spec.md 4.1）を安全に取り出す。
-// バックエンド不達・非JSON・旧形式など、エンベロープでない場合はnullを返し、
-// 呼び出し側がステータス別の既定文言へフォールバックできるようにする。
+// バックエンド不達・非JSONなどエンベロープでない応答ではundefinedを返し、呼び出し側が
+// ステータス別の既定文言へフォールバックできるようにする。
 async function parseErrorBody(response: Response): Promise<RenderErrorInfo | undefined> {
   let info: RenderErrorInfo | undefined
   try {
@@ -68,7 +57,6 @@ async function parseErrorBody(response: Response): Promise<RenderErrorInfo | und
       }
     }
   } catch {
-    // ボディが空/非JSONの場合はフォールバック（undefined）にする。
     return undefined
   }
   // ボディにrequest_idが無くてもヘッダーから拾えれば相関IDを補完する。
@@ -78,8 +66,7 @@ async function parseErrorBody(response: Response): Promise<RenderErrorInfo | und
   return info
 }
 
-// docs/spec.md 3.1が`multipart/form-data`を要求しているため、pdfファイルも
-// 同じ関数で扱えるようFormDataを使う（JSON.stringifyのapplication/jsonにはしない）。
+// docs/spec.md 3.1が`multipart/form-data`を要求するため、pdfも同じ関数で扱えるようFormDataを使う。
 export async function renderSheet(fields: RenderRequestFields): Promise<RenderResponse> {
   const formData = new FormData()
   for (const [key, value] of Object.entries(fields)) {
@@ -93,17 +80,13 @@ export async function renderSheet(fields: RenderRequestFields): Promise<RenderRe
   })
 
   if (!response.ok) {
-    // バックエンドの構造化エラーボディ（ADR-017）を取り出し、
-    // ユーザー向けメッセージ・相関IDを保持したままストア側へ伝播させる。
-    const info = await parseErrorBody(response)
-    throw new RenderApiError(response.status, info)
+    throw new RenderApiError(response.status, await parseErrorBody(response))
   }
 
   try {
     return (await response.json()) as RenderResponse
   } catch {
-    // 200応答でも本文が空/不正なJSONの場合にSyntaxErrorをそのまま伝播させず、
-    // 呼び出し側（sheetStore.fetchRender）に意味の伝わるメッセージを渡す。
+    // 200応答でも本文が空/不正な場合に、SyntaxErrorをそのまま伝播させず意味の伝わる文言にする。
     throw new Error('/api/render のレスポンスがJSONとして解釈できませんでした')
   }
 }

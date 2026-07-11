@@ -8,7 +8,7 @@ from app.services.ai_client import (
     RenderResult,
     build_prompt,
     get_ai_client,
-    parse_gemini_response,
+    parse_ai_response,
     validate_render_result,
 )
 
@@ -258,32 +258,32 @@ def test_llama_client_wraps_connection_error(monkeypatch):
 
 # ADR-010: AnthropicからGemini APIへの移行に伴うテスト。
 # GeminiAIClient.generate自体は実ネットワーク呼び出しを伴うため単体テストの対象にせず、
-# レスポンス解析ロジック（parse_gemini_response）を純粋関数として切り出してテストする。
+# レスポンス解析ロジック（parse_ai_response）を純粋関数として切り出してテストする。
 
 
-def test_parse_gemini_response_parses_plain_json():
+def test_parse_ai_response_parses_plain_json():
     text = '{"html": "<p>{{name}}</p>", "css": "body{}", "json": {"name": "value"}}'
-    result = parse_gemini_response(text)
+    result = parse_ai_response(text)
 
     assert isinstance(result, RenderResult)
     assert result.html == "<p>{{name}}</p>"
     assert result.data == {"name": "value"}
 
 
-def test_parse_gemini_response_strips_code_fence():
+def test_parse_ai_response_strips_code_fence():
     # Geminiはプロンプトでコードブロック記法不要と指示しても、
     # ```json ... ``` で囲んで返すことがあるため、フェンス除去が必須。
     text = '```json\n{"html": "<p>ok</p>", "css": "body{}", "json": {}}\n```'
-    result = parse_gemini_response(text)
+    result = parse_ai_response(text)
 
     assert result.html == "<p>ok</p>"
 
 
-def test_parse_gemini_response_rejects_invalid_json():
+def test_parse_ai_response_rejects_invalid_json():
     with pytest.raises(AIGenerationError):
-        parse_gemini_response("not a json")
+        parse_ai_response("not a json")
 
 
-def test_parse_gemini_response_rejects_missing_keys():
+def test_parse_ai_response_rejects_missing_keys():
     with pytest.raises(AIGenerationError):
-        parse_gemini_response('{"html": "<p>ok</p>"}')
+        parse_ai_response('{"html": "<p>ok</p>"}')

@@ -35,19 +35,23 @@ function App() {
         {/* 左カラム: 操作系 + プロンプト + プレビュー。拡大時は上部要素を隠してプレビューを最大化する。
             md以上では右カラムとの境界に縦罫線（border-r）を引き、2区画を明確に分ける。 */}
         <div className="flex w-full flex-col gap-3 p-4 md:h-full md:w-1/2 md:border-r md:border-input">
-          {!previewExpanded && (
-            <>
-              {/* 上段: サイズ操作を左、描画ボタンを右端に寄せる（justify-between）。狭幅では折り返す。 */}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <SizeControls />
-                <RenderButton />
-              </div>
-              {/* ステップ7: 既存PDFをベースにしたい場合のアップロード導線（docs/spec.md 2.1）。 */}
-              <PdfDropzone />
-              {/* ステップ16: 生成方針の自然言語指示（プレースホルダ表示）。 */}
-              <PromptInput />
-            </>
-          )}
+          {/* バグ修正: 従来は{!previewExpanded && (...)}でこの一帯ごとアンマウントしていたため、
+              描画中（isLoading）にプレビューを拡大表示するとRenderButton内のRenderingProgressも
+              アンマウントされ、縮小時に経過秒数が0から数え直しになっていた（ユーザー報告バグ）。
+              display:contentsのラッパーに変え、非表示中もマウントは維持したまま見た目だけ隠すことで
+              RenderingProgressのuseStateを保持する。contentsは子要素を親のflexレイアウトへ直接
+              参加させるため、gap-3を含む既存レイアウトは変わらない。 */}
+          <div className={previewExpanded ? 'hidden' : 'contents'}>
+            {/* 上段: サイズ操作を左、描画ボタンを右端に寄せる（justify-between）。狭幅では折り返す。 */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <SizeControls />
+              <RenderButton />
+            </div>
+            {/* ステップ7: 既存PDFをベースにしたい場合のアップロード導線（docs/spec.md 2.1）。 */}
+            <PdfDropzone />
+            {/* ステップ16: 生成方針の自然言語指示（プレースホルダ表示）。 */}
+            <PromptInput />
+          </div>
           <PreviewPanel expanded={previewExpanded} onToggleExpand={() => setPreviewExpanded((prev) => !prev)} />
         </div>
 

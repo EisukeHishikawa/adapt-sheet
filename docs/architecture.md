@@ -16,21 +16,23 @@ flowchart LR
         CF["CloudFront"]
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
-        Lambda["Lambda (FastAPI + Lambda Web Adapter)\nDoclingモデル焼き込み済み"]
+        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter"]
+        LambdaDocling["Lambda (Docling変換)\nDoclingモデル焼き込み済み"]
         WAF["AWS WAF"]
     end
 
     subgraph External["外部サービス"]
-        Claude["Anthropic API (Claude)"]
+        Gemini["Gemini API (Google AI Studio)"]
         Auth0["Auth0"]
         Supabase["Supabase (PostgreSQL)"]
     end
 
     Browser -->|静的アセット取得| CF --> S3
-    Browser -->|API呼び出し| WAF --> APIGW --> Lambda
-    Lambda -->|生成AI呼び出し| Claude
-    Lambda -->|認証トークン検証| Auth0
-    Lambda -->|データ保存/取得| Supabase
+    Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
+    LambdaEntry -->|PDF変換リクエスト (HTTP)| LambdaDocling
+    LambdaEntry -->|生成AI呼び出し| Gemini
+    LambdaEntry -->|認証トークン検証| Auth0
+    LambdaEntry -->|データ保存/取得| Supabase
 ```
 
 ---
@@ -44,7 +46,7 @@ sequenceDiagram
     participant FE as フロントエンド
     participant API as FastAPI (/api/render)
     participant Docling as Docling
-    participant Claude as Claude API
+    participant Gemini as Gemini API
 
     FE->>API: PDF/HTML/CSS/JSON/プロンプト/サイズ送信
     alt PDFが存在する
@@ -52,8 +54,8 @@ sequenceDiagram
         Docling-->>API: ベースHTML/CSS
     end
     API->>API: 送信要素の有無に応じてプロンプトを動的構築
-    API->>Claude: 構造化生成リクエスト
-    Claude-->>API: HTML/CSS/JSON
+    API->>Gemini: 構造化生成リクエスト
+    Gemini-->>API: HTML/CSS/JSON
     API-->>FE: 200 OK { html, css, json }
     Note over API,FE: バリデーション/AI生成/Docling解析エラーは<br/>例外種別に応じたHTTPステータスで返却
 ```

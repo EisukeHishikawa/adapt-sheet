@@ -4,14 +4,19 @@ ADR-018に基づき、Docling本体（torch等の大容量ML依存）はdocling-
 本モジュールはHTTP経由でdocling-serviceの`POST /convert`を呼び出すクライアントのみを持つ。
 PDFConverterプロトコル自体はステップ7から変更していないため、app/main.pyのDI配線・
 docs/spec.md 3.1の外部API契約（/api/render）は無変更のまま分離できる。
+
+adapt-sheetの帳票テンプレートは1ページ完結が前提のため、docling-serviceへ転送する前に
+`_first_page_only`で2ページ目以降を破棄する（Docling側の処理時間を1ページ分に抑えるため）。
 """
 
 from __future__ import annotations
 
 import os
+from io import BytesIO
 from typing import Optional, Protocol
 
 import httpx
+from pypdf import PdfReader, PdfWriter
 
 
 class PDFConversionError(Exception):
@@ -51,6 +56,7 @@ class RemoteDoclingPDFConverter:
         self._client = client or httpx.Client()
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
+        content = _first_page_only(content)
         try:
             # ローカル開発でdocling-serviceコンテナを起動した直後の初回変換は、OCRモデルの
             # 初回ダウンロード（実測で60秒超）が発生しうるため、通常の推論時間（数秒〜十数秒）
@@ -70,6 +76,27 @@ class RemoteDoclingPDFConverter:
             )
 
         return response.json()["html"]
+
+
+def _first_page_only(content: bytes) -> bytes:
+    """PDFの1ページ目のみを残したバイト列を返す。
+
+    adapt-sheetの帳票テンプレートは1ページ完結が前提のため、2ページ目以降をDoclingへ
+    送っても解析コスト（処理時間）が増えるだけで使われない。docling-serviceへ転送する前に
+    ここで切り詰める。PDFとして解析できない場合（壊れている等）は、そのままの検証・422化を
+    docling-service側の既存エラーハンドリングに委ねるため、元のバイト列を無変更で返す。
+    """
+    try:
+        reader = PdfReader(BytesIO(content))
+        if len(reader.pages) <= 1:
+            return content
+        writer = PdfWriter()
+        writer.add_page(reader.pages[0])
+        buffer = BytesIO()
+        writer.write(buffer)
+        return buffer.getvalue()
+    except Exception:
+        return content
 
 
 def _extract_detail(response: httpx.Response) -> str:

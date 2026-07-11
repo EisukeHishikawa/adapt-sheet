@@ -238,6 +238,16 @@
 
 ---
 
+## ADR-021: Doclingへ送信するPDFを1ページ目のみに制限
+
+- **ステータス**: Accepted
+- **コンテキスト**: adapt-sheetの帳票テンプレートは1ページ完結が前提（docs/spec.md 2.1）だが、`/api/render`のPDFアップロードは複数ページのPDFもそのまま受け付けられる状態だった。`backend/app/services/docling_client.py`の`RemoteDoclingPDFConverter`がPDF全体をdocling-serviceへ転送していたため、2ページ目以降が存在しても使われないままDocling側の解析時間（処理コスト）だけが増えていた。
+- **決定**: `RemoteDoclingPDFConverter.convert_to_html`がdocling-serviceへ送信する直前に、`_first_page_only`（`pypdf`を使用）でPDFを1ページ目のみに切り詰める。PDFとして解析できない場合（壊れている等）は切り詰めを行わず元のバイト列をそのまま送信し、検証・422化はdocling-service側の既存エラーハンドリング（ADR-018）にそのまま委ねる。
+- **理由**: `pypdf`は純Pythonで軽量なため、ADR-018で分離した重量級ML依存（torch等）を持つdocling-service側ではなく、入口エンドポイント側のbackendに実装するのが自然。1ページ目のみに絞ることで、複数ページPDFをアップロードされた場合のDocling解析時間を短縮できる。
+- **トレードオフ**: 将来的に2ページ目以降の情報を帳票生成に使いたい要件が生まれた場合は、本ロジックの前提（1ページ完結）そのものを見直す必要がある。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

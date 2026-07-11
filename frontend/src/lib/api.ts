@@ -8,10 +8,11 @@ export type RenderResponse = components['schemas']['RenderResponse']
 // docs/spec.md 3.1の契約に沿ったフィールドのみを手書きする（CLAUDE.mdの型安全規約）。
 // ADR-019により、cssは独立したリクエストフィールドを持たない（既存CSSはhtml側の<style>に
 // 埋め込まれている前提のため）ので、ここにも追加しない。width_mm/height_mmはステップ8の
-// 定型サイズ自動入力機能で、json/promptはステップ16のJSON/プロンプト入力エディタで使う。
+// 定型サイズ自動入力機能で、promptはステップ16のプロンプト入力エディタで使う。
+// jsonは業務データがGeminiへの入力として不要（レスポンス側でのみ返る）なため、
+// リクエストフィールドとして持たない（backend/app/main.pyのjson_fieldパラメータ廃止と対）。
 export type RenderRequestFields = {
   html?: string
-  json?: string
   prompt?: string
   pdf?: File
   width_mm?: number

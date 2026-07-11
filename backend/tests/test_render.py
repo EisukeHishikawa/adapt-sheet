@@ -42,13 +42,6 @@ def test_render_response_placeholders_exist_in_json():
     assert placeholders <= set(body["json"].keys())
 
 
-def test_render_rejects_invalid_json_field():
-    # docs/spec.md エラーコード定義: JSON構文エラーは400 Bad Requestとする。
-    response = client.post("/api/render", data={"json": "{invalid"})
-
-    assert response.status_code == 400
-
-
 def test_render_returns_502_when_ai_generation_fails():
     # docs/spec.md エラーコード定義: AI生成エラー（Claude API呼び出し失敗等）は502 Bad Gatewayとする。
     # dependency_overridesでAIクライアントを失敗させ、エンドポイントのエラーハンドリングを検証する。
@@ -96,8 +89,8 @@ def test_render_uses_docling_html_when_pdf_uploaded():
         app.dependency_overrides.pop(get_pdf_converter, None)
 
 
-def test_render_threads_json_and_prompt_into_ai_prompt():
-    # json/promptフィールドがbuild_prompt経由でAI呼び出しのプロンプトへ反映されることを検証する。
+def test_render_threads_prompt_into_ai_prompt():
+    # promptフィールドがbuild_prompt経由でAI呼び出しのプロンプトへ反映されることを検証する。
     captured_prompts = []
 
     class _RecordingAIClient:
@@ -109,13 +102,21 @@ def test_render_threads_json_and_prompt_into_ai_prompt():
     try:
         response = client.post(
             "/api/render",
-            data={"json": '{"customer": "田中"}', "prompt": "請求書レイアウトにして"},
+            data={"prompt": "請求書レイアウトにして"},
         )
         assert response.status_code == 200
-        assert '"customer": "田中"' in captured_prompts[0]
         assert "請求書レイアウトにして" in captured_prompts[0]
     finally:
         app.dependency_overrides.pop(get_ai_client, None)
+
+
+def test_render_ignores_json_field_if_sent():
+    # jsonはGeminiへの入力として不要になったため、リクエストの宣言済みフィールドではなくなった。
+    # クライアントが送っても未知のフォームフィールドとしてFastAPIが無視し、
+    # エラーにならないことを確認する（ADR-019のcss同様の扱い）。
+    response = client.post("/api/render", data={"json": '{"customer": "田中"}'})
+
+    assert response.status_code == 200
 
 
 def test_render_ignores_css_field_if_sent():

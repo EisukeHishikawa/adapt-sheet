@@ -59,7 +59,6 @@ class AIClient(Protocol):
 def build_prompt(
     *,
     html: str,
-    json_data: dict,
     prompt: str,
     width_mm: Optional[float],
     height_mm: Optional[float],
@@ -76,6 +75,9 @@ def build_prompt(
     キーの単純な文字列置換のみ対応するため）にすることを指示する。
     ADR-019により、既存CSSは独立した引数として受け取らない（既存htmlの`<style>`に
     埋め込まれている前提のため）。
+    業務データJSONはGeminiへの入力としては不要（レスポンス側でGeminiがhtmlから抽出する
+    ものであり、リクエストの`json`フィールドは既存の業務データを渡す用途ではないため）、
+    プロンプトには含めない。
     """
     size_line = ""
     if width_mm is not None and height_mm is not None:
@@ -93,7 +95,6 @@ def build_prompt(
         "見た目を変えずに構造だけを整理してください。\n"
         f"{size_line}"
         f"元のHTML（見た目は正確、構造は保守性が低い可能性がある想定で参照してください）:\n{html}\n\n"
-        f"元の業務データJSON:\n{json.dumps(json_data, ensure_ascii=False)}\n\n"
         f"生成方針（自然言語指示）: {prompt}\n\n"
         "出力は次のJSON形式のみで返してください（説明文やコードブロック記法は不要）:\n"
         '{"html": "...", "css": "...", "json": {...}}\n'

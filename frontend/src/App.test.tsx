@@ -170,3 +170,48 @@ describe('PDFアップロード時のAPI疎通（ステップ7）', () => {
     expect(useSheetStore.getState().error).toBeNull()
   })
 })
+
+// ステップ22のTDD要件: Doclingの解析に時間がかかることがあるため、描画中は
+// 「固まっていない」ことが伝わるよう経過秒数を1秒ごとに表示することを検証する。
+// ネットワーク（msw）のタイミングに依存させず、ストアのisLoadingを直接操作して
+// RenderButton（useElapsedSeconds）の表示ロジックのみを検証する。
+describe('描画中の経過秒数表示（ステップ22）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('isLoading中は1秒ごとに経過秒数が描画ボタンに表示され、falseに戻ると次回のためにリセットされる', () => {
+    render(<App />)
+
+    act(() => {
+      useSheetStore.setState({ isLoading: true })
+    })
+    expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(0秒)')
+
+    act(() => {
+      vi.advanceTimersByTime(1000)
+    })
+    expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(1秒)')
+
+    act(() => {
+      vi.advanceTimersByTime(2000)
+    })
+    expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(3秒)')
+
+    act(() => {
+      useSheetStore.setState({ isLoading: false })
+    })
+    expect(screen.getByRole('button', { name: '描画' })).toBeInTheDocument()
+
+    // 次に再び描画中になったとき、前回の秒数(3秒)からではなく0秒から数え直す。
+    act(() => {
+      useSheetStore.setState({ isLoading: true })
+    })
+    expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(0秒)')
+  })
+})

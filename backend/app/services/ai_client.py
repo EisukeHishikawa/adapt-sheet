@@ -19,10 +19,18 @@ import requests
 from google import genai
 from google.genai import errors as genai_errors
 
+from app.services.mock_templates import LANDSCAPE_INVOICE, PORTRAIT_DELIVERY_NOTE
+
 # htmlのテンプレート変数 {{key}} を抽出する正規表現。
 # CLAUDE.mdの「固定情報と業務データの分離」規約に基づき、これらのkeyは
 # 必ずレスポンスのjsonに存在することをvalidate_render_resultで検証する。
 _PLACEHOLDER_PATTERN = re.compile(r"\{\{(\w+)\}\}")
+
+# build_promptが埋め込む「帳票サイズ: 横{width}mm × 縦{height}mm」の行から寸法を読み取る正規表現。
+# MockAIClientはAIClientプロトコル（generate(prompt: str)）を変更せずに向き判定したいため、
+# サイズをプロンプト引数として別途受け取るのではなく、build_promptが生成したプロンプト文字列から
+# 逆算する（ADR-020）。
+_SIZE_LINE_PATTERN = re.compile(r"帳票サイズ: 横([\d.]+)mm\s*×\s*縦([\d.]+)mm")
 
 
 class AIGenerationError(Exception):
@@ -56,12 +64,18 @@ def build_prompt(
     width_mm: Optional[float],
     height_mm: Optional[float],
 ) -> str:
-    """docs/spec.md 3.1のリクエスト項目から、Claudeへの動的プロンプトを構築する。
+    """docs/spec.md 3.1のリクエスト項目から、Geminiへの動的プロンプトを構築する。
 
-    既存のhtml/jsonをコンテキストとして渡し、固定テキストと業務データ（テンプレート変数）を
-    分離する規約（CLAUDE.md）をプロンプト内で明示することで、モック/本番の双方で
-    同じ形式のレスポンスが得られるようにする。ADR-019により、既存CSSは独立した引数として
-    受け取らない（既存htmlの`<style>`に埋め込まれている前提のため）。
+    ADR-020: 元HTMLがDocling（`docling-service`の`export_to_html()`）由来の場合、
+    見た目はPDFに忠実だがstyle属性の直書き・無意味な入れ子div・class名の欠如など
+    保守性が低い。AI側で見た目から作り直すと元PDFとの視覚的な一致度が下がるため、
+    「見た目（レイアウト・余白・罫線・フォントサイズ配分）はDocling出力を最優先で維持し、
+    保守性（セマンティックなタグ・意味のあるclass名・整理されたCSS）だけをGeminiに
+    作り替えさせる」という役割分担を明示する。あわせて、JSON側もキー名を業務的に意味の
+    伝わるスネークケースにし、フラットな構造（プレビューのテンプレート置換がトップレベル
+    キーの単純な文字列置換のみ対応するため）にすることを指示する。
+    ADR-019により、既存CSSは独立した引数として受け取らない（既存htmlの`<style>`に
+    埋め込まれている前提のため）。
     """
     size_line = ""
     if width_mm is not None and height_mm is not None:
@@ -69,15 +83,25 @@ def build_prompt(
 
     return (
         "あなたはHTML/CSS帳票の生成アシスタントです。"
-        "以下の情報をもとに、保守しやすいHTML/CSSと、それに対応する業務データのJSONを生成してください。\n"
+        "次の2つを両立させてください。"
+        "(1) 元のHTMLが表現している視覚的な体裁（レイアウト・余白・罫線・フォントサイズの"
+        "配分など、実物の帳票の見た目）を最優先で維持すること。"
+        "(2) 保守しやすいHTML/CSS（意味の伝わるclass名、セマンティックな見出し・table要素、"
+        "styleの直書きを避け<style>に整理したCSS）へ作り替えること。\n"
+        "元のHTMLはPDFを機械的にテーブル抽出したものである場合があり、その場合は見た目こそ"
+        "正確ですが、要素ごとのインラインstyleや無意味な入れ子のdivが多く保守性が低いです。"
+        "見た目を変えずに構造だけを整理してください。\n"
         f"{size_line}"
-        f"既存HTML（CSSは<style>として埋め込まれている想定）:\n{html}\n\n"
-        f"既存の業務データJSON:\n{json.dumps(json_data, ensure_ascii=False)}\n\n"
+        f"元のHTML（見た目は正確、構造は保守性が低い可能性がある想定で参照してください）:\n{html}\n\n"
+        f"元の業務データJSON:\n{json.dumps(json_data, ensure_ascii=False)}\n\n"
         f"生成方針（自然言語指示）: {prompt}\n\n"
         "出力は次のJSON形式のみで返してください（説明文やコードブロック記法は不要）:\n"
         '{"html": "...", "css": "...", "json": {...}}\n'
         "タイトル等の固定テキストはHTMLに直接記述し、明細等の業務データのみを"
         "{{key}}形式のテンプレート変数としてHTMLに埋め込み、対応するキーをjsonに含めてください。"
+        "jsonは配列・ネストしたオブジェクトを使わず、埋め込み先ごとに業務的な意味が伝わる"
+        "スネークケースのキー名を持つフラットな構造にしてください"
+        "（例: 明細1行目の数量なら item_1_qty のように行番号を含んだキー名にする）。"
     )
 
 
@@ -103,25 +127,24 @@ def validate_render_result(result: RenderResult) -> None:
 
 
 class MockAIClient:
-    """ADR-007のモック層。実APIを叩かず、プロンプト内容に応じた疑似レスポンスを返す。
+    """ADR-007/ADR-020のモック層。実APIを叩かず、プロンプト内容に応じた疑似レスポンスを返す。
 
-    プロンプトの内容自体で分岐はしないが、末尾にプロンプトの一部をコメントとして
-    埋め込むことで、実際に呼び出しが行われたことをテスト・デバッグ時に確認しやすくする。
+    ADR-020: 実際にPDFをDoclingで変換・Geminiで整形した場合に近い体裁のプレビューを
+    ローカル開発（既定のUSE_MOCK_AI=true）でも確認できるよう、実務的な帳票2種類を用意する。
+    帳票サイズ（横mm/縦mm、build_promptが埋め込む）から用紙の向きを判定し、
+    縦（高さ>=幅）なら納品書、横（幅>高さ）なら請求書を返す。サイズ情報が無い場合は、
+    フロント（sheetStore）の既定サイズがA4縦であることに合わせ、納品書をデフォルトにする。
     """
 
     def generate(self, prompt: str) -> RenderResult:
-        prompt_preview = prompt.strip().replace("\n", " ")[:50]
-        return RenderResult(
-            html=(
-                "<!doctype html><html><body>"
-                f"<!-- mock generated from prompt: {prompt_preview} -->"
-                "<h1>帳票タイトル</h1>"
-                "<p>{{customer_name}}</p>"
-                "</body></html>"
-            ),
-            css="body { font-family: sans-serif; }",
-            data={"customer_name": "モック太郎"},
-        )
+        document = PORTRAIT_DELIVERY_NOTE
+        match = _SIZE_LINE_PATTERN.search(prompt)
+        if match:
+            width_mm, height_mm = float(match.group(1)), float(match.group(2))
+            if width_mm > height_mm:
+                document = LANDSCAPE_INVOICE
+
+        return RenderResult(html=document.html, css=document.css, data=dict(document.data))
 
 
 def parse_gemini_response(text: str) -> RenderResult:

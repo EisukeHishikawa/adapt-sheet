@@ -57,6 +57,8 @@ docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
 docker compose exec docling pytest                       # doclingサービス（PDF変換専用）の全テスト実行
 docker compose exec docling ruff check .                  # doclingサービスの静的解析
+docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
+docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8100/convert # /convertを直接叩いて動作確認（ホスト非公開のため、docling自身にexecして呼び出す）
 docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
 docker compose exec frontend npm run lint                # ESLint
 ```

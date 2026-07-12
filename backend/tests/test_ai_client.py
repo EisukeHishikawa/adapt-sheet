@@ -1,8 +1,12 @@
+from types import SimpleNamespace
+
 import pytest
 import requests
+from google.genai import errors as genai_errors
 
 from app.services.ai_client import (
     AIGenerationError,
+    GeminiAIClient,
     LlamaAIClient,
     MockAIClient,
     RenderResult,
@@ -311,3 +315,72 @@ def test_parse_ai_response_rejects_invalid_json():
 def test_parse_ai_response_rejects_missing_keys():
     with pytest.raises(AIGenerationError):
         parse_ai_response('{"html": "<p>ok</p>"}')
+
+
+# ADR-023: Gemini APIは高負荷時に503 UNAVAILABLE（"experiencing high demand"）を返すことがある。
+# 一過性の失敗で帳票生成が落ちないよう、503のみバックオフして再試行する。
+
+
+class _StubGeminiModels:
+    def __init__(self, failures: int, response_text: str):
+        self._remaining_failures = failures
+        self._response_text = response_text
+        self.call_count = 0
+
+    def generate_content(self, model, contents):
+        self.call_count += 1
+        if self._remaining_failures > 0:
+            self._remaining_failures -= 1
+            raise genai_errors.ServerError(503, {"error": {"message": "high demand"}})
+        return SimpleNamespace(text=self._response_text)
+
+
+class _StubGeminiClient:
+    def __init__(self, models):
+        self.models = models
+
+
+_VALID_RESPONSE = '{"html": "<p>{{x}}</p>", "css": "body{}", "json": {"x": "1"}}'
+
+
+def test_gemini_client_retries_on_503_and_succeeds(monkeypatch):
+    monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
+    models = _StubGeminiModels(failures=2, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    result = client.generate("prompt")
+
+    assert result.html == "<p>{{x}}</p>"
+    assert models.call_count == 3
+
+
+def test_gemini_client_raises_after_exhausting_retries(monkeypatch):
+    monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
+    models = _StubGeminiModels(failures=99, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with pytest.raises(AIGenerationError):
+        client.generate("prompt")
+
+    assert models.call_count == 3
+
+
+def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
+    # 429（クォータ超過）等のクライアントエラーは再試行しても無駄なため、即座に失敗させる。
+    monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
+
+    class _QuotaExceededModels:
+        def __init__(self):
+            self.call_count = 0
+
+        def generate_content(self, model, contents):
+            self.call_count += 1
+            raise genai_errors.ClientError(429, {"error": {"message": "quota exceeded"}})
+
+    models = _QuotaExceededModels()
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with pytest.raises(AIGenerationError):
+        client.generate("prompt")
+
+    assert models.call_count == 1

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Optional, Protocol
 
@@ -25,6 +26,10 @@ _PLACEHOLDER_PATTERN = re.compile(r"\{\{(\w+)\}\}")
 # MockAIClientはAIClientプロトコル（generate(prompt: str)）を変えずに用紙の向きを知る必要があるため、
 # build_promptが埋め込んだサイズ行から寸法を逆算する（ADR-020）。
 _SIZE_LINE_PATTERN = re.compile(r"帳票サイズ: 横([\d.]+)mm\s*×\s*縦([\d.]+)mm")
+
+# Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間（ADR-023）。
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_BACKOFF_SECONDS = 2.0
 
 
 class AIGenerationError(Exception):
@@ -188,16 +193,30 @@ class GeminiAIClient:
     # 現行の無料枠推奨モデルを既定にしている。
     _MODEL = "gemini-2.5-flash"
 
-    def __init__(self, api_key: str) -> None:
-        self._client = genai.Client(api_key=api_key)
+    def __init__(self, api_key: str, client: Optional[object] = None) -> None:
+        # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
+        self._client = client or genai.Client(api_key=api_key)
 
     def generate(self, prompt: str) -> RenderResult:
-        try:
-            response = self._client.models.generate_content(model=self._MODEL, contents=prompt)
-        except genai_errors.APIError as exc:
-            raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
+        for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+            try:
+                response = self._client.models.generate_content(
+                    model=self._MODEL, contents=prompt
+                )
+            except genai_errors.ServerError as exc:
+                # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は
+                # Gemini側の一過性の混雑であり、待てば成功しうる（ADR-023）。
+                if attempt == _RETRY_MAX_ATTEMPTS:
+                    raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
+                time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
+                continue
+            except genai_errors.APIError as exc:
+                # 429（クォータ超過）等のクライアントエラーは再試行しても結果が変わらない。
+                raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
 
-        return parse_ai_response(response.text or "")
+            return parse_ai_response(response.text or "")
+
+        raise AIGenerationError("Gemini API呼び出しに失敗しました")
 
 
 class LlamaAIClient:

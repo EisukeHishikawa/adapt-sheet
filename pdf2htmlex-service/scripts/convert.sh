@@ -6,8 +6,9 @@ set -euo pipefail
 
 INPUT_DIR="${INPUT_DIR:-/input}"
 OUTPUT_DIR="${OUTPUT_DIR:-/output}"
-# 既定値はapp/converter.py（サービス本体）と揃える。
 ZOOM="${PDF2HTMLEX_ZOOM:-1.5}"
+# 人がブラウザで見た目を確認する用途のため、サービス本体（app/converter.py、Gemini向けに
+# フォント・画像・JSを落とす）とは異なり、既定ではすべて埋め込んだ自己完結HTMLを出力する。
 EMBED="${PDF2HTMLEX_EMBED:-CFIJ}"
 PROCESS_NONTEXT="${PDF2HTMLEX_PROCESS_NONTEXT:-1}"
 FIRST_PAGE="${FIRST_PAGE:-1}"

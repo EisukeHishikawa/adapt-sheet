@@ -283,6 +283,9 @@
   - コンテナが1つ増え、ローカル環境のビルド時間・メモリ消費が増える。pdf2htmlEXはMLモデルを持たないため、Doclingほどのコストにはならない。
   - pdf2htmlEX公式Dockerイメージはx86_64ビルドのみで、最終リリースも2020年（0.18.8.rc2）で更新が停滞している。Apple Silicon上ではエミュレーション実行（`platform: linux/amd64`）になる。本番のAWS Lambdaはx86_64のためネイティブ実行になり、この制約は開発環境に閉じる。
 - **1ページ目のみ送る前提（ADR-021）の扱い**: 帳票は1ページ完結が前提のため、backend側で1ページ目に切り詰めてから**両サービスへ**送る（`app/services/pdf_common.py`の`first_page_only`を共用）。pdf2htmlEX側も`--first-page 1 --last-page 1`で二重に制限している。
+- **Geminiへ渡すHTMLからバイナリ資産を除外する**: pdf2htmlEXの既定出力はフォント（WOFF）・背景画像（PNG）をbase64で埋め込み、ビューア用のJSも同梱する。ほぼ空白のサンプルPDFですら56KBに達し、そのうちレイアウト情報（座標を持つCSSクラス定義とテキスト）は3割程度でしかない。実際にこの出力をそのままGeminiへ渡したところ、`gemini-2.5-flash`が503 UNAVAILABLE（"experiencing high demand"）を返し、`/api/render`が502で失敗した（同じ構成でもPDFなしの短いプロンプトは成功する）。base64のフォント・画像はLLMには一切読めないため、`--embed Cfij`（CSSのみ埋め込み）＋`--process-nontext 0`とし、残る`<script>`・`<link>`・`url(data:...)`は変換後に除去する。サンプルPDFで56,516文字 → 17,700文字（約69%削減）。人がブラウザで見た目を確認する用途には、すべて埋め込む`scripts/convert.sh`を別途用意する。
+- **Geminiの503への再試行**: 上記の削減後も、Gemini側の混雑による503は起こりうる。`GeminiAIClient`は503（`ServerError`）のみ、指数バックオフで最大3回まで再試行する。429（クォータ超過）等のクライアントエラーは再試行しても結果が変わらないため即座に失敗させる。
+- **無料枠の制約（運用上の注意）**: `gemini-2.5-flash`の無料枠は1日20リクエスト（`GenerateRequestsPerDayPerProjectPerModel-FreeTier`）であり、実生成の動作確認を数回繰り返すとすぐ429になる。継続的に実生成を試す場合は課金の有効化、またはより無料枠の大きいモデルへの切り替えを検討する。
 
 ---
 

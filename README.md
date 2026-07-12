@@ -42,10 +42,12 @@ PDF解析はbackendとは別の2コンテナ（どちらもホスト非公開）
 
 | コンテナ | 役割 | 出力 |
 |---|---|---|
-| `pdf2htmlex` | レイアウト（座標・罫線・フォント）の再現。**見た目の正** | 単一HTML |
+| `pdf2htmlex` | レイアウト（座標・罫線・フォント）の再現。**見た目の正** | HTML（レイアウトCSSのみ埋め込み） |
 | `docling` | 本文テキストと論理構造の抽出。**テキストの正** | Markdown |
 
 Geminiにはこの2つを両方渡し、「レイアウトはHTML、文字列はMarkdownを正とする」役割分担で整形させる。
+
+> pdf2htmlEXの出力からは、埋め込みフォント・背景画像（base64）とビューア用JSを除去している。LLMには読めない一方でペイロードの大半を占め、Gemini APIが503を返す原因になるため（[docs/decisions.md](./docs/decisions.md) ADR-023参照）。ブラウザで見た目を確認したい場合は、すべて埋め込む`pdf2htmlex-service/scripts/convert.sh`を使う。
 
 > 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-013参照）。
 

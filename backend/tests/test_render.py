@@ -1,11 +1,14 @@
 import re
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client
-from app.services.docling_client import PDFConversionError, get_pdf_converter
+from app.services.docling_client import get_markdown_extractor
+from app.services.pdf2htmlex_client import get_layout_converter
+from app.services.pdf_common import PDFConversionError
 
 # DEVELOPMENT.md ステップ7で追加するPDFアップロードテスト用フィクスチャ。
 # scripts/verify_docling.pyやtest_docling_client.pyと同じ実PDFを使い回す。
@@ -57,12 +60,10 @@ def test_render_returns_502_when_ai_generation_fails():
         app.dependency_overrides.pop(get_ai_client, None)
 
 
-def test_render_uses_docling_html_when_pdf_uploaded():
-    # docs/architecture.md 2節のシーケンス図: PDFが送信された場合、Docling変換結果が
-    # プロンプト構築のコンテキストとして使われることを検証する。
-    # 実際のDocling変換は重い（モデルロード）ため、ここではdependency_overridesで
-    # 高速なフェイクに差し替え、main.pyの配線（変換結果をプロンプトへ渡す処理）のみを検証する
-    # （実際にDoclingが正しくHTML抽出できることはtest_docling_client.pyで別途検証済み）。
+def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
+    # ADR-023: PDFが送信された場合、pdf2htmlEX由来のレイアウトHTML（見た目）とDocling由来の
+    # Markdown（テキスト）の両方がプロンプトへ渡ることを検証する。実変換は重いため、
+    # dependency_overridesで高速なフェイクに差し替え、main.pyの配線のみを検証する。
     captured_prompts = []
 
     class _RecordingAIClient:
@@ -70,12 +71,17 @@ def test_render_uses_docling_html_when_pdf_uploaded():
             captured_prompts.append(prompt)
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    class _FakePDFConverter:
+    class _FakeMarkdownExtractor:
+        def convert_to_markdown(self, filename: str, content: bytes) -> str:
+            return "# docling-extracted-markdown-marker"
+
+    class _FakeLayoutConverter:
         def convert_to_html(self, filename: str, content: bytes) -> str:
-            return "<p>docling-extracted-html-marker</p>"
+            return "<html><body>pdf2htmlex-layout-marker</body></html>"
 
     app.dependency_overrides[get_ai_client] = lambda: _RecordingAIClient()
-    app.dependency_overrides[get_pdf_converter] = lambda: _FakePDFConverter()
+    app.dependency_overrides[get_markdown_extractor] = lambda: _FakeMarkdownExtractor()
+    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
     try:
         response = client.post(
             "/api/render",
@@ -83,10 +89,45 @@ def test_render_uses_docling_html_when_pdf_uploaded():
             files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
         )
         assert response.status_code == 200
-        assert "docling-extracted-html-marker" in captured_prompts[0]
+        assert "pdf2htmlex-layout-marker" in captured_prompts[0]
+        assert "docling-extracted-markdown-marker" in captured_prompts[0]
     finally:
         app.dependency_overrides.pop(get_ai_client, None)
-        app.dependency_overrides.pop(get_pdf_converter, None)
+        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
+
+
+def test_render_calls_docling_and_pdf2htmlex_in_parallel():
+    # ADR-023: DoclingとpdfhtmlEXはどちらも秒単位の処理時間がかかるため、直列ではなく並列に呼ぶ。
+    # 各変換を0.5秒スリープさせ、合計所要時間が直列（1.0秒）ではなく並列（0.5秒強）に収まることで
+    # 並列実行を検証する。
+    delay_seconds = 0.5
+
+    class _SlowMarkdownExtractor:
+        def convert_to_markdown(self, filename: str, content: bytes) -> str:
+            time.sleep(delay_seconds)
+            return "# markdown"
+
+    class _SlowLayoutConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            time.sleep(delay_seconds)
+            return "<html></html>"
+
+    app.dependency_overrides[get_markdown_extractor] = lambda: _SlowMarkdownExtractor()
+    app.dependency_overrides[get_layout_converter] = lambda: _SlowLayoutConverter()
+    try:
+        started_at = time.monotonic()
+        response = client.post(
+            "/api/render",
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        elapsed = time.monotonic() - started_at
+
+        assert response.status_code == 200
+        assert elapsed < delay_seconds * 2
+    finally:
+        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
 
 
 def test_render_threads_prompt_into_ai_prompt():
@@ -160,12 +201,18 @@ def test_render_mock_returns_invoice_for_landscape_size():
 
 
 def test_render_returns_422_when_pdf_conversion_fails():
-    # docs/spec.md エラーコード定義: Docling解析エラーは422 Unprocessable Entityとする。
-    class _FailingPDFConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
+    # docs/spec.md エラーコード定義: PDF解析エラーは422 Unprocessable Entityとする。
+    # Docling・pdf2htmlEXのどちらが失敗しても同じPDFConversionErrorへ集約される（ADR-023）。
+    class _FailingMarkdownExtractor:
+        def convert_to_markdown(self, filename: str, content: bytes) -> str:
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
 
-    app.dependency_overrides[get_pdf_converter] = lambda: _FailingPDFConverter()
+    class _FakeLayoutConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            return "<html></html>"
+
+    app.dependency_overrides[get_markdown_extractor] = lambda: _FailingMarkdownExtractor()
+    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
     try:
         response = client.post(
             "/api/render",
@@ -173,4 +220,27 @@ def test_render_returns_422_when_pdf_conversion_fails():
         )
         assert response.status_code == 422
     finally:
-        app.dependency_overrides.pop(get_pdf_converter, None)
+        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
+
+
+def test_render_returns_422_when_layout_conversion_fails():
+    class _FakeMarkdownExtractor:
+        def convert_to_markdown(self, filename: str, content: bytes) -> str:
+            return "# markdown"
+
+    class _FailingLayoutConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_markdown_extractor] = lambda: _FakeMarkdownExtractor()
+    app.dependency_overrides[get_layout_converter] = lambda: _FailingLayoutConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_layout_converter, None)

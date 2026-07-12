@@ -17,7 +17,8 @@ flowchart LR
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
         LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter"]
-        LambdaDocling["Lambda (Docling変換)\nDoclingモデル焼き込み済み"]
+        LambdaDocling["Lambda (Doclingテキスト抽出)\nDoclingモデル焼き込み済み"]
+        LambdaPdf2htmlEX["Lambda (pdf2htmlEXレイアウト変換)"]
         WAF["AWS WAF"]
     end
 
@@ -29,7 +30,8 @@ flowchart LR
 
     Browser -->|静的アセット取得| CF --> S3
     Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
-    LambdaEntry -->|PDF変換リクエスト (HTTP)| LambdaDocling
+    LambdaEntry -->|テキスト抽出リクエスト (HTTP・並列)| LambdaDocling
+    LambdaEntry -->|レイアウトHTML生成リクエスト (HTTP・並列)| LambdaPdf2htmlEX
     LambdaEntry -->|生成AI呼び出し| Gemini
     LambdaEntry -->|認証トークン検証| Auth0
     LambdaEntry -->|データ保存/取得| Supabase
@@ -45,19 +47,26 @@ flowchart LR
 sequenceDiagram
     participant FE as フロントエンド
     participant API as FastAPI (/api/render)
-    participant Docling as Docling
+    participant P2H as pdf2htmlEX (レイアウト)
+    participant Docling as Docling (テキスト)
     participant Gemini as Gemini API
 
-    FE->>API: PDF/HTML/CSS/JSON/プロンプト/サイズ送信
+    FE->>API: PDF/HTML/プロンプト/サイズ送信
     alt PDFが存在する
-        API->>Docling: PDF解析リクエスト
-        Docling-->>API: ベースHTML/CSS
+        Note over API,Docling: 2つの変換は並列に実行する（ADR-023）
+        par レイアウト変換
+            API->>P2H: PDF（1ページ目）
+            P2H-->>API: レイアウトHTML（見た目の正）
+        and テキスト抽出
+            API->>Docling: PDF（1ページ目）
+            Docling-->>API: Markdown（テキストの正）
+        end
     end
     API->>API: 送信要素の有無に応じてプロンプトを動的構築
-    API->>Gemini: 構造化生成リクエスト
+    API->>Gemini: レイアウトHTML + Markdown + 指示
     Gemini-->>API: HTML/CSS/JSON
     API-->>FE: 200 OK { html, css, json }
-    Note over API,FE: バリデーション/AI生成/Docling解析エラーは<br/>例外種別に応じたHTTPステータスで返却
+    Note over API,FE: バリデーション/AI生成/PDF解析エラーは<br/>例外種別に応じたHTTPステータスで返却
 ```
 
 ---

@@ -31,9 +31,9 @@ docker compose exec backend ruff check .                # 静的解析
 docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-006）
 ```
 
-### Doclingサービス (Python / FastAPI、PDF変換専用・ADR-018)
+### Doclingサービス (Python / FastAPI、テキスト抽出専用・ADR-018/023)
 
-> Python 3.9系で動作確認済み（`docling-service/Dockerfile`）。Docling 2.x系も同バージョンで動作する。backendからHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
+> Python 3.9系で動作確認済み（`docling-service/Dockerfile`）。Docling 2.x系も同バージョンで動作する。backendからHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。ADR-023により、DoclingはHTMLではなく**Markdown**（テキストの正）を返す。
 
 ```bash
 docker compose exec docling pytest                     # 全テスト実行（実PDF変換の結合テストを含む）
@@ -41,6 +41,17 @@ docker compose exec docling pytest path/to/test.py -v   # 単体テスト
 docker compose exec docling ruff check .                 # 静的解析
 docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
 docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8100/convert # /convertエンドポイントを直接叩いて動作確認（backend/frontendを介さない）
+```
+
+### pdf2htmlEXサービス (Python / FastAPI、レイアウトHTML生成専用・ADR-023)
+
+> pdf2htmlEX公式イメージ（Ubuntu 20.04 / x86_64のみ）をベースにFastAPIラッパーを載せた内部サービス（`pdf2htmlex-service/Dockerfile`）。Apple Silicon上はエミュレーション実行（`platform: linux/amd64`）。backendからHTTPで呼び出されるため、ホストへポートは公開しない。
+
+```bash
+docker compose exec pdf2htmlex pytest                    # 全テスト実行（実バイナリでの変換結合テストを含む）
+docker compose exec pdf2htmlex ruff check .               # 静的解析
+docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8200/convert # /convertを直接叩いて動作確認
+docker compose exec pdf2htmlex bash -c 'INPUT_DIR=/tmp OUTPUT_DIR=/tmp convert.sh input.pdf' # CLIで一括変換（変換オプションの目視確認用）
 ```
 
 ### フロントエンド (React / TypeScript)

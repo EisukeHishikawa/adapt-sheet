@@ -1,54 +1,56 @@
-"""Docling変換の呼び出しレイヤー（ADR-018）。
+"""Doclingによるテキスト抽出（Markdown）の呼び出しレイヤー（ADR-018/023）。
 
-Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離したため、本モジュールは
-HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。
+Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離しているため、本モジュールは
+HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。レイアウトHTMLの生成は
+pdf2htmlex_client.pyの責務（ADR-023）。
 """
 
 from __future__ import annotations
 
 import os
-from io import BytesIO
 from typing import Optional, Protocol
 
 import httpx
-from pypdf import PdfReader, PdfWriter
+
+from app.services.pdf_common import PDFConversionError, first_page_only
+
+__all__ = [
+    "PDFConversionError",
+    "PDFMarkdownExtractor",
+    "RemoteDoclingMarkdownExtractor",
+    "get_markdown_extractor",
+]
 
 
-class PDFConversionError(Exception):
-    """PDF解析の失敗。app/errors.pyのハンドラが422へ変換する（docs/spec.md 4章）。
-
-    docling-serviceからの非200応答・接続エラー（サービスダウン等）もここへマッピングする（ADR-018）。
-    """
-
-
-class PDFConverter(Protocol):
+class PDFMarkdownExtractor(Protocol):
     """本番/テストで差し替え可能にするための共通インターフェース（ai_client.AIClientと同じ方針）。"""
 
-    def convert_to_html(self, filename: str, content: bytes) -> str: ...
+    def convert_to_markdown(self, filename: str, content: bytes) -> str: ...
 
 
 # 未設定時の既定をcompose上のサービス名に合わせ、環境変数を明示しない単体実行でも動くようにする。
 _DEFAULT_DOCLING_SERVICE_URL = "http://docling:8100"
 
 
-class RemoteDoclingPDFConverter:
-    """docling-serviceへHTTPで変換を委譲する本番実装（ADR-018）。"""
+class RemoteDoclingMarkdownExtractor:
+    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-018/023）。"""
 
-    def __init__(self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None) -> None:
+    def __init__(
+        self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None
+    ) -> None:
         # テスト側がhttpx.MockTransportを注入したClientやカスタムURLへ差し替えられるよう引数で受ける。
         self._base_url = (
             base_url or os.environ.get("DOCLING_SERVICE_URL", _DEFAULT_DOCLING_SERVICE_URL)
         ).rstrip("/")
         self._client = client or httpx.Client()
 
-    def convert_to_html(self, filename: str, content: bytes) -> str:
-        content = _first_page_only(content)
+    def convert_to_markdown(self, filename: str, content: bytes) -> str:
         try:
             # コンテナ起動直後の初回変換ではOCRモデルのダウンロード（実測60秒超）が発生しうるため、
             # 通常の推論時間（数秒〜十数秒）より大きめのタイムアウトを取る。
             response = self._client.post(
                 f"{self._base_url}/convert",
-                files={"file": (filename, content, "application/pdf")},
+                files={"file": (filename, first_page_only(content), "application/pdf")},
                 timeout=120.0,
             )
         except httpx.RequestError as exc:
@@ -60,27 +62,7 @@ class RemoteDoclingPDFConverter:
                 f"{_extract_detail(response)}"
             )
 
-        return response.json()["html"]
-
-
-def _first_page_only(content: bytes) -> bytes:
-    """PDFの1ページ目のみを残したバイト列を返す（ADR-021）。
-
-    帳票テンプレートは1ページ完結が前提のため、2ページ目以降はDoclingの解析コストを増やすだけで
-    使われない。PDFとして解析できない場合は元のバイト列をそのまま返し、検証と422化は
-    docling-service側の既存エラーハンドリングに委ねる。
-    """
-    try:
-        reader = PdfReader(BytesIO(content))
-        if len(reader.pages) <= 1:
-            return content
-        writer = PdfWriter()
-        writer.add_page(reader.pages[0])
-        buffer = BytesIO()
-        writer.write(buffer)
-        return buffer.getvalue()
-    except Exception:
-        return content
+        return response.json()["markdown"]
 
 
 def _extract_detail(response: httpx.Response) -> str:
@@ -92,6 +74,6 @@ def _extract_detail(response: httpx.Response) -> str:
         return response.text
 
 
-def get_pdf_converter() -> PDFConverter:
+def get_markdown_extractor() -> PDFMarkdownExtractor:
     """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。"""
-    return RemoteDoclingPDFConverter()
+    return RemoteDoclingMarkdownExtractor()

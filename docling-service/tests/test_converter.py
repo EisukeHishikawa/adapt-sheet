@@ -4,22 +4,23 @@ import pytest
 
 from app.converter import DoclingPDFConverter, PDFConversionError
 
-# ADR-018によりbackend/tests/test_docling_client.pyから移動。DoclingPDFConverter自体の
-# 変換ロジックはステップ7から変わっていないため、テスト内容もそのまま引き継ぐ。
+# ADR-023: DoclingはHTML変換ではなくテキスト抽出（Markdown）を担う。
 # scripts/verify_docling.pyと同じ既知の埋め込みテキストを含むサンプルPDFを使い回す。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 
 
-def test_docling_converter_extracts_html_from_real_pdf():
+def test_docling_converter_extracts_markdown_from_real_pdf():
     converter = DoclingPDFConverter()
-    html = converter.convert_to_html("sample.pdf", SAMPLE_PDF.read_bytes())
+    markdown = converter.convert_to_markdown("sample.pdf", SAMPLE_PDF.read_bytes())
 
-    assert isinstance(html, str)
-    assert "Docling verification sample text" in html
+    assert isinstance(markdown, str)
+    assert "Docling verification sample text" in markdown
+    # レイアウトの再現はpdf2htmlEX側の責務のため、HTML文書として返さないこと（ADR-023）。
+    assert "<html" not in markdown.lower()
 
 
 def test_docling_converter_rejects_invalid_pdf_bytes():
     converter = DoclingPDFConverter()
 
     with pytest.raises(PDFConversionError):
-        converter.convert_to_html("broken.pdf", b"not a real pdf content at all")
+        converter.convert_to_markdown("broken.pdf", b"not a real pdf content at all")

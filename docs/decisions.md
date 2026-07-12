@@ -267,6 +267,25 @@
 
 ---
 
+## ADR-023: PDF解析をpdf2htmlEX（見た目）とDocling（テキスト）へ役割分担し、並列実行する
+
+- **ステータス**: Accepted
+- **コンテキスト**: ADR-003で採用したDoclingは、PDFから**意味構造**（見出し・段落・表）を抽出するツールであり、`export_to_html()`の出力は座標・罫線・フォント・余白といった**見た目**を保持しない。adapt-sheetの中核体験は「既存帳票の見た目を再現したHTML/CSSを作る」ことであり、ADR-020ではDocling由来HTMLの見た目再現をGeminiのプロンプト側で補う方針を取ったが、入力そのものにレイアウト情報が無いため精度が頭打ちだった。一方で、レイアウト再現に優れる[pdf2htmlEX](https://github.com/pdf2htmlEX/pdf2htmlEX)（Popplerベースで、PDFの見た目を絶対座標のdiv＋埋め込みフォントとして忠実に再現する）は、文字をグリフ単位で配置する都合上、**テキストとしての正確さ**（文字の分割・欠落・論理的な読み順）ではDoclingに劣る。
+- **決定**: どちらか一方を選ぶのではなく、**役割を分担して両方使う**。
+  - **pdf2htmlEX（`pdf2htmlex-service`、新設）**: PDF → **レイアウトHTML**。見た目の正。CSS・フォント・画像を埋め込んだ単一HTMLを返す（`POST /convert` → `{"html": ...}`）。
+  - **Docling（`docling-service`、既存を変更）**: PDF → **Markdown**。テキストの正。HTML出力（`export_to_html`）をやめ、`export_to_markdown`に切り替える（`POST /convert` → `{"markdown": ...}`）。
+  - **backend**: 両サービスを**並列に**呼び出し（`asyncio.gather` + `asyncio.to_thread`）、得られたHTMLとMarkdownの**両方**をGeminiのプロンプトへ渡す。プロンプトでは「レイアウトの正はHTML、文字列の正はMarkdown」と役割を明示する。
+- **理由**:
+  - 2つのツールの弱点が相補的である（pdf2htmlEXは見た目に強くテキストに弱い / Doclingはテキストに強く見た目を持たない）。両方をGeminiへ渡せば、Geminiは「どちらを信じるか」を要素ごとに判断できる。
+  - 並列化は、直列だと2つの変換時間が単純加算されるため。Doclingは初回のモデルロードを含めると分単位、pdf2htmlEXも（Apple Silicon上はエミュレーション実行のため）秒単位かかる。クライアントは同期I/O（`httpx.Client`）のままスレッドへ逃がし、`asyncio.gather`で待ち合わせる構成にした。エンドポイントを`async def`にする以外の変更は不要で、既存のDI（`Depends`）とテスト戦略（`dependency_overrides`）をそのまま維持できる。
+- **トレードオフ**:
+  - Geminiへの入力トークン量が増える（pdf2htmlEXのHTMLは埋め込みフォント・画像を含むと数十KB〜）。将来的にコストが問題になる場合は、`PDF2HTMLEX_PROCESS_NONTEXT=0`（背景画像を出力しない）や埋め込み対象の削減（`PDF2HTMLEX_EMBED`）で調整できるよう環境変数化してある。
+  - コンテナが1つ増え、ローカル環境のビルド時間・メモリ消費が増える。pdf2htmlEXはMLモデルを持たないため、Doclingほどのコストにはならない。
+  - pdf2htmlEX公式Dockerイメージはx86_64ビルドのみで、最終リリースも2020年（0.18.8.rc2）で更新が停滞している。Apple Silicon上ではエミュレーション実行（`platform: linux/amd64`）になる。本番のAWS Lambdaはx86_64のためネイティブ実行になり、この制約は開発環境に閉じる。
+- **1ページ目のみ送る前提（ADR-021）の扱い**: 帳票は1ページ完結が前提のため、backend側で1ページ目に切り詰めてから**両サービスへ**送る（`app/services/pdf_common.py`の`first_page_only`を共用）。pdf2htmlEX側も`--first-page 1 --last-page 1`で二重に制限している。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

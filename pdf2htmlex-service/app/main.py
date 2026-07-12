@@ -1,7 +1,7 @@
-"""Doclingによるテキスト抽出専用の内部サービス（ADR-018/023）。
+"""pdf2htmlEXによるレイアウトHTML生成専用の内部サービス（ADR-023）。
 
 Docker Compose内部ネットワーク経由でbackendからのみ呼ばれ、ホストへは公開しないため、
-CORS設定や認証は行わない。
+CORS設定や認証は行わない（docling-serviceと同じ方針）。
 """
 
 from __future__ import annotations
@@ -20,12 +20,10 @@ def convert(
     pdf_converter: PDFConverter = Depends(get_pdf_converter),
 ) -> dict:
     try:
-        markdown = pdf_converter.convert_to_markdown(
-            file.filename or "uploaded.pdf", file.file.read()
-        )
+        html = pdf_converter.convert_to_html(file.filename or "uploaded.pdf", file.file.read())
     except PDFConversionError as exc:
-        # backend側のRemoteDoclingMarkdownExtractorがこの422を検知し、自身のPDFConversionErrorへ
+        # backend側のRemotePdf2htmlEXConverterがこの422を検知し、自身のPDFConversionErrorへ
         # 再マッピングする（ADR-017により最終的に422レスポンスになる）。
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return {"markdown": markdown}
+    return {"html": html}

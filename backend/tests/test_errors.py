@@ -53,13 +53,20 @@ def test_ai_generation_error_returns_structured_body():
 
 
 def test_pdf_conversion_error_returns_structured_body():
-    from app.services.docling_client import PDFConversionError, get_pdf_converter
+    from app.services.docling_client import get_markdown_extractor
+    from app.services.pdf2htmlex_client import get_layout_converter
+    from app.services.pdf_common import PDFConversionError
 
-    class _FailingPDFConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
+    class _FailingExtractor:
+        def convert_to_markdown(self, filename: str, content: bytes) -> str:
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
 
-    app.dependency_overrides[get_pdf_converter] = lambda: _FailingPDFConverter()
+    class _FakeLayoutConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            return "<html><body>layout</body></html>"
+
+    app.dependency_overrides[get_markdown_extractor] = lambda: _FailingExtractor()
+    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
     try:
         response = client.post(
             "/api/render",
@@ -69,7 +76,8 @@ def test_pdf_conversion_error_returns_structured_body():
         request_id = _assert_error_envelope(response.json(), "PDF_CONVERSION_ERROR")
         assert request_id == response.headers["X-Request-ID"]
     finally:
-        app.dependency_overrides.pop(get_pdf_converter, None)
+        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
 
 
 def test_unhandled_exception_returns_500_structured_body():

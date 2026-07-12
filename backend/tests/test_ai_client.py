@@ -28,6 +28,30 @@ def test_build_prompt_includes_context():
     assert "210" in prompt and "297" in prompt
 
 
+def test_build_prompt_includes_layout_html_and_markdown_with_roles():
+    # ADR-023: pdf2htmlEX由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
+    # 両方渡し、それぞれの役割をGeminiへ明示する契約を固定する。
+    prompt = build_prompt(
+        html="<html>layout-marker</html>",
+        markdown="# markdown-marker",
+        prompt="x",
+        width_mm=None,
+        height_mm=None,
+    )
+
+    assert "layout-marker" in prompt
+    assert "markdown-marker" in prompt
+    # テキストの正確さはMarkdown側を正とする役割分担を指示していること。
+    assert "Markdown" in prompt
+
+
+def test_build_prompt_omits_markdown_section_when_absent():
+    # PDFを伴わないリクエスト（htmlフィールドのみ）ではMarkdownの節を生成しない。
+    prompt = build_prompt(html="<p>old</p>", prompt="x", width_mm=None, height_mm=None)
+
+    assert "抽出テキスト" not in prompt
+
+
 def test_build_prompt_excludes_css_section():
     # ADR-019: CSSは独立した入力を持たず、既存htmlの<style>に埋め込まれている前提のため、
     # プロンプトに「既存CSS」の節を生成しないことを回帰テストとして固定する。

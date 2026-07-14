@@ -134,10 +134,16 @@ def build_prompt(
 
 
 def validate_render_result(result: RenderResult) -> None:
-    """レスポンス契約（docs/spec.md 3.1）とテンプレート変数の整合性を検証する。
+    """レスポンス契約（docs/spec.md 3.1）を検証し、テンプレート変数の欠けを補完する。
 
     モック・本番のどちらの経路で生成された結果も同じ契約を満たす必要があるため、
     app/main.py側ではなくこの共通関数で検証する。
+
+    テンプレート変数の欠け（htmlに{{key}}があるのにjsonにキーが無い）は、実Geminiが空欄
+    セルのキーを落とす挙動により起こりうる。1件の欠けで帳票全体を502にせず、欠けたキーを
+    空文字列で補完してレンダリングを成立させる（ADR-024）。空欄セルは空欄のまま描画され、
+    これはモデルが値を出さなかった意図に忠実。逆にhtmlに現れないjsonの余剰キーは、テンプレート
+    適用時に使われないだけで無害なため許容する。
     """
     if not isinstance(result.html, str) or not result.html.strip():
         raise AIGenerationError("AI生成結果のhtmlが空、または文字列ではありません")
@@ -147,11 +153,8 @@ def validate_render_result(result: RenderResult) -> None:
         raise AIGenerationError("AI生成結果のjsonがオブジェクト形式ではありません")
 
     placeholders = set(_PLACEHOLDER_PATTERN.findall(result.html))
-    missing = placeholders - set(result.data.keys())
-    if missing:
-        raise AIGenerationError(
-            "htmlのテンプレート変数がjsonに存在しません: " + ", ".join(sorted(missing))
-        )
+    for key in placeholders - set(result.data.keys()):
+        result.data[key] = ""
 
 
 class MockAIClient:

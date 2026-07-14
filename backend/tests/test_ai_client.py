@@ -169,11 +169,21 @@ def test_validate_render_result_rejects_non_dict_json():
         validate_render_result(bad)
 
 
-def test_validate_render_result_rejects_placeholder_without_json_key():
-    # CLAUDE.mdの「固定情報と業務データの分離」規約: htmlの{{key}}はjsonに対応キーが必須。
-    bad = RenderResult(html="<p>{{missing_key}}</p>", css="body{}", data={})
-    with pytest.raises(AIGenerationError):
-        validate_render_result(bad)
+def test_validate_render_result_fills_missing_json_keys_with_empty_string():
+    # 実Geminiは空欄セルのプレースホルダに対応するキーを落とすことがある。1件のキー漏れで
+    # 帳票全体を502にせず、欠けたキーを空文字列で補完してレンダリングを成立させる。
+    result = RenderResult(
+        html="<p>{{name}}{{missing_key}}</p>", css="body{}", data={"name": "値"}
+    )
+    validate_render_result(result)
+    assert result.data == {"name": "値", "missing_key": ""}
+
+
+def test_validate_render_result_keeps_extra_json_keys():
+    # htmlに現れないjsonキーは無害なため許容する（テンプレート適用時に使われないだけ）。
+    result = RenderResult(html="<p>{{name}}</p>", css="body{}", data={"name": "値", "extra": "x"})
+    validate_render_result(result)
+    assert result.data == {"name": "値", "extra": "x"}
 
 
 def test_validate_render_result_accepts_matching_placeholder():

@@ -1,0 +1,39 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 203 >>
+stream
+0.8 w
+0 0 0 RG
+60 640 480 120 re S
+60 700 m 540 700 l S
+300 640 m 300 760 l S
+BT /F1 14 Tf 70 770 Td (Ruled table sample) Tj ET
+BT /F1 10 Tf 70 715 Td (Item) Tj ET
+BT /F1 10 Tf 310 715 Td (Amount) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000494 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+564
+%%EOF

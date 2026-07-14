@@ -49,6 +49,21 @@ def test_build_prompt_includes_layout_html_and_markdown_with_roles():
     assert "Markdown" in prompt
 
 
+def test_build_prompt_instructs_reading_svg_as_ruling_lines():
+    # ADR-024: pdf2htmlEXのHTMLに含まれる<svg>のpathは罫線・枠線を表す。Geminiにこれを
+    # CSSのborder等へ翻訳させ、svg自体は出力させない役割分担を指示する契約を固定する。
+    prompt = build_prompt(
+        html="<html><svg><path d=''/></svg></html>",
+        prompt="x",
+        width_mm=None,
+        height_mm=None,
+    )
+
+    assert "svg" in prompt.lower()
+    assert "罫線" in prompt
+    assert "border" in prompt.lower()
+
+
 def test_build_prompt_omits_markdown_section_when_absent():
     # PDFを伴わないリクエスト（htmlフィールドのみ）ではMarkdownの節を生成しない。
     prompt = build_prompt(html="<p>old</p>", prompt="x", width_mm=None, height_mm=None)

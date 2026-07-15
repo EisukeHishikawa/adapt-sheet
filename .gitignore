@@ -26,3 +26,4 @@ dist/
 # チームで共有すべき.claude/skills/配下のみ例外的にGit管理対象にする。
 .claude/*
 !.claude/skills/
+docker-compose.override.yml

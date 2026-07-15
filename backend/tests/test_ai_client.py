@@ -64,6 +64,16 @@ def test_build_prompt_instructs_reading_layout_divs_as_ruling_lines():
     assert "border" in prompt.lower()
 
 
+def test_build_prompt_instructs_not_to_enlarge_font_sizes():
+    # ADR-026: 帳票として過大にならないよう、Geminiにフォントを大きくしない指示を与える契約を固定する。
+    prompt = build_prompt(html="<div></div>", prompt="x", width_mm=None, height_mm=None)
+
+    assert "フォントサイズ" in prompt
+    assert "大きくしない" in prompt
+    # 役割別の目安（タイトル/見出し/本文）を含むこと。
+    assert "22px" in prompt and "11px" in prompt
+
+
 def test_build_prompt_omits_markdown_section_when_absent():
     # PDFを伴わないリクエスト（htmlフィールドのみ）ではMarkdownの節を生成しない。
     prompt = build_prompt(html="<p>old</p>", prompt="x", width_mm=None, height_mm=None)

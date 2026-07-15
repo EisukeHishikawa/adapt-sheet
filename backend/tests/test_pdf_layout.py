@@ -1,10 +1,13 @@
+import re
 from pathlib import Path
 
 import pytest
 
 from app.services.pdf_layout import (
+    _MAX_FONT_PX_TITLE,
     PDFConversionError,
     PyMuPDFLayoutConverter,
+    _capped_font_size,
     _is_bold,
     _rgb,
     get_layout_converter,
@@ -85,3 +88,29 @@ def test_is_bold_detects_weight_markers_in_font_name(font_name, expected):
 )
 def test_rgb_converts_unit_tuple_to_css_hex(color, expected):
     assert _rgb(color) == expected
+
+
+@pytest.mark.parametrize(
+    "size, expected",
+    [
+        (40.0, 22.0),   # 過大なタイトルは22pxへ頭打ち
+        (18.5, 18.5),   # 上限以下のタイトルはそのまま（実請求書の帳票名）
+        (16.0, 16.0),   # タイトル帯で上限以下はそのまま
+        (14.5, 14.0),   # 見出し帯（12〜15pt）で上限超過は14pxへ
+        (13.0, 13.0),   # 見出し帯で上限以下はそのまま
+        (11.5, 11.0),   # 本文帯（12pt未満）で上限超過は11pxへ
+        (8.0, 8.0),     # 元が小さい本文は縮めない（実請求書の本文）
+    ],
+)
+def test_capped_font_size_limits_by_area(size, expected):
+    assert _capped_font_size(size) == expected
+
+
+def test_converter_caps_font_sizes_below_title_max():
+    # 生成HTMLのfont-sizeが役割別上限（最大でもタイトル上限）を超えないこと。
+    converter = PyMuPDFLayoutConverter()
+    html = converter.convert_to_html("layout_sample.pdf", LAYOUT_PDF.read_bytes())
+
+    sizes = [float(m) for m in re.findall(r"font-size:([\d.]+)px", html)]
+    assert sizes  # フォント指定が存在する
+    assert max(sizes) <= _MAX_FONT_PX_TITLE

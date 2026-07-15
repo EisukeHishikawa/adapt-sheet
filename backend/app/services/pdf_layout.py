@@ -32,6 +32,16 @@ _BOLD_FONT_MARKERS = ("bold", "black", "heavy", "gothic")
 # サーバー環境にPDF埋め込みフォントが無くても字形が崩れないよう、Webフォントを最優先に指定する。
 _FONT_STACK = "'Noto Sans JP', sans-serif"
 
+# 一般的な請求書・帳票として過大にならないフォントサイズ上限（px）。役割（エリア）別に分ける（ADR-026）。
+# PDFが大きめの字で作られていてもここで頭打ちにする。上限を超えない元の小さい字は縮めない（min）。
+# GeminiはこのHTMLを見た目の参照にするため、入力段階で過大なサイズを抑えると出力も過大になりにくい。
+_MAX_FONT_PX_TITLE = 22.0    # 帳票名・大見出し
+_MAX_FONT_PX_HEADING = 14.0  # セクション見出し・ラベル
+_MAX_FONT_PX_BODY = 11.0     # 明細・本文・その他
+# 元のフォントサイズ（pt）から役割を推定する境界。これ以上を各ティアとみなす。
+_FONT_TIER_TITLE_MIN = 15.0
+_FONT_TIER_HEADING_MIN = 12.0
+
 
 class PDFLayoutConverter(Protocol):
     """本番/テストで差し替え可能にするための共通インターフェース（ai_client.AIClientと同じ方針）。"""
@@ -108,7 +118,7 @@ def _text_divs(page: "fitz.Page") -> list:
                 if not text:
                     continue
                 x0, y0, x1, _ = span["bbox"]
-                size = round(span["size"], 1)
+                size = round(_capped_font_size(span["size"]), 1)
                 color = f"#{span['color']:06x}"
                 weight = "bold" if _is_bold(span["font"]) else "normal"
                 divs.append(
@@ -122,6 +132,20 @@ def _text_divs(page: "fitz.Page") -> list:
 def _is_bold(font_name: str) -> bool:
     lowered = font_name.lower()
     return any(marker in lowered for marker in _BOLD_FONT_MARKERS)
+
+
+def _capped_font_size(size: float) -> float:
+    """フォントサイズを役割別の上限で頭打ちにする（ADR-026）。
+
+    元のサイズから役割（タイトル/見出し/明細・本文）を推定し、その上限を超える分だけ縮める。
+    元が上限以下ならそのまま返す（小さい字は縮めない）。明細と本文・その他は同じ本文サイズ帯として
+    1つの上限にまとめる（フォントサイズだけでは明細とその他を区別できないため）。
+    """
+    if size >= _FONT_TIER_TITLE_MIN:
+        return min(size, _MAX_FONT_PX_TITLE)
+    if size >= _FONT_TIER_HEADING_MIN:
+        return min(size, _MAX_FONT_PX_HEADING)
+    return min(size, _MAX_FONT_PX_BODY)
 
 
 def _rgb(color: tuple) -> str:

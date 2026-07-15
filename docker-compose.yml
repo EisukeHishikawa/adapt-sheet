@@ -47,12 +47,10 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # ADR-018: テキスト抽出をdoclingサービスへHTTP委譲するための接続先。Compose内部DNS
       # （サービス名docling）で解決するため、ホストへは公開しない。
+      # レイアウトHTML生成はbackend内のPyMuPDFで完結するため、専用サービスへの接続先は不要（ADR-025）。
       - DOCLING_SERVICE_URL=http://docling:8100
-      # ADR-023: レイアウトHTML生成をpdf2htmlexサービスへHTTP委譲するための接続先。
-      - PDF2HTMLEX_SERVICE_URL=http://pdf2htmlex:8200
     depends_on:
       - docling
-      - pdf2htmlex
 
   # ③ Doclingによるテキスト抽出専用の内部サービス（ADR-018/023、DEVELOPMENT.md ステップ15）
   # torch/opencv-python等の重量級ML依存を含み、backendの起動速度に影響しないよう分離した。
@@ -74,18 +72,7 @@ services:
       # 標準HTTPSダウンロードへフォールバックさせる。
       - HF_HUB_DISABLE_XET=1
 
-  # ④ pdf2htmlEXによるレイアウトHTML生成専用の内部サービス（ADR-023）
-  # DoclingのMarkdown（テキスト）と本サービスのHTML（見た目）をbackendが並列に取得し、両方を
-  # Geminiへ渡す。doclingと同じくbackendからのみ呼ばれる内部サービスのため、ホストへ公開しない。
-  pdf2htmlex:
-    build: ./pdf2htmlex-service
-    # pdf2htmlEX公式イメージはx86_64ビルドのみ公開されており、Apple Silicon上では
-    # エミュレーション実行になる（本番のAWS Lambdaはx86_64のためネイティブ実行）。
-    platform: linux/amd64
-    volumes:
-      - ./pdf2htmlex-service:/app
-
-  # ⑤ E2Eテスト (Playwright)
+  # ④ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
   # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
   # として用意する（ADR-014）。frontend/backendのように常時起動する必要はないため、

@@ -15,7 +15,7 @@ def test_docling_converter_extracts_markdown_from_real_pdf():
 
     assert isinstance(markdown, str)
     assert "Docling verification sample text" in markdown
-    # レイアウトの再現はpdf2htmlEX側の責務のため、HTML文書として返さないこと（ADR-023）。
+    # レイアウトの再現はPyMuPDF（backend内）側の責務のため、HTML文書として返さないこと（ADR-023）。
     assert "<html" not in markdown.lower()
 
 

@@ -2,7 +2,7 @@
 
 Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離しているため、本モジュールは
 HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。レイアウトHTMLの生成は
-pdf2htmlex_client.pyの責務（ADR-023）。
+pdf_layout.pyの責務（ADR-023/025）。
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 """DoclingによるPDF→Markdownテキスト抽出レイヤー（ADR-003/018/023）。
 
-レイアウト（座標・罫線・フォント）の再現はpdf2htmlEX側が担うため、Doclingは本文テキストと
+レイアウト（座標・罫線・フォント）の再現はPyMuPDF（backend内）側が担うため、Doclingは本文テキストと
 その論理構造（見出し・表）の抽出だけを担当し、Markdownで返す（ADR-023）。
 """
 

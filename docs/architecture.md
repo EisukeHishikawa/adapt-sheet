@@ -16,9 +16,8 @@ flowchart LR
         CF["CloudFront"]
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
-        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter"]
+        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-025)"]
         LambdaDocling["Lambda (Doclingテキスト抽出)\nDoclingモデル焼き込み済み"]
-        LambdaPdf2htmlEX["Lambda (pdf2htmlEXレイアウト変換)"]
         WAF["AWS WAF"]
     end
 
@@ -31,7 +30,6 @@ flowchart LR
     Browser -->|静的アセット取得| CF --> S3
     Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
     LambdaEntry -->|テキスト抽出リクエスト (HTTP・並列)| LambdaDocling
-    LambdaEntry -->|レイアウトHTML生成リクエスト (HTTP・並列)| LambdaPdf2htmlEX
     LambdaEntry -->|生成AI呼び出し| Gemini
     LambdaEntry -->|認証トークン検証| Auth0
     LambdaEntry -->|データ保存/取得| Supabase
@@ -47,16 +45,16 @@ flowchart LR
 sequenceDiagram
     participant FE as フロントエンド
     participant API as FastAPI (/api/render)
-    participant P2H as pdf2htmlEX (レイアウト)
+    participant Layout as PyMuPDF (レイアウト・backend内)
     participant Docling as Docling (テキスト)
     participant Gemini as Gemini API
 
     FE->>API: PDF/HTML/プロンプト/サイズ送信
     alt PDFが存在する
-        Note over API,Docling: 2つの変換は並列に実行する（ADR-023）
-        par レイアウト変換
-            API->>P2H: PDF（1ページ目）
-            P2H-->>API: レイアウトHTML（見た目の正）
+        Note over API,Docling: 2つの変換は並列に実行する（ADR-023/025）
+        par レイアウト変換（backend内・PyMuPDF）
+            API->>Layout: PDF（1ページ目）
+            Layout-->>API: レイアウトHTML（見た目の正）
         and テキスト抽出
             API->>Docling: PDF（1ページ目）
             Docling-->>API: Markdown（テキストの正）

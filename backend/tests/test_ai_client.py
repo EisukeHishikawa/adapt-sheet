@@ -33,7 +33,7 @@ def test_build_prompt_includes_context():
 
 
 def test_build_prompt_includes_layout_html_and_markdown_with_roles():
-    # ADR-023: pdf2htmlEX由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
+    # ADR-023/025: PyMuPDF由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
     # 両方渡し、それぞれの役割をGeminiへ明示する契約を固定する。
     prompt = build_prompt(
         html="<html>layout-marker</html>",
@@ -49,17 +49,17 @@ def test_build_prompt_includes_layout_html_and_markdown_with_roles():
     assert "Markdown" in prompt
 
 
-def test_build_prompt_instructs_reading_svg_as_ruling_lines():
-    # ADR-024: pdf2htmlEXのHTMLに含まれる<svg>のpathは罫線・枠線を表す。Geminiにこれを
-    # CSSのborder等へ翻訳させ、svg自体は出力させない役割分担を指示する契約を固定する。
+def test_build_prompt_instructs_reading_layout_divs_as_ruling_lines():
+    # ADR-025: PyMuPDF由来HTMLはborder-element/bg-elementのdivで罫線・背景を表す。Geminiに
+    # これをCSSのborder/background-colorへ翻訳させる役割分担を指示する契約を固定する。
     prompt = build_prompt(
-        html="<html><svg><path d=''/></svg></html>",
+        html='<div class="border-element"></div>',
         prompt="x",
         width_mm=None,
         height_mm=None,
     )
 
-    assert "svg" in prompt.lower()
+    assert "border-element" in prompt
     assert "罫線" in prompt
     assert "border" in prompt.lower()
 

@@ -59,10 +59,10 @@ def build_prompt(
     height_mm: Optional[float],
     markdown: str = "",
 ) -> str:
-    """docs/spec.md 3.1のリクエスト項目からGeminiへの動的プロンプトを構築する（ADR-019/020/023）。
+    """docs/spec.md 3.1のリクエスト項目からGeminiへの動的プロンプトを構築する（ADR-019/020/023/025）。
 
     PDFアップロード時は2つの入力を渡す（ADR-023）。
-    - html: pdf2htmlEX由来。見た目（座標・罫線・フォント）は正確だが構造の保守性は低い。
+    - html: PyMuPDF由来。テキスト・罫線・背景を絶対座標のdivに写したもの。見た目は正確だが構造の保守性は低い。
     - markdown: Docling由来。テキストと論理構造は正確だが見た目の情報を持たない。
     それぞれを「見た目の正」「テキストの正」として使い分けるようGeminiへ役割を明示する。
 
@@ -94,10 +94,12 @@ def build_prompt(
         "元のHTMLはPDFを機械的に変換したもので、見た目こそ正確ですが、絶対座標で配置された"
         "divやインラインstyle、無意味な入れ子が多く保守性が低いです。"
         "見た目を変えずに構造だけを整理してください。\n"
-        "元のHTMLに含まれる<svg>は、PDF上の罫線・枠線・網掛けをベクターで表したものです"
-        "（pathのd属性の座標が線の位置・長さ・囲みを表します）。これを読み取って表の枠線・"
-        "区切り線・背景色を把握し、<table>のborderやCSSのborder/background-colorとして"
-        "再現してください。<svg>やpathそのものは出力に含めないでください。\n"
+        "元のHTMLは、PDF上の各要素を絶対座標に配置したdivで表しています。"
+        'class="text-element"はテキスト、class="border-element"は罫線・枠線、'
+        'class="bg-element"は背景の塗りつぶしです。各divのleft/top/width/heightと'
+        "border-color/background-colorから、表の構造・区切り線・背景色を読み取り、"
+        "<table>のborderやCSSのborder/background-colorとして再現してください。"
+        "絶対座標のdivをそのまま出力せず、意味の伝わる構造へ作り替えてください。\n"
         f"{size_line}"
         f"元のHTML（見た目は正確、構造は保守性が低い想定で参照してください）:\n{html}\n\n"
         f"{markdown_section}"

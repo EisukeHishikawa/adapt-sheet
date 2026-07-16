@@ -353,7 +353,7 @@
 - **コンテキスト**: バックグラウンドジョブ（Claude Code）は、他ジョブや作業中のチェックアウトと干渉しないよう、ジョブごとに `.claude/worktrees/` 配下へ一時的なGit Worktree（`worktree-<名称>` ブランチ）を自動生成する。隔離自体は妥当だが、掃除の指針が明文化されていなかったため、マージ済み・方針転換で不要になったWorktreeとブランチがローカル・リモートに積み上がった（一時は6 Worktree・多数のブランチが残存）。Worktreeはリポジトリの複製を伴うため、ディスク消費とコンテキスト読み込みの遅延という実害に直結する。
 - **決定**: 定常状態のGit構成を次の最小形に保つことをルール化する（詳細な手順は `CLAUDE.md` の「Git / CI運用」に記載）。
   - **Worktreeは2つだけ**: プライマリ本体と、`main` 参照専用の `docs-space`（ADR-015）。`.claude/worktrees/` は定常状態で空にする。
-  - **`worktree-*` ブランチを残さない**: バックグラウンドジョブの一時Worktree／`worktree-*` ブランチは、PRが `main` へマージされたら削除する（セッション終了時に `remove`、または本体側で `git worktree remove --force` ＋ `git branch -D`）。
+  - **`worktree-*` ブランチを残さない（マージと同時に削除）**: バックグラウンドジョブの一時Worktree／`worktree-*` ブランチは、PRを `main` へマージした**直後にその場で削除する**（セッション終了時まで持ち越さない）。動作中のWorktreeは `ExitWorktree`（`remove`）で離脱・削除、または本体側で `git worktree remove --force` ＋ `git branch -D`、リモートは `git push origin --delete`。
   - **マージ済み・不要ブランチの掃除**: マージ済みブランチ、PRがCLOSEDのまま方針転換で不要になったブランチは、ローカル・リモートとも削除する。リモート削除（`git push --delete`）は事前確認する。
   - **点検手段**: `git worktree list` / `git branch` / `git ls-remote --heads origin` で最小構成を確認する。
 - **理由**: Worktree複製の増殖はディスクとコンテキスト読み込みの実害に直結する。ブランチの正は常に `main`（とリモート）にあり、マージ済みの一時ブランチをローカルに残す利益は無い。掃除の基準を明文化することで増殖を未然に防ぐ。

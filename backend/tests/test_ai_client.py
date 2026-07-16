@@ -72,6 +72,11 @@ def test_build_prompt_instructs_not_to_enlarge_font_sizes():
     assert "大きくしない" in prompt
     # 役割別の目安（タイトル/見出し/本文）を含むこと。
     assert "22px" in prompt and "11px" in prompt
+    # 見出しタグの既定サイズが大きい問題への対処（明示的にfont-size上書き）を指示すること。
+    assert "h1" in prompt
+    # 明細のtable化と余白（縮小に合わせたスタイル）を指示すること。
+    assert "invoice-items" in prompt
+    assert "line-height" in prompt
 
 
 def test_build_prompt_omits_markdown_section_when_absent():

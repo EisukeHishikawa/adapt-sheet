@@ -47,6 +47,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # 使用モデルは環境変数GEMINI_MODELで切り替え可能（未設定時はgemini-2.5-flash）。無料枠の
       # 日次クォータ（20回/日）はモデル単位のため、上限に達したら別モデルへ切り替えて継続できる（ADR-023）。
+      # Geminiへの入力プロンプト全文と出力全文をログへ出す（ADR-028）。業務データを含むため
+      # コード側の既定は無効で、開発環境であるこの構成でのみ有効にする。
+      - LOG_AI_PAYLOAD=true
       # ADR-018: テキスト抽出をdoclingサービスへHTTP委譲するための接続先。Compose内部DNS
       # （サービス名docling）で解決するため、ホストへは公開しない。
       # レイアウトHTML生成はbackend内のPyMuPDFで完結するため、専用サービスへの接続先は不要（ADR-025）。

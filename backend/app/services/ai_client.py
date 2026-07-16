@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -31,6 +32,19 @@ _SIZE_LINE_PATTERN = re.compile(r"帳票サイズ: 横([\d.]+)mm\s*×\s*縦([\d.
 # Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間（ADR-023）。
 _RETRY_MAX_ATTEMPTS = 3
 _RETRY_BACKOFF_SECONDS = 2.0
+
+logger = logging.getLogger("app.ai")
+
+
+def _log_ai_payload(message: str, **fields: str) -> None:
+    """Geminiの入出力全文をログへ出す（LOG_AI_PAYLOAD有効時のみ。ADR-028）。
+
+    全文は帳票の業務データを含むため、ADR-016の「機微情報の非出力」に従い既定では出さない。
+    環境変数は呼び出しごとに読み、コンテナを再ビルドせず切り替えられるようにする。
+    """
+    if os.getenv("LOG_AI_PAYLOAD", "false").strip().lower() not in ("true", "1", "yes"):
+        return
+    logger.info(message, extra=fields)
 
 
 class AIGenerationError(Exception):
@@ -244,6 +258,8 @@ class GeminiAIClient:
         )
 
     def generate(self, prompt: str) -> RenderResult:
+        _log_ai_payload("Geminiへプロンプトを送信", ai_model=self._model, ai_prompt=prompt)
+
         for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
             try:
                 response = self._client.models.generate_content(
@@ -260,7 +276,10 @@ class GeminiAIClient:
                 # 429（クォータ超過）等のクライアントエラーは再試行しても結果が変わらない。
                 raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
 
-            return parse_ai_response(response.text or "")
+            text = response.text or ""
+            # パース失敗の原因調査が主目的のため、parse_ai_responseの例外より前に出力全文を残す。
+            _log_ai_payload("Geminiからレスポンスを受信", ai_model=self._model, ai_response=text)
+            return parse_ai_response(text)
 
         raise AIGenerationError("Gemini API呼び出しに失敗しました")
 

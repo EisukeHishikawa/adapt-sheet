@@ -19,7 +19,18 @@ class JsonLogFormatter(logging.Formatter):
 
     # extra経由でレコードに載りうる文脈フィールド。ここに列挙したものだけを出力し、
     # loggingが内部で付与する標準属性（args, pathname等）は出さない。
-    _CONTEXT_FIELDS = ("request_id", "method", "path", "status_code", "duration_ms", "detail")
+    _CONTEXT_FIELDS = (
+        "request_id",
+        "method",
+        "path",
+        "status_code",
+        "duration_ms",
+        "detail",
+        # AI生成の入出力全文（ADR-028）。app/services/ai_client.pyがLOG_AI_PAYLOAD有効時のみ付与する。
+        "ai_model",
+        "ai_prompt",
+        "ai_response",
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         payload = {

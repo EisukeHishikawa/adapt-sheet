@@ -1,3 +1,4 @@
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -448,3 +449,49 @@ def test_gemini_client_uses_model_from_env(monkeypatch):
     client.generate("prompt")
 
     assert models.last_model == "gemini-1.5-flash"
+
+
+def _ai_logs(caplog):
+    return [r for r in caplog.records if r.name == "app.ai"]
+
+
+def test_gemini_client_logs_prompt_and_response_when_enabled(monkeypatch, caplog):
+    # ADR-028: LOG_AI_PAYLOAD=trueのときだけ、Geminiへの入力と出力の全文をログへ出す。
+    monkeypatch.setenv("LOG_AI_PAYLOAD", "true")
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with caplog.at_level(logging.INFO, logger="app.ai"):
+        client.generate("プロンプト全文マーカー")
+
+    records = _ai_logs(caplog)
+    assert len(records) == 2
+    # 送信前のプロンプト全文と、パース前のレスポンス全文がそれぞれ構造化フィールドに載る。
+    assert records[0].ai_prompt == "プロンプト全文マーカー"
+    assert records[0].ai_model == models.last_model
+    assert records[1].ai_response == _VALID_RESPONSE
+
+
+def test_gemini_client_logs_response_even_when_unparsable(monkeypatch, caplog):
+    # パース失敗（不正JSON）の原因調査こそログの主目的のため、例外送出の前に出力全文を残す。
+    monkeypatch.setenv("LOG_AI_PAYLOAD", "true")
+    models = _StubGeminiModels(failures=0, response_text="これはJSONではない")
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with caplog.at_level(logging.INFO, logger="app.ai"):
+        with pytest.raises(AIGenerationError):
+            client.generate("prompt")
+
+    assert any(getattr(r, "ai_response", None) == "これはJSONではない" for r in _ai_logs(caplog))
+
+
+def test_gemini_client_does_not_log_payload_by_default(monkeypatch, caplog):
+    # 既定では帳票の業務データを含む全文をログに残さない（ADR-016の機微情報の非出力）。
+    monkeypatch.delenv("LOG_AI_PAYLOAD", raising=False)
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with caplog.at_level(logging.INFO, logger="app.ai"):
+        client.generate("プロンプト全文マーカー")
+
+    assert _ai_logs(caplog) == []

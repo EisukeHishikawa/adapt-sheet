@@ -7,10 +7,12 @@
 （属性はミドルウェアがlogger.info/exceptionのextraで付与する。app/middleware.py参照）。
 """
 
+import json
 import logging
 
 from fastapi.testclient import TestClient
 
+from app.logging_config import JsonLogFormatter
 from app.main import app
 from app.services.ai_client import RenderResult, get_ai_client
 
@@ -64,3 +66,25 @@ def test_unhandled_exception_is_logged_with_traceback(caplog):
         assert error_logs[0].request_id == response.headers["X-Request-ID"]
     finally:
         app.dependency_overrides.pop(get_ai_client, None)
+
+
+def test_json_formatter_outputs_ai_payload_fields():
+    # ADR-028: Geminiの入出力全文はフォーマッタの許可リストに載っている場合のみJSONへ出る。
+    record = logging.LogRecord(
+        name="app.ai",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="Geminiへプロンプトを送信",
+        args=(),
+        exc_info=None,
+    )
+    record.ai_model = "gemini-2.5-flash"
+    record.ai_prompt = "プロンプト全文"
+    record.ai_response = '{"html": "..."}'
+
+    payload = json.loads(JsonLogFormatter().format(record))
+
+    assert payload["ai_model"] == "gemini-2.5-flash"
+    assert payload["ai_prompt"] == "プロンプト全文"
+    assert payload["ai_response"] == '{"html": "..."}'

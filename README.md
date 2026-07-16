@@ -47,6 +47,14 @@ PDF解析は2つの経路を**並列**に実行する（[docs/decisions.md](./do
 
 Geminiにはこの2つを両方渡し、「レイアウトはHTML、文字列はMarkdownを正とする」役割分担で整形させる。
 
+実際にGeminiへ渡したプロンプト全文と、Geminiが返した出力全文はバックエンドのログで確認できる（`docker-compose.yml`で`LOG_AI_PAYLOAD=true`を設定済み。ADR-028）。ログは1行1レコードのJSONのため、`jq`で該当フィールドだけを取り出すと読みやすい。
+
+```bash
+docker compose logs backend | grep '"logger": "app.ai"' | jq -r '.ai_prompt // .ai_response'
+```
+
+プロンプトには帳票の業務データが含まれるため、コード側の既定は無効（未設定＝出力しない）であり、有効化しているのはこの開発用Compose構成のみ。実際に出力されるのは実Gemini経路（`USE_MOCK_AI=false`）のときで、既定のモック経路では出力されない。
+
 > レイアウトHTML生成は、当初pdf2htmlEX（C++バイナリの専用コンテナ）で行っていたが、出力が絶対座標のdivと機械生成CSSで保守しづらく罫線が背景画像化する等の問題があり、ADR-025で純PythonのPyMuPDF（backend内モジュール `backend/app/services/pdf_layout.py`）へ置き換えた。これにより専用コンテナ・x86_64エミュレーション実行が不要になった。
 
 > 当初はOllama（`llama3.2:3b`）コンテナも構成していたが、Docling抽出後の長いプロンプトに対してJSON整形が安定せず`/api/render`が頻繁に502で失敗したため廃止した（[docs/decisions.md](./docs/decisions.md) ADR-013参照）。

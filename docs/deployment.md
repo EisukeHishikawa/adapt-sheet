@@ -26,6 +26,8 @@
 | `GEMINI_API_KEY` | Gemini API（Google AI Studio）利用のためのAPIキー | `USE_MOCK_AI=false`かつ`AI_PROVIDER=llama`以外のときのみ必須（[CLAUDE.md](../CLAUDE.md)、ADR-010参照） |
 | `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`AI_PROVIDER`に応じた実経路を呼び出す（ADR-007） |
 | `AI_PROVIDER` | `USE_MOCK_AI=false`時に使う実経路の選択 | `gemini`（既定）または`llama`。`llama`はOllama（`llama3.2:3b`）を使いAPIキー不要だが、Ollama自体はDocker Compose環境にもセットアップ手順にも含まれておらず、利用する場合は開発者が自前で用意する必要がある（ADR-011、ADR-013/014） |
+| `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-023） |
+| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-016/028） |
 | `DOCLING_SERVE_ARTIFACTS_PATH` | Doclingモデルの焼き込み先絶対パス | コンテナ内で完全オフライン動作させるために必須 |
 | `AUTH0_DOMAIN` / `AUTH0_AUDIENCE` | Auth0テナント情報 | フェーズ5以降で使用 |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報 | フェーズ5以降で使用。ローカルは `Supabase Local CLI` の値を使用 |

@@ -219,17 +219,20 @@ class GeminiAIClient:
 
     # 2026-07-08時点、gemini-2.0-flashは無料枠クォータが0（429 RESOURCE_EXHAUSTED）だったため、
     # 現行の無料枠推奨モデルを既定にしている。
-    _MODEL = "gemini-2.5-flash"
+    _DEFAULT_MODEL = "gemini-2.5-flash"
 
     def __init__(self, api_key: str, client: Optional[object] = None) -> None:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
         self._client = client or genai.Client(api_key=api_key)
+        # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
+        # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-023）。
+        self._model = os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL).strip() or self._DEFAULT_MODEL
 
     def generate(self, prompt: str) -> RenderResult:
         for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
             try:
                 response = self._client.models.generate_content(
-                    model=self._MODEL, contents=prompt
+                    model=self._model, contents=prompt
                 )
             except genai_errors.ServerError as exc:
                 # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は

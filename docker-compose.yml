@@ -45,6 +45,8 @@ services:
       # 既定（USE_MOCK_AI=true）では未使用だが、上記のとおりモックを無効化した際に
       # そのまま実Gemini APIを呼び出せるよう、キー自体は常に注入しておく。
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # 使用モデルは環境変数GEMINI_MODELで切り替え可能（未設定時はgemini-2.5-flash）。無料枠の
+      # 日次クォータ（20回/日）はモデル単位のため、上限に達したら別モデルへ切り替えて継続できる（ADR-023）。
       # ADR-018: テキスト抽出をdoclingサービスへHTTP委譲するための接続先。Compose内部DNS
       # （サービス名docling）で解決するため、ホストへは公開しない。
       # レイアウトHTML生成はbackend内のPyMuPDFで完結するため、専用サービスへの接続先は不要（ADR-025）。

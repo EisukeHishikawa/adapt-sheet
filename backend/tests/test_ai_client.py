@@ -369,6 +369,7 @@ class _StubGeminiModels:
 
     def generate_content(self, model, contents):
         self.call_count += 1
+        self.last_model = model
         if self._remaining_failures > 0:
             self._remaining_failures -= 1
             raise genai_errors.ServerError(503, {"error": {"message": "high demand"}})
@@ -424,3 +425,24 @@ def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
         client.generate("prompt")
 
     assert models.call_count == 1
+
+
+def test_gemini_client_uses_default_model(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    client.generate("prompt")
+
+    assert models.last_model == "gemini-2.5-flash"
+
+
+def test_gemini_client_uses_model_from_env(monkeypatch):
+    # 無料枠クォータはモデル単位のため、日次上限に達したらGEMINI_MODELで別モデルへ切り替えて継続できる。
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-1.5-flash")
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    client.generate("prompt")
+
+    assert models.last_model == "gemini-1.5-flash"

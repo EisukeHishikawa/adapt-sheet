@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client
 from app.services.docling_client import get_markdown_extractor
-from app.services.pdf2htmlex_client import get_layout_converter
+from app.services.pdf_layout import get_layout_converter
 from app.services.pdf_common import PDFConversionError
 
 # DEVELOPMENT.md ステップ7で追加するPDFアップロードテスト用フィクスチャ。
@@ -61,7 +61,7 @@ def test_render_returns_502_when_ai_generation_fails():
 
 
 def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
-    # ADR-023: PDFが送信された場合、pdf2htmlEX由来のレイアウトHTML（見た目）とDocling由来の
+    # ADR-023: PDFが送信された場合、PyMuPDF由来のレイアウトHTML（見た目）とDocling由来の
     # Markdown（テキスト）の両方がプロンプトへ渡ることを検証する。実変換は重いため、
     # dependency_overridesで高速なフェイクに差し替え、main.pyの配線のみを検証する。
     captured_prompts = []
@@ -77,7 +77,7 @@ def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
 
     class _FakeLayoutConverter:
         def convert_to_html(self, filename: str, content: bytes) -> str:
-            return "<html><body>pdf2htmlex-layout-marker</body></html>"
+            return "<html><body>layout-html-marker</body></html>"
 
     app.dependency_overrides[get_ai_client] = lambda: _RecordingAIClient()
     app.dependency_overrides[get_markdown_extractor] = lambda: _FakeMarkdownExtractor()
@@ -89,7 +89,7 @@ def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
             files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
         )
         assert response.status_code == 200
-        assert "pdf2htmlex-layout-marker" in captured_prompts[0]
+        assert "layout-html-marker" in captured_prompts[0]
         assert "docling-extracted-markdown-marker" in captured_prompts[0]
     finally:
         app.dependency_overrides.pop(get_ai_client, None)
@@ -97,8 +97,8 @@ def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
         app.dependency_overrides.pop(get_layout_converter, None)
 
 
-def test_render_calls_docling_and_pdf2htmlex_in_parallel():
-    # ADR-023: DoclingとpdfhtmlEXはどちらも秒単位の処理時間がかかるため、直列ではなく並列に呼ぶ。
+def test_render_calls_docling_and_layout_in_parallel():
+    # ADR-023: Doclingの呼び出しとPyMuPDF変換はどちらも秒単位の処理時間がかかるため、直列ではなく並列に呼ぶ。
     # 各変換を0.5秒スリープさせ、合計所要時間が直列（1.0秒）ではなく並列（0.5秒強）に収まることで
     # 並列実行を検証する。
     delay_seconds = 0.5
@@ -202,7 +202,7 @@ def test_render_mock_returns_invoice_for_landscape_size():
 
 def test_render_returns_422_when_pdf_conversion_fails():
     # docs/spec.md エラーコード定義: PDF解析エラーは422 Unprocessable Entityとする。
-    # Docling・pdf2htmlEXのどちらが失敗しても同じPDFConversionErrorへ集約される（ADR-023）。
+    # Docling・レイアウト生成のどちらが失敗しても同じPDFConversionErrorへ集約される（ADR-023）。
     class _FailingMarkdownExtractor:
         def convert_to_markdown(self, filename: str, content: bytes) -> str:
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")

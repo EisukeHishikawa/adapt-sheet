@@ -22,7 +22,7 @@ from app.services.ai_client import (
     validate_render_result,
 )
 from app.services.docling_client import PDFMarkdownExtractor, get_markdown_extractor
-from app.services.pdf2htmlex_client import PDFLayoutConverter, get_layout_converter
+from app.services.pdf_layout import PDFLayoutConverter, get_layout_converter
 from app.services.pdf_common import PDFConversionError
 
 # アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-016）。
@@ -68,8 +68,8 @@ async def render(
     markdown_extractor: PDFMarkdownExtractor = Depends(get_markdown_extractor),
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
 ) -> RenderResponse:
-    # PDFがある場合は、pdf2htmlEXのレイアウトHTML（見た目）とDoclingのMarkdown（テキスト）の
-    # 両方をプロンプトのベースにする（ADR-023、docs/architecture.md 2節のシーケンス図）。
+    # PDFがある場合は、PyMuPDF由来のレイアウトHTML（見た目）とDoclingのMarkdown（テキスト）の
+    # 両方をプロンプトのベースにする（ADR-023/025、docs/architecture.md 2節のシーケンス図）。
     # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う（ADR-017）。
     effective_html = html
     markdown = ""
@@ -100,10 +100,10 @@ async def _convert_pdf(
     filename: str,
     content: bytes,
 ) -> tuple:
-    """pdf2htmlEX（レイアウトHTML）とDocling（Markdown）を並列に実行する（ADR-023）。
+    """レイアウトHTML生成（PyMuPDF、backend内）とDocling（Markdown、別コンテナ）を並列に実行する（ADR-023/025）。
 
-    どちらも秒単位（Doclingは初回モデルロードで分単位）かかるため、直列に呼ぶと待ち時間が
-    単純に加算される。クライアント実装は同期I/O（httpx.Client）のため、スレッドへ逃がして
+    Doclingは初回モデルロードで分単位かかり、PyMuPDFの変換もCPUバウンドで数秒かかりうるため、
+    直列に呼ぶと待ち時間が単純に加算される。どちらも同期処理のため、スレッドへ逃がして
     asyncio.gatherで並列化する。
     """
     return await asyncio.gather(

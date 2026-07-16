@@ -33,7 +33,7 @@ def test_build_prompt_includes_context():
 
 
 def test_build_prompt_includes_layout_html_and_markdown_with_roles():
-    # ADR-023: pdf2htmlEX由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
+    # ADR-023/025: PyMuPDF由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
     # 両方渡し、それぞれの役割をGeminiへ明示する契約を固定する。
     prompt = build_prompt(
         html="<html>layout-marker</html>",
@@ -47,6 +47,38 @@ def test_build_prompt_includes_layout_html_and_markdown_with_roles():
     assert "markdown-marker" in prompt
     # テキストの正確さはMarkdown側を正とする役割分担を指示していること。
     assert "Markdown" in prompt
+
+
+def test_build_prompt_instructs_reading_layout_divs_as_ruling_lines():
+    # ADR-025: PyMuPDF由来HTMLはborder-element/bg-elementのdivで罫線・背景を表す。Geminiに
+    # これをCSSのborder/background-colorへ翻訳させる役割分担を指示する契約を固定する。
+    prompt = build_prompt(
+        html='<div class="border-element"></div>',
+        prompt="x",
+        width_mm=None,
+        height_mm=None,
+    )
+
+    assert "border-element" in prompt
+    assert "罫線" in prompt
+    assert "border" in prompt.lower()
+
+
+def test_build_prompt_instructs_not_to_enlarge_font_sizes():
+    # ADR-026: 帳票として過大にならないよう、Geminiにフォントを大きくしない指示を与える契約を固定する。
+    prompt = build_prompt(html="<div></div>", prompt="x", width_mm=None, height_mm=None)
+
+    assert "フォントサイズ" in prompt
+    assert "大きくしない" in prompt
+    # 役割別の目安（タイトル/見出し/本文）を含むこと。
+    assert "22px" in prompt and "11px" in prompt
+    # 見出しタグの既定サイズが大きい問題への対処（明示的にfont-size上書き）を指示すること。
+    assert "h1" in prompt
+    # 明細のtable化と、テーブル・余白の具体スタイル（縮小に合わせた視認性）を指示すること。
+    assert "invoice-items" in prompt
+    assert "border-collapse" in prompt
+    assert "text-align:right" in prompt
+    assert "line-height" in prompt
 
 
 def test_build_prompt_omits_markdown_section_when_absent():
@@ -154,11 +186,21 @@ def test_validate_render_result_rejects_non_dict_json():
         validate_render_result(bad)
 
 
-def test_validate_render_result_rejects_placeholder_without_json_key():
-    # CLAUDE.mdの「固定情報と業務データの分離」規約: htmlの{{key}}はjsonに対応キーが必須。
-    bad = RenderResult(html="<p>{{missing_key}}</p>", css="body{}", data={})
-    with pytest.raises(AIGenerationError):
-        validate_render_result(bad)
+def test_validate_render_result_fills_missing_json_keys_with_empty_string():
+    # 実Geminiは空欄セルのプレースホルダに対応するキーを落とすことがある。1件のキー漏れで
+    # 帳票全体を502にせず、欠けたキーを空文字列で補完してレンダリングを成立させる。
+    result = RenderResult(
+        html="<p>{{name}}{{missing_key}}</p>", css="body{}", data={"name": "値"}
+    )
+    validate_render_result(result)
+    assert result.data == {"name": "値", "missing_key": ""}
+
+
+def test_validate_render_result_keeps_extra_json_keys():
+    # htmlに現れないjsonキーは無害なため許容する（テンプレート適用時に使われないだけ）。
+    result = RenderResult(html="<p>{{name}}</p>", css="body{}", data={"name": "値", "extra": "x"})
+    validate_render_result(result)
+    assert result.data == {"name": "値", "extra": "x"}
 
 
 def test_validate_render_result_accepts_matching_placeholder():
@@ -327,8 +369,9 @@ class _StubGeminiModels:
         self._response_text = response_text
         self.call_count = 0
 
-    def generate_content(self, model, contents):
+    def generate_content(self, model, contents, config=None):
         self.call_count += 1
+        self.last_model = model
         if self._remaining_failures > 0:
             self._remaining_failures -= 1
             raise genai_errors.ServerError(503, {"error": {"message": "high demand"}})
@@ -373,7 +416,7 @@ def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
         def __init__(self):
             self.call_count = 0
 
-        def generate_content(self, model, contents):
+        def generate_content(self, model, contents, config=None):
             self.call_count += 1
             raise genai_errors.ClientError(429, {"error": {"message": "quota exceeded"}})
 
@@ -384,3 +427,24 @@ def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
         client.generate("prompt")
 
     assert models.call_count == 1
+
+
+def test_gemini_client_uses_default_model(monkeypatch):
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    client.generate("prompt")
+
+    assert models.last_model == "gemini-2.5-flash"
+
+
+def test_gemini_client_uses_model_from_env(monkeypatch):
+    # 無料枠クォータはモデル単位のため、日次上限に達したらGEMINI_MODELで別モデルへ切り替えて継続できる。
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-1.5-flash")
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    client.generate("prompt")
+
+    assert models.last_model == "gemini-1.5-flash"

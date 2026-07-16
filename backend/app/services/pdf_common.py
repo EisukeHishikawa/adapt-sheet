@@ -1,7 +1,7 @@
-"""PDF変換クライアント（docling_client / pdf2htmlex_client）で共通の例外と前処理（ADR-023）。
+"""PDF変換（docling_client / pdf_layout）で共通の例外と前処理（ADR-023/025）。
 
-2つの変換サービスは役割が異なるが、backendから見た失敗（接続不可・解析失敗）は同じ422として
-扱うため、例外種別も1つに揃える。
+テキスト抽出（Docling、別コンテナ）とレイアウトHTML生成（PyMuPDF、backend内）は役割が
+異なるが、backendから見た失敗（接続不可・解析失敗）は同じ422として扱うため、例外種別も1つに揃える。
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from pypdf import PdfReader, PdfWriter
 class PDFConversionError(Exception):
     """PDF解析の失敗。app/errors.pyのハンドラが422へ変換する（docs/spec.md 4章）。
 
-    docling-service / pdf2htmlex-serviceからの非200応答・接続エラー（サービスダウン等）も
-    ここへマッピングする（ADR-018/023）。
+    docling-serviceからの非200応答・接続エラー（サービスダウン等）や、PyMuPDFでの
+    レイアウトHTML生成失敗（破損PDF等）もここへマッピングする（ADR-018/023/025）。
     """
 
 

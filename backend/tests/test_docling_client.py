@@ -12,7 +12,7 @@ from app.services.docling_client import (
 )
 
 # ADR-018/023: backend側はDoclingを直接呼ばず、docling-serviceへHTTPで委譲する。Doclingが担うのは
-# テキスト抽出（Markdown）のみで、レイアウトHTMLはpdf2htmlex-service側の責務。
+# テキスト抽出（Markdown）のみで、レイアウトHTMLはpdf_layout側の責務。
 # 実際のDocling変換の正しさはdocling-service/tests/test_converter.pyで検証済みのため、
 # ここではhttpx.MockTransportでHTTP呼び出しの配線（リクエスト形状・エラーマッピング）のみを検証する。
 

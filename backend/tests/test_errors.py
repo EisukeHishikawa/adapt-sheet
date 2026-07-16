@@ -54,7 +54,7 @@ def test_ai_generation_error_returns_structured_body():
 
 def test_pdf_conversion_error_returns_structured_body():
     from app.services.docling_client import get_markdown_extractor
-    from app.services.pdf2htmlex_client import get_layout_converter
+    from app.services.pdf_layout import get_layout_converter
     from app.services.pdf_common import PDFConversionError
 
     class _FailingExtractor:

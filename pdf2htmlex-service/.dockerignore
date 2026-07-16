@@ -1,7 +1,0 @@
-# ホスト側の一時ファイル・キャッシュはコンテナ内で使わないため、ビルドコンテキストから除外する。
-.venv/
-__pycache__/
-**/__pycache__/
-.pytest_cache/
-.ruff_cache/
-*.pyc

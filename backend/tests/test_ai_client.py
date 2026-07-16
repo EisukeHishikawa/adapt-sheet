@@ -74,8 +74,10 @@ def test_build_prompt_instructs_not_to_enlarge_font_sizes():
     assert "22px" in prompt and "11px" in prompt
     # 見出しタグの既定サイズが大きい問題への対処（明示的にfont-size上書き）を指示すること。
     assert "h1" in prompt
-    # 明細のtable化と余白（縮小に合わせたスタイル）を指示すること。
+    # 明細のtable化と、テーブル・余白の具体スタイル（縮小に合わせた視認性）を指示すること。
     assert "invoice-items" in prompt
+    assert "border-collapse" in prompt
+    assert "text-align:right" in prompt
     assert "line-height" in prompt
 
 

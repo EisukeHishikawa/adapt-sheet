@@ -95,6 +95,10 @@ docker compose --profile e2e run --rm e2e            # Playwright（frontend/Doc
   そのため、プライマリの作業ディレクトリがブランチ作業の合間に detached HEAD になっているのは**この構成では正常な状態**であり、異常ではない（`main`を載せられないため）。detached HEAD のまま古くなっている場合は `git fetch origin` の後に上記の `git switch -c ... origin/main` を実行すれば、そのまま最新のmainを起点に作業を開始できる。
 - マージ済みのローカルブランチを見つけた場合は削除を提案する。
 - **`docs-space`では作業しない**: プロジェクトルート直下の `docs-space`（シンボリックリンク先 `/Users/mina/docs-space`）は `main` ブランチ専用のGit Worktreeであり、常時最新の`main`を読み取り専用で参照するためのものである（ADR-015）。実装作業・ブランチ作成・コミットはプライマリの作業ディレクトリ（このリポジトリ本体）側で行い、`main`をチェックアウトしている`docs-space`配下では行わない。
+- **Git Worktree・ブランチは最小構成に保つ（ADR-027）**: 定常状態のGit Worktreeは**プライマリ本体**と**`docs-space`（`main`参照専用）の2つだけ**に保つ。ローカル・リモートのブランチは、`main`と現在作業中のブランチ以外を残さない。
+  - **`worktree-*`ブランチを残さない**: バックグラウンドジョブ（Claude Code）がジョブごとに `.claude/worktrees/` へ自動生成する一時Worktreeと `worktree-*` ブランチは、そのPRが `main` へマージされたら削除する。セッション終了時のプロンプトで `remove` を選ぶ（または本体側で `git worktree remove --force <path>` と `git branch -D worktree-*`）。定常状態で `.claude/worktrees/` は空にする。
+  - **マージ済み・不要ブランチは掃除する**: マージ済みのローカルブランチ、およびPRがCLOSED（未マージ）で方針転換により不要になったブランチは、ローカル・リモートとも削除する。リモート削除（`git push --delete`）は「作業時の確認ルール」に従い事前確認する。
+  - **点検手段**: `git worktree list`（本体＋`docs-space`の2行のみか）・`git branch`（`main`＋作業中のみか）・`git ls-remote --heads origin`（`main`＋進行中PRのみか）で最小構成を確認する。
 
 ## GitHub MCP / ギットハブ運用ルール
 

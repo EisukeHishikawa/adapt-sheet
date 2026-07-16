@@ -367,7 +367,7 @@ class _StubGeminiModels:
         self._response_text = response_text
         self.call_count = 0
 
-    def generate_content(self, model, contents):
+    def generate_content(self, model, contents, config=None):
         self.call_count += 1
         self.last_model = model
         if self._remaining_failures > 0:
@@ -414,7 +414,7 @@ def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
         def __init__(self):
             self.call_count = 0
 
-        def generate_content(self, model, contents):
+        def generate_content(self, model, contents, config=None):
             self.call_count += 1
             raise genai_errors.ClientError(429, {"error": {"message": "quota exceeded"}})
 

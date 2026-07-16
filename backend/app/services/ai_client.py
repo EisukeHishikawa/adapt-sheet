@@ -16,6 +16,7 @@ from typing import Optional, Protocol
 import requests
 from google import genai
 from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 
 from app.services.mock_templates import LANDSCAPE_INVOICE, PORTRAIT_DELIVERY_NOTE
 
@@ -221,18 +222,27 @@ class GeminiAIClient:
     # 現行の無料枠推奨モデルを既定にしている。
     _DEFAULT_MODEL = "gemini-2.5-flash"
 
+    # 帳票のHTML+CSS+JSONは長くなりやすい。出力が途中で切れると不正JSONになるため上限を広く取る。
+    # 思考モデル（Gemini 3系のflash等）は思考にも出力予算を使うため、既定より大きめに設定する。
+    _MAX_OUTPUT_TOKENS = 16384
+
     def __init__(self, api_key: str, client: Optional[object] = None) -> None:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
         self._client = client or genai.Client(api_key=api_key)
         # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
         # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-023）。
         self._model = os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL).strip() or self._DEFAULT_MODEL
+        # response_mime_typeでJSON出力を強制し、コードフェンスや前置きで壊れないようにする。
+        self._config = genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+            max_output_tokens=self._MAX_OUTPUT_TOKENS,
+        )
 
     def generate(self, prompt: str) -> RenderResult:
         for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
             try:
                 response = self._client.models.generate_content(
-                    model=self._model, contents=prompt
+                    model=self._model, contents=prompt, config=self._config
                 )
             except genai_errors.ServerError as exc:
                 # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は

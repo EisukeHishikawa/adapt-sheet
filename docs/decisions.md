@@ -285,6 +285,7 @@
 - **1ページ目のみ送る前提（ADR-021）の扱い**: 帳票は1ページ完結が前提のため、backend側で1ページ目に切り詰めてから**両サービスへ**送る（`app/services/pdf_common.py`の`first_page_only`を共用）。pdf2htmlEX側も`--first-page 1 --last-page 1`で二重に制限している。
 - **Geminiへ渡すHTMLからバイナリ資産を除外する**: pdf2htmlEXの既定出力はフォント（WOFF）・背景画像（PNG）をbase64で埋め込み、ビューア用のJSも同梱する。ほぼ空白のサンプルPDFですら56KBに達し、そのうちレイアウト情報（座標を持つCSSクラス定義とテキスト）は3割程度でしかない。実際にこの出力をそのままGeminiへ渡したところ、`gemini-2.5-flash`が503 UNAVAILABLE（"experiencing high demand"）を返し、`/api/render`が502で失敗した（同じ構成でもPDFなしの短いプロンプトは成功する）。base64のフォント・画像はLLMには一切読めないため、`--embed Cfij`（CSSのみ埋め込み）＋`--process-nontext 0`とし、残る`<script>`・`<link>`・`url(data:...)`は変換後に除去する。サンプルPDFで56,516文字 → 17,700文字（約69%削減）。人がブラウザで見た目を確認する用途には、すべて埋め込む`scripts/convert.sh`を別途用意する。
 - **Geminiの503への再試行**: 上記の削減後も、Gemini側の混雑による503は起こりうる。`GeminiAIClient`は503（`ServerError`）のみ、指数バックオフで最大3回まで再試行する。429（クォータ超過）等のクライアントエラーは再試行しても結果が変わらないため即座に失敗させる。
+- **構造化JSON出力の強制**: `GeminiAIClient`は`response_mime_type="application/json"`と大きめの`max_output_tokens`（16384）を指定して呼び出す。前者はコードフェンスや前置きの混入を防ぎ、後者は帳票のHTML+CSS+JSONが長い場合や思考モデル（Gemini 3系のflash等）が思考に出力予算を使う場合に、JSONが途中で切れて不正になるのを防ぐ（`gemini-flash-latest`で実際に途中切れを確認したための対策）。
 - **無料枠の制約（運用上の注意）**: `gemini-2.5-flash`の無料枠は1日20リクエスト（`GenerateRequestsPerDayPerProjectPerModel-FreeTier`）であり、実生成の動作確認を数回繰り返すとすぐ429になる。継続的に実生成を試す場合は課金の有効化、またはより無料枠の大きいモデルへの切り替えを検討する。クォータはモデル単位（`PerModel`）のため、日次上限に達したら環境変数`GEMINI_MODEL`で別モデルへ切り替えれば別枠で検証を継続できる（既定は`gemini-2.5-flash`）。429（`RESOURCE_EXHAUSTED`）は再試行しても結果が変わらないため`GeminiAIClient`は即座に502で失敗させる（503のみ再試行）。
 
 ---

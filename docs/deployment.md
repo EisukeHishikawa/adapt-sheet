@@ -24,10 +24,10 @@
 | 変数名 | 説明 | 備考 |
 |---|---|---|
 | `GEMINI_API_KEY` | Gemini API（Google AI Studio）利用のためのAPIキー | `USE_MOCK_AI=false`のときのみ必須（[CLAUDE.md](../CLAUDE.md)参照） |
-| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す（ADR-007） |
-| `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-015） |
-| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-012） |
-| `DOCLING_SERVE_ARTIFACTS_PATH` | Doclingモデルの焼き込み先絶対パス | コンテナ内で完全オフライン動作させるために必須 |
+| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す（ADR-006） |
+| `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-014） |
+| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-011） |
+| `SSM_PARAMETER_PREFIX` | Parameter StoreからAPIキーを取得する際のパス接頭辞（例: `/adapt-sheet/prod`） | Lambda本番でのみ設定。設定時、コールドスタート時に`{prefix}/GEMINI_API_KEY`等を復号取得し`os.environ`へ展開する（ADR-017）。ローカル/pytestでは未設定のため何もしない |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（認証・DB共通） | フェーズ5以降で使用。ローカルは `Supabase Local CLI` の値を使用 |
 
 ### フロントエンド
@@ -47,18 +47,20 @@
 
 ---
 
-## 3. バックエンドのコンテナ化（フェーズ4 ステップ20）
+## 3. バックエンドのコンテナ化（フェーズ4 ステップ24）
 
-1. Dockerfileに`AWS Lambda Web Adapter`のバイナリを追加。
-2. ビルド時に`docling-tools models download`を実行し、Doclingモデルをコンテナに焼き込む。
-3. `DOCLING_SERVE_ARTIFACTS_PATH`を焼き込んだ絶対パスに設定。
+1. 本番用`backend/Dockerfile.lambda`に`AWS Lambda Web Adapter`のバイナリを`COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:...`で追加（開発用`backend/Dockerfile`とは別ファイル。イメージ名は`aws-lambda-adapter`で`web`は付かない）。
+2. APIキーはイメージに焼き込まず、`SSM_PARAMETER_PREFIX`を設定してParameter Store（SecureString）から実行時に取得する。取得はLambdaのコールドスタート時（`app/secrets_loader.py`のグローバルスコープ呼び出し）に一度だけ行い、ハンドラ内では毎リクエストSSMを叩かない（ADR-017）。
+3. イメージは**ECR Public（`public.ecr.aws`）**へpushする（ECR Privateの無料枠500MBを避けるため。ADR-017）。
 4. コンテナ内で`pytest`を実行し、環境依存なくテストがパスすることを確認。
 
-理由の詳細は [`decisions.md`](./decisions.md#adr-004-aws-lambda-web-adapter--モデル事前焼き込みでコールドスタート対策) を参照。
+> 当面のLambda化対象は軽量な`backend`のみ。`docling-service`/`pdf2htmlex-service`のLambda化は後続で対応する（ADR-017）。
+
+理由の詳細は [`decisions.md`](./decisions.md) のADR-017を参照。
 
 ---
 
-## 4. インフラのコード化（フェーズ4 ステップ21）
+## 4. インフラのコード化（フェーズ4 ステップ25）
 
 - Terraformで以下を定義・構築する。
   - フロントエンド: CloudFront + S3
@@ -69,7 +71,7 @@
 
 ---
 
-## 5. CI/CDの構築（フェーズ4 ステップ25）
+## 5. CI/CDの構築（フェーズ4 ステップ26）
 
 - PR作成時・mainマージ時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）を自動実行するワークフローを構築する。
 - 「CIが100%成功しなければマージ不可」をBranch Protection Ruleに設定する（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。
@@ -79,7 +81,7 @@
 
 ## 6. 運用時の注意点
 
-- **Doclingモデルの更新**: モデルバージョンを上げる場合は、コンテナ再ビルド＋焼き込みが必須（起動時ダウンロードには戻さない）。
+- **APIキーのローテーション**: Parameter Store（SecureString）の値を更新後、Lambdaの実行環境を入れ替える（新デプロイ or 再デプロイ）ことで、次のコールドスタート時に新しいキーが読み込まれる（ADR-017。キャッシュはコールドスタート単位）。
 - **レート制限**: 未認証エリアはIP単位、認証エリアはユーザーID単位でAWS WAFのレート制限を設定・監視する（[architecture.md](./architecture.md#3-セキュリティ概要図) 参照）。
 - **ロールバック**: Terraform管理下のため、問題発生時は直前のTerraform state / GitHub Actionsのデプロイ履歴から切り戻す。
 

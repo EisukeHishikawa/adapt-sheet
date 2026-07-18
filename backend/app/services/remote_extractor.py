@@ -1,4 +1,4 @@
-"""内部変換サービス（docling-service / pdf2htmlex-service）へHTTPで委譲する共通実装（ADR-014/016）。
+"""内部変換サービス（docling-service / pdf2htmlex-service）へHTTPで委譲する共通実装（ADR-013/016）。
 
 Docling（torch等の大容量ML依存）とpdf2htmlEX（AGPL、特殊パッチ済みpoppler/libfontforgeに依存する
 重量級ネイティブ依存）はいずれも専用コンテナへ分離しており、backendからはHTTP経由の`POST /convert`を
@@ -23,7 +23,7 @@ class PDFHtmlExtractor(Protocol):
 
 
 class RemoteHtmlExtractor:
-    """変換サービスへHTTPでPDF→HTML変換を委譲する本番実装の基底（ADR-014/016）。
+    """変換サービスへHTTPでPDF→HTML変換を委譲する本番実装の基底（ADR-013/016）。
 
     サブクラスは表示名・環境変数名・既定URLの3つだけを定義する。
     """

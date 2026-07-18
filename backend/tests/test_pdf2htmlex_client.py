@@ -15,7 +15,7 @@ from tests._pdf_test_helpers import (
     extract_uploaded_file_bytes as _extract_uploaded_file_bytes,
 )
 
-# ADR-016: backend側はpdf2htmlEXを直接呼ばず、pdf2htmlex-serviceへHTTPで委譲する
+# ADR-015: backend側はpdf2htmlEXを直接呼ばず、pdf2htmlex-serviceへHTTPで委譲する
 # （docling_clientと同じ分離方針）。ここではhttpx.MockTransportでHTTP呼び出しの配線
 # （リクエスト形状・エラーマッピング）のみを検証する。
 
@@ -80,7 +80,7 @@ def test_get_pdf2htmlex_extractor_returns_remote_extractor():
 
 def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
     # adapt-sheetの帳票テンプレートは1ページ完結が前提のため、pdf2htmlex-serviceへの
-    # 変換リクエストを1ページ目分に抑える（docling_client・ADR-015と同じ方針）。
+    # 変換リクエストを1ページ目分に抑える（docling_client・ADR-014と同じ方針）。
     multi_page_pdf = _build_multi_page_pdf([200, 300, 400])
     sent_page_widths = []
 

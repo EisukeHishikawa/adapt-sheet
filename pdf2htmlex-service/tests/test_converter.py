@@ -6,7 +6,7 @@ import pytest
 
 from app.converter import PDFConversionError, Pdf2HtmlExConverter
 
-# ADR-016: pdf2htmlEXは単独のHTMLエンジンとして、フォント・画像・CSSを埋め込んだ
+# ADR-015: pdf2htmlEXは単独のHTMLエンジンとして、フォント・画像・CSSを埋め込んだ
 # 自己完結HTMLを生成する。docling-serviceと同じsample.pdf（既知の埋め込みテキストを含む）を使い回す。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 

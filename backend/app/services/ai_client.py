@@ -1,4 +1,4 @@
-"""AI生成レイヤー（ADR-007/016）。
+"""AI生成レイヤー（ADR-006/016）。
 
 本番用のGeminiAIClient・ClaudeAIClient・OpenAIAIClient・テスト用のMockAIClientを
 同一インターフェース（AIClient）で切り替え、pytest・ローカル開発で実APIを誤って
@@ -29,16 +29,16 @@ from app.services.mock_templates import LANDSCAPE_INVOICE, PORTRAIT_DELIVERY_NOT
 _PLACEHOLDER_PATTERN = re.compile(r"\{\{(\w+)\}\}")
 
 # MockAIClientはAIClientプロトコル（generate(prompt, pdf)）を変えずに用紙の向きを知る必要があるため、
-# build_promptが埋め込んだサイズ行から寸法を逆算する（ADR-015）。
+# build_promptが埋め込んだサイズ行から寸法を逆算する（ADR-014）。
 _SIZE_LINE_PATTERN = re.compile(r"帳票サイズ: 横([\d.]+)mm\s*×\s*縦([\d.]+)mm")
 
-# Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間（ADR-015）。
+# Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間（ADR-014）。
 _RETRY_MAX_ATTEMPTS = 3
 _RETRY_BACKOFF_SECONDS = 2.0
 
 logger = logging.getLogger("app.ai")
 
-# フロントのモデル選択（EngineSelect）が公開する7つの生成エンジン（ADR-016）。
+# フロントのモデル選択（EngineSelect）が公開する7つの生成エンジン（ADR-015）。
 # gemini_free/gemini/claude/openaiは生成AI（LLMがHTML/CSS/JSONを作る）、
 # docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン（変換結果をそのまま描画結果にする）。
 RenderEngine = Literal[
@@ -46,7 +46,7 @@ RenderEngine = Literal[
 ]
 
 # フェーズ5（Supabase Auth導入、DEVELOPMENT.md ステップ27）でアカウント登録ユーザーのみに解禁するまで、
-# 標準プラン（無料枠を超えるAPI利用）の生成AIは自由アクセスのユーザーに提供しない（ADR-016）。
+# 標準プラン（無料枠を超えるAPI利用）の生成AIは自由アクセスのユーザーに提供しない（ADR-015）。
 GATED_ENGINES: frozenset = frozenset({"gemini", "claude", "openai"})
 AI_ENGINES: frozenset = frozenset({"gemini_free", "gemini", "claude", "openai"})
 CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
@@ -55,7 +55,7 @@ CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
 def _log_ai_payload(message: str, **fields: str) -> None:
     """生成AIの入出力全文をログへ出す（LOG_AI_PAYLOAD有効時のみ）。
 
-    全文は帳票の業務データを含むため、ADR-012の「機微情報の非出力」に従い既定では出さない。
+    全文は帳票の業務データを含むため、ADR-011の「機微情報の非出力」に従い既定では出さない。
     環境変数は呼び出しごとに読み、コンテナを再ビルドせず切り替えられるようにする。
     """
     if os.getenv("LOG_AI_PAYLOAD", "false").strip().lower() not in ("true", "1", "yes"):
@@ -89,7 +89,7 @@ def build_prompt(
     height_mm: Optional[float],
     has_pdf: bool,
 ) -> str:
-    """docs/spec.md 3.1のリクエスト項目から生成AIへの動的プロンプトを構築する（ADR-016）。
+    """docs/spec.md 3.1のリクエスト項目から生成AIへの動的プロンプトを構築する（ADR-015）。
 
     生成AI（Gemini/Claude/OpenAI）へはPDFファイルをマルチモーダル入力として直接添付する。
     PyMuPDF由来のレイアウトHTMLやDocling由来のテキストは一切プロンプトへ含めない（それらは
@@ -185,7 +185,7 @@ def validate_render_result(result: RenderResult) -> None:
 
     テンプレート変数の欠け（htmlに{{key}}があるのにjsonにキーが無い）は、実AIが空欄
     セルのキーを落とす挙動により起こりうる。1件の欠けで帳票全体を502にせず、欠けたキーを
-    空文字列で補完してレンダリングを成立させる（ADR-015）。空欄セルは空欄のまま描画され、
+    空文字列で補完してレンダリングを成立させる（ADR-014）。空欄セルは空欄のまま描画され、
     これはモデルが値を出さなかった意図に忠実。逆にhtmlに現れないjsonの余剰キーは、テンプレート
     適用時に使われないだけで無害なため許容する。
     """
@@ -202,10 +202,10 @@ def validate_render_result(result: RenderResult) -> None:
 
 
 class MockAIClient:
-    """実APIを叩かないモック層（ADR-007）。
+    """実APIを叩かないモック層（ADR-006）。
 
     ローカル開発（既定のUSE_MOCK_AI=true）でも実務帳票に近い体裁を確認できるよう、用紙の向きで
-    2種類を出し分ける（ADR-015）。サイズ情報が無い場合は、フロントの既定サイズ（A4たて）に合わせる。
+    2種類を出し分ける（ADR-014）。サイズ情報が無い場合は、フロントの既定サイズ（A4たて）に合わせる。
     どのエンジンが選ばれてもUSE_MOCK_AI=trueの間は本モックが使われる（get_ai_client参照）ため、
     pdf引数は受け取るが使わない。
     """
@@ -245,7 +245,7 @@ def parse_ai_response(text: str) -> RenderResult:
 
 
 def _raise_if_truncated(response: object) -> None:
-    """出力がmax_output_tokensの上限で打ち切られていたら、原因が分かるエラーを送出する（ADR-015）。
+    """出力がmax_output_tokensの上限で打ち切られていたら、原因が分かるエラーを送出する（ADR-014）。
 
     打ち切られたJSONはparse_ai_responseで「不正JSON」として弾かれるが、それだけでは真因（上限到達）
     が判別できない。finish_reason=MAX_TOKENSを先に検知し、GEMINI_MODELの変更や入力短縮といった対処
@@ -263,7 +263,7 @@ def _raise_if_truncated(response: object) -> None:
 
 
 class GeminiAIClient:
-    """本番用のGeminiクライアント（ADR-016）。USE_MOCK_AI=false時のみ使う。
+    """本番用のGeminiクライアント（ADR-015）。USE_MOCK_AI=false時のみ使う。
 
     無料枠（gemini_freeエンジン）と標準プラン（geminiエンジン）で既定モデルを分ける。
     標準プランはフェーズ5まで自由アクセスのユーザーには提供しない（main.pyのゲート判定）。
@@ -284,7 +284,7 @@ class GeminiAIClient:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
         self._client = client or genai.Client(api_key=api_key)
         # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
-        # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-015）。
+        # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-014）。
         if standard:
             self._model = (
                 os.getenv("GEMINI_STANDARD_MODEL", self._DEFAULT_MODEL_STANDARD).strip()
@@ -298,7 +298,7 @@ class GeminiAIClient:
         # 思考モデル（gemini-2.5-flash等）は思考トークンもmax_output_tokensの予算を消費するため、
         # 動的思考が予算の大半を食うとJSON本体が出力途中で打ち切られ不正JSONになる。本タスクは
         # PDFを保守しやすい構造へ作り替える構造化変換であり深い推論を要さないため、
-        # 思考を無効化して出力予算を全てJSON本体へ充てる（ADR-015）。
+        # 思考を無効化して出力予算を全てJSON本体へ充てる（ADR-014）。
         # response_mime_typeでJSON出力を強制し、コードフェンスや前置きで壊れないようにする。
         self._config = genai_types.GenerateContentConfig(
             response_mime_type="application/json",
@@ -307,7 +307,7 @@ class GeminiAIClient:
         )
 
     def generate(self, prompt: str, pdf: Optional[bytes] = None) -> RenderResult:
-        # PDFがある場合はマルチモーダル入力としてプロンプトと並べて渡す（ADR-016）。
+        # PDFがある場合はマルチモーダル入力としてプロンプトと並べて渡す（ADR-015）。
         # PyMuPDF/Docling経由の事前変換は行わず、PDFそのものをGeminiに読ませる。
         contents: object = prompt
         if pdf:
@@ -322,7 +322,7 @@ class GeminiAIClient:
                 )
             except genai_errors.ServerError as exc:
                 # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は
-                # Gemini側の一過性の混雑であり、待てば成功しうる（ADR-015）。
+                # Gemini側の一過性の混雑であり、待てば成功しうる（ADR-014）。
                 if attempt == _RETRY_MAX_ATTEMPTS:
                     raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
                 time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
@@ -341,7 +341,7 @@ class GeminiAIClient:
 
 
 class ClaudeAIClient:
-    """本番用のClaude APIクライアント（ADR-016）。
+    """本番用のClaude APIクライアント（ADR-015）。
 
     フェーズ5（Supabase Auth導入）までmain.pyのゲート判定により自由アクセスのユーザーからは到達しないが、
     ANTHROPIC_API_KEYを設定すればすぐに動く状態まで実装しておく（ユーザー要望）。
@@ -377,7 +377,7 @@ class ClaudeAIClient:
                 max_tokens=self._MAX_OUTPUT_TOKENS,
                 messages=[{"role": "user", "content": content}],
             )
-        except Exception as exc:  # SDK例外の型に関わらず一律502へマッピングする（ADR-013の方針）
+        except Exception as exc:  # SDK例外の型に関わらず一律502へマッピングする（ADR-012の方針）
             raise AIGenerationError(f"Claude API呼び出しに失敗しました: {exc}") from exc
 
         text = "".join(
@@ -388,7 +388,7 @@ class ClaudeAIClient:
 
 
 class OpenAIAIClient:
-    """本番用のOpenAI APIクライアント（ADR-016）。
+    """本番用のOpenAI APIクライアント（ADR-015）。
 
     Responses API（`client.responses.create`）でPDFをbase64のinput_fileとして直接添付する。
     フェーズ5まではClaudeAIClient同様main.pyのゲート判定で到達しないが、OPENAI_API_KEYを
@@ -441,9 +441,9 @@ def _require_env(name: str) -> str:
 def get_ai_client(engine: str = "gemini_free") -> AIClient:
     """FastAPIのDependsとして利用するファクトリ（get_ai_client_factory経由）。
 
-    テスト・ローカル開発を安全にするため、USE_MOCK_AI未設定時は既定でモックを返す（ADR-007）。
+    テスト・ローカル開発を安全にするため、USE_MOCK_AI未設定時は既定でモックを返す（ADR-006）。
     実生成にはUSE_MOCK_AI=falseの明示が必要で、その上でengine（EngineSelectの選択値）が経路を選ぶ
-    （ADR-016）。
+    （ADR-015）。
     """
     use_mock = os.getenv("USE_MOCK_AI", "true").strip().lower() not in ("false", "0", "no")
     if use_mock:
@@ -465,7 +465,7 @@ def get_ai_client(engine: str = "gemini_free") -> AIClient:
 
 
 def get_ai_client_factory() -> Callable[[str], AIClient]:
-    """FastAPIのDependsとして利用するファクトリのファクトリ（ADR-016）。
+    """FastAPIのDependsとして利用するファクトリのファクトリ（ADR-015）。
 
     engineはリクエストのForm値として実行時に決まるため、DependsでAIClientインスタンスを
     直接注入せず、関数（get_ai_client）を注入してapp/main.py側でengineを渡して呼び出す。

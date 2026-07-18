@@ -7,7 +7,7 @@ import { defineConfig, devices } from '@playwright/test'
 // APIモック方針: /api/render は各テスト内の page.route でモックする（実バックエンド・実Claude APIには
 // 接続しない。CLAUDE.md「AI呼び出しのモック」）。そのためwebServerはViteの開発サーバーのみを起動する。
 //
-// 実行方法（ADR-010）: frontend/Dockerfile（node:20-alpine）はPlaywrightのブラウザバイナリに
+// 実行方法（ADR-009）: frontend/Dockerfile（node:20-alpine）はPlaywrightのブラウザバイナリに
 // 非対応（Alpine/musl libc）のため、E2Eはdocker-compose.ymlの独立したe2eサービス
 // （mcr.microsoft.com/playwrightベース）から実行する。e2eサービスはfrontendサービス（Vite開発
 // サーバー）が既に起動している前提で、PLAYWRIGHT_TEST_BASE_URLでその接続先（コンテナ間の

@@ -38,17 +38,7 @@
 
 ---
 
-## ADR-004: AWS Lambda Web Adapter + モデル事前焼き込みでコールドスタート対策
-
-- **ステータス**: Accepted
-- **コンテキスト**: DoclingのMLモデルはサイズが大きく、Lambdaのコールドスタート時に毎回ダウンロードすると起動が大幅に遅延する。またFastAPIをそのままLambda上で動かすには工夫が要る。
-- **決定**: Dockerイメージのビルド時に`docling-tools models download`を実行してモデルをコンテナに焼き込み、`AWS Lambda Web Adapter`を導入してFastAPIをサーバーレス向けに高速起動させる。
-- **理由**: 起動時のモデルダウンロード通信を撲滅し、コールドスタートを大幅に短縮できる。Lambda Web Adapterにより既存のFastAPIコードをほぼそのままLambda上で動かせ、ローカル・サーバーレス間のコード差分を最小化できる。
-- **トレードオフ**: コンテナイメージサイズが増大し、ビルド時間・デプロイ時間が伸びる。Lambdaのメモリ割り当てを4GB〜8GBと余裕を持たせる必要がある。
-
----
-
-## ADR-005: Terraformによるインフラのコード化（IaC一本化）
+## ADR-004: Terraformによるインフラのコード化（IaC一本化）
 
 - **ステータス**: Accepted
 - **コンテキスト**: AWS（CloudFront, S3, Lambda, API Gateway, WAF）とSupabaseプロバイダーなど、複数サービスにまたがるインフラ構成を再現可能かつレビュー可能な形で管理したい。
@@ -58,7 +48,7 @@
 
 ---
 
-## ADR-006: 型安全のためのOpenAPIベース型自動生成
+## ADR-005: 型安全のためのOpenAPIベース型自動生成
 
 - **ステータス**: Accepted
 - **コンテキスト**: フロントエンド（TypeScript）とバックエンド（Python/FastAPI）間でAPIのキー名を手書きで一致させると、実装のズレによるバグが発生しやすい。
@@ -69,7 +59,7 @@
 
 ---
 
-## ADR-007: AI API呼び出しのモック層を必須化
+## ADR-006: AI API呼び出しのモック層を必須化
 
 - **ステータス**: Accepted
 - **コンテキスト**: pytest実行やローカル開発のたびに実際のAI API（旧Claude API、ステップ9以降はGemini API）を呼ぶと、コスト・レイテンシ・レート制限の問題が発生する。
@@ -79,7 +69,7 @@
 
 ---
 
-## ADR-008: 認証・データベースにSupabaseを採用
+## ADR-007: 認証・データベースにSupabaseを採用
 
 - **ステータス**: Accepted
 - **コンテキスト**: フェーズ5でアカウント登録ユーザー向けの認証・データ保存機能を追加する必要がある。
@@ -89,7 +79,7 @@
 
 ---
 
-## ADR-009: フロントエンドの状態管理にZustandを採用
+## ADR-008: フロントエンドの状態管理にZustandを採用
 
 - **ステータス**: Accepted
 - **コンテキスト**: ステップ4で「左：入力エディタ／右：リアルタイムプレビュー」の2カラム画面を実装するにあたり、HTML/CSS/JSON等の編集内容を複数コンポーネント（将来的には描画ボタンや履歴スライド機能も含む）から参照・更新する必要がある。propsのバケツリレーは、コンポーネント階層が深くなるフェーズ2以降で保守性が下がる。
@@ -99,17 +89,17 @@
 
 ---
 
-## ADR-010: ローカル開発環境のDocker Compose化（非Docker実行はサポートしない）
+## ADR-009: ローカル開発環境のDocker Compose化（非Docker実行はサポートしない）
 
 - **ステータス**: Accepted
 - **コンテキスト**: venv/npm installによる手動セットアップは、開発者ごとの環境差異（特にDoclingのOS依存バイナリ・MLモデル。[CLAUDE.md](../CLAUDE.md) の環境依存の注意点を参照）を招きやすい。Docker/非Dockerの2つの実行方法を並行して記述・維持するコストと、記述間の不整合リスクも見合わない。
 - **決定**: `docker-compose.yml`と各`Dockerfile`でfrontend（Node 20-alpine + Vite）・backend（Python 3.9-slim + FastAPI）をコンテナ化し、`docker compose up --build`のみをサポート対象とする。バインドマウント＋`--reload`/`--host 0.0.0.0`でホットリロードを維持する。非Docker実行の手順、macOS専用OCR依存（`ocrmac`等）、ホスト実行向けのプロキシフォールバックは持たない。E2E（Playwright）はfrontendの`node:20-alpine`イメージがブラウザバイナリに非対応（Alpine/musl libc）のため、Microsoft公式Playwrightイメージを使う独立サービス`e2e`（`profiles: [e2e]`でopt-in）で実行する。
 - **理由**: 単一の実行環境に一本化することで環境差異とドキュメント・Dockerfileの記述コストを削減できる。特にDoclingのOS依存バイナリ問題（ADR-003）は、コンテナ内Linuxに統一することで実質的に解消される。
-- **トレードオフ**: Docker Desktop（またはOCI互換ランタイム）が無いと開発できない。初回ビルド時はDocling/torch等の大容量パッケージのダウンロードで時間がかかる。本Dockerfileはローカル開発専用であり、AWS Lambda Web Adapterやモデル事前焼き込み（ADR-004）を含む本番用コンテナ化とは別物である。
+- **トレードオフ**: Docker Desktop（またはOCI互換ランタイム）が無いと開発できない。初回ビルド時はDocling/torch等の大容量パッケージのダウンロードで時間がかかる。本Dockerfileはローカル開発専用であり、AWS Lambda Web Adapterを含む本番用コンテナ化（ADR-017）とは別物である。
 
 ---
 
-## ADR-011: Git Worktreeによるmain専用参照ディレクトリ（docs-space）の導入
+## ADR-010: Git Worktreeによるmain専用参照ディレクトリ（docs-space）の導入
 
 - **ステータス**: Accepted
 - **コンテキスト**: 機能ブランチ（`feat/stepN-*`）で作業中、プライマリの作業ディレクトリ（`/Users/mina/adapt-sheet`）は当該ブランチをチェックアウトしているため、`main`ブランチの最新ドキュメント（`DEVELOPMENT.md`等）を確認するには都度`git stash`やブランチ切り替えが必要になり、作業の中断コストが高かった（DEVELOPMENT.md ステップ12）。
@@ -119,13 +109,13 @@
 
 ---
 
-## ADR-012: 構造化ログ基盤（標準loggingベースのJSONログ＋リクエスト相関ID）
+## ADR-011: 構造化ログ基盤（標準loggingベースのJSONログ＋リクエスト相関ID）
 
 - **ステータス**: Accepted
 - **コンテキスト**: DEVELOPMENT.md ステップ13として追加。既存バックエンド（`backend/app/main.py`）はログ出力を一切持たず、`/api/render` のどの段階（JSONバリデーション・Docling変換・AI生成）で失敗したのかをサーバー側で追跡する手段がなかった。今後のバックエンド分離（ステップ15）でプロセス/コンテナが増えると、横断的なログ相関の重要性がさらに増す。
 - **決定**: Python標準ライブラリの`logging`をベースに、以下を導入する。新たなログ用サードパーティ依存（structlog等）は追加しない。
   - **JSON構造化ログ**: 1レコード=1行のJSONを標準出力へ出す`logging.Formatter`のサブクラス（`backend/app/logging_config.py`）。`timestamp`/`level`/`logger`/`message`に加え、`request_id`・`method`・`path`・`status_code`・`duration_ms`等の文脈フィールドを含める。コンテナやLambda（フェーズ4）の標準出力ログ収集と相性が良い。
-  - **リクエスト相関ID（request_id）**: リクエストごとにUUIDを採番するASGIミドルウェア（`backend/app/middleware.py`）。`contextvars`でリクエストスコープに保持し、同一リクエスト内の全ログへ自動付与する。レスポンスには`X-Request-ID`ヘッダーとして返し、エラー時はレスポンスボディにも含める（ADR-013）。
+  - **リクエスト相関ID（request_id）**: リクエストごとにUUIDを採番するASGIミドルウェア（`backend/app/middleware.py`）。`contextvars`でリクエストスコープに保持し、同一リクエスト内の全ログへ自動付与する。レスポンスには`X-Request-ID`ヘッダーとして返し、エラー時はレスポンスボディにも含める（ADR-012）。
   - **アクセスログ**: ミドルウェアで各リクエストの開始・終了（method・path・status・duration_ms）をINFOで記録し、未捕捉例外はERRORでスタックトレース付きで記録する。
   - **機微情報の非出力**: APIキー・リクエストボディ全文・PDFバイト列はログに出さない。CLAUDE.mdのセキュリティ規約に準拠する。
 - **理由**: 標準`logging`のみで構造化ログと相関IDを実現でき、依存を増やさずにコンテナ/サーバーレス環境の標準出力ログ収集に載せられる。相関IDをレスポンスとログの双方に出すことで、ユーザーが画面で見た`request_id`から該当リクエストのログを一意に特定できる。
@@ -133,15 +123,15 @@
 
 ---
 
-## ADR-013: API通信の構造化エラーレスポンス設計とフロントエンド表示
+## ADR-012: API通信の構造化エラーレスポンス設計とフロントエンド表示
 
 - **ステータス**: Accepted
 - **コンテキスト**: DEVELOPMENT.md ステップ14として追加。従来のエラー応答は`HTTPException(detail=...)`による文字列（`{"detail": "..."}`）で、`detail`にはバックエンドの生の例外メッセージ（英語・内部情報を含みうる）がそのまま載っていた。フロントエンドはHTTPステータスコードから静的な日本語文言へ丸めるだけで、バックエンドが持つ原因の粒度や、ログと突き合わせるための相関IDを画面へ反映できなかった。
 - **決定**: エラー応答を次の構造化エンベロープに統一する（docs/spec.md 4.1）。
   - 形式: `{"error": {"code": <機械可読識別子>, "message": <ユーザー向け安全文言>, "request_id": <相関ID>}}`
   - `code`は例外種別に1対1対応（`VALIDATION_ERROR`=400 / `PAYLOAD_TOO_LARGE`=413 / `PDF_CONVERSION_ERROR`=422 / `RATE_LIMITED`=429 / `AI_GENERATION_ERROR`=502 / `INTERNAL_ERROR`=500）。
-  - `message`はステータス／`code`ごとに固定の安全な日本語文言へ丸め、生の例外メッセージ・スタックトレースはレスポンスに含めずサーバーログ（ADR-012）にのみ残す。
-  - `request_id`はADR-012で採番した相関IDで、`X-Request-ID`ヘッダーと同値。
+  - `message`はステータス／`code`ごとに固定の安全な日本語文言へ丸め、生の例外メッセージ・スタックトレースはレスポンスに含めずサーバーログ（ADR-011）にのみ残す。
+  - `request_id`はADR-011で採番した相関IDで、`X-Request-ID`ヘッダーと同値。
   - 実装は、FastAPIの例外ハンドラ（`app.exception_handler`）で`PDFConversionError`/`AIGenerationError`/`HTTPException`/未捕捉`Exception`を捕捉し、上記エンベロープの`JSONResponse`へ変換する。
   - フロントは`RenderApiError`に`code`/`message`/`request_id`を持たせ、`sheetStore`はバックエンド提供の`message`を優先表示する。ボディが構造化エンベロープでない場合はステータス別の既定文言にフォールバックする。
 - **理由**: `code`（機械可読）と`message`（人間向け）を分離することで、フロントは表示にも分岐にも使える。安全文言をバックエンドが返す一方で技術詳細はログにのみ残すため、情報漏えいリスクなくユーザーへ状況を伝えられる。
@@ -149,22 +139,22 @@
 
 ---
 
-## ADR-014: バックエンドの「入口エンドポイント」と「Doclingコンテナ」への分離
+## ADR-013: バックエンドの「入口エンドポイント」と「Doclingコンテナ」への分離
 
 - **ステータス**: Accepted
-- **コンテキスト**: DEVELOPMENT.md ステップ15として追加。従来の`backend`コンテナは、リクエスト受付・バリデーション・AI呼び出しを担うAPIエンドポイントと、Docling（`torch`/`opencv-python`/`transformers`等の大容量ML依存を含む）によるPDF変換処理が同一プロセス・同一コンテナに同居していた。Doclingの依存関係はイメージサイズ・ビルド時間・コンテナ起動時間に大きく影響するため、PDFを伴わないリクエストでも常にこの重量級コンテナの起動を待つ必要があり、AWS Lambdaのコールドスタート対策（ADR-004）の方針とも整合しない状態だった。
+- **コンテキスト**: DEVELOPMENT.md ステップ15として追加。従来の`backend`コンテナは、リクエスト受付・バリデーション・AI呼び出しを担うAPIエンドポイントと、Docling（`torch`/`opencv-python`/`transformers`等の大容量ML依存を含む）によるPDF変換処理が同一プロセス・同一コンテナに同居していた。Doclingの依存関係はイメージサイズ・ビルド時間・コンテナ起動時間に大きく影響するため、PDFを伴わないリクエストでも常にこの重量級コンテナの起動を待つ必要があり、AWS Lambdaのコールドスタート対策（ADR-017）の方針とも整合しない状態だった。
 - **決定**:
   - バックエンドを2つのコンテナ/プロセスに分離する。
-    - `backend`（入口エンドポイント）: `/api/render`のリクエスト受付・バリデーション・プロンプト構築・AI呼び出し・エラー整形（ADR-012/013）を担う軽量プロセス。Docling関連の依存を含まない。
+    - `backend`（入口エンドポイント）: `/api/render`のリクエスト受付・バリデーション・プロンプト構築・AI呼び出し・エラー整形（ADR-011/013）を担う軽量プロセス。Docling関連の依存を含まない。
     - `docling-service`（Docling変換専用）: PDFバイト列を受け取りテキストへ変換する処理のみを担うステートレスな内部サービス。Docling本体とその重量級依存はこちらにのみ含める。
   - 通信方式は**HTTP**とする。`docling-service`が内部専用エンドポイント`POST /convert`（multipart）を公開し、`backend`はDocker Compose内部ネットワーク経由（サービス名`docling`、環境変数`DOCLING_SERVICE_URL`）でこれを呼び出す。ホストへは公開しない。
-  - `backend`側の`PDFConverter`プロトコル（`app/services/docling_client.py`）はインターフェースを変更せず、実装のみをプロセス内呼び出しからHTTP呼び出し（`RemoteDoclingPDFConverter`）に差し替える。`docling-service`からの非200応答・接続エラーは既存の`PDFConversionError`（422、ADR-013）へマッピングする。
+  - `backend`側の`PDFConverter`プロトコル（`app/services/docling_client.py`）はインターフェースを変更せず、実装のみをプロセス内呼び出しからHTTP呼び出し（`RemoteDoclingPDFConverter`）に差し替える。`docling-service`からの非200応答・接続エラーは既存の`PDFConversionError`（422、ADR-012）へマッピングする。
 - **理由**: gRPCやメッセージキューは本フェーズの要件（単一の同期変換呼び出し）に対して過剰であり、既存スタック（FastAPI/Docker Compose）と最も親和性が高いHTTPを選んだ。`PDFConverter`プロトコルを維持したままDIの実装差し替えのみで分離できるため、既存テストが「分離後もAPI契約が変わらないことを検証するテスト」としてそのまま機能する。
-- **トレードオフ**: サービス間通信がネットワーク越しになるため、プロセス内呼び出しにはなかった接続エラー・タイムアウトのハンドリングが新たに必要になる。`docling-service`のリクエストログには現時点でADR-012の相関ID（`request_id`）を伝播しておらず、サービス間のログ突き合わせは将来課題として残る。
+- **トレードオフ**: サービス間通信がネットワーク越しになるため、プロセス内呼び出しにはなかった接続エラー・タイムアウトのハンドリングが新たに必要になる。`docling-service`のリクエストログには現時点でADR-011の相関ID（`request_id`）を伝播しておらず、サービス間のログ突き合わせは将来課題として残る。
 
 ---
 
-## ADR-015: 帳票生成品質の改善(PDF解析の役割分担・プロンプト設計・堅牢化)
+## ADR-014: 帳票生成品質の改善(PDF解析の役割分担・プロンプト設計・堅牢化)
 
 - **ステータス**: Accepted
 - **コンテキスト**: 「PDFと見た目が変わらず、かつ保守しやすいHTML/CSSを生成する」という中核体験の品質を上げるため、入力・PDF解析の構成・プロンプト設計・エラー耐性にまたがる調整を重ねた。個別の微調整をADRとして都度残さず、到達点のみ本ADRに記録する。試行の経緯はGitログを一次ソースとする。
@@ -181,10 +171,10 @@
 
 ---
 
-## ADR-016: モデル選択機能の追加（生成AI4種＋変換エンジン3種）とPDF直接送信方式への転換
+## ADR-015: モデル選択機能の追加（生成AI4種＋変換エンジン3種）とPDF直接送信方式への転換
 
 - **ステータス**: Accepted
-- **コンテキスト**: 描画ボタンの隣で生成エンジンを選べるようにしたいという要望を受け、生成AI（Gemini無料/Gemini標準/Claude/OpenAI）とAIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）の計7エンジンを選択できるようにした。あわせて、生成AIへのリクエストからHTML/JSON/Doclingテキストを排し、PDFをマルチモーダル入力として直接渡す方式へ転換した。ADR-015が確立した「レイアウトHTML＋Docling Markdownを両方AIへ渡す」設計は、この転換により一部が置き換えられた。
+- **コンテキスト**: 描画ボタンの隣で生成エンジンを選べるようにしたいという要望を受け、生成AI（Gemini無料/Gemini標準/Claude/OpenAI）とAIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）の計7エンジンを選択できるようにした。あわせて、生成AIへのリクエストからHTML/JSON/Doclingテキストを排し、PDFをマルチモーダル入力として直接渡す方式へ転換した。ADR-014が確立した「レイアウトHTML＋Docling Markdownを両方AIへ渡す」設計は、この転換により一部が置き換えられた。
 - **決定**:
   - `RenderEngine`（7値）と、標準プラン（`gemini`/`claude`/`openai`）を示す`GATED_ENGINES`を定義する。標準プランはフェーズ5（Supabase Auth導入）までは`app/main.py`が403 `FREE_ACCESS_FORBIDDEN`で弾く。
   - `AIClient.generate(prompt, pdf)`にシグネチャを変更し、Gemini/Claude/OpenAIはいずれもPDFバイト列をマルチモーダル入力として直接添付する。`build_prompt`からhtml/markdown引数を削除し`has_pdf`フラグへ置き換える。
@@ -193,11 +183,11 @@
   - フロントに`EngineSelect`を新設し、描画ボタンの隣で7エンジンを選べるようにする。ゲート対象にはロックアイコンを表示するが選択自体は無効化せず、実際の403判定はバックエンドに委ねる。
 - **理由**: PDFを直接AIへ渡すマルチモーダル入力は、機械的な中間表現より情報の欠落が少ない。変換エンジンを独立した選択肢として公開することで、AIによる整形と機械的な変換結果を直接比較できる。ゲート判定をバックエンドの1箇所に集約することで、フェーズ5では条件の差し替えのみで済む。
 - **トレードオフ**: `pdf2htmlex-service`のベースイメージはx86_64タグのみで、arm64ホストでは常にQEMUエミュレーションになる（将来的にネイティブビルドの検討が必要）。pdf2htmlEXのライセンスはAGPL（PyMuPDFと同様）。OpenAI/Geminiの既定モデル名は実装時点の想定であり、`OPENAI_MODEL`/`GEMINI_STANDARD_MODEL`で随時上書きする前提。
-- **関連**: ADR-013（構造化エラー）、ADR-014（docling-service分離）、ADR-015（本ADRが一部を置き換える帳票生成品質の改善）。
+- **関連**: ADR-012（構造化エラー）、ADR-013（docling-service分離）、ADR-014（本ADRが一部を置き換える帳票生成品質の改善）。
 
 ---
 
-## ADR-024: 開発用Dockerイメージからのbuild-essential除去（イメージ軽量化）
+## ADR-016: 開発用Dockerイメージからのbuild-essential除去（イメージ軽量化）
 
 - **ステータス**: Accepted
 - **コンテキスト**: フェーズ4（インフラ構築・コールドスタート高速化）に入る前に、開発用Compose構成のDockerイメージを計測したところ、`backend`が939MB、`docling`が2.81GBだった。両イメージとも`build-essential`（gcc/g++/cpp/binutils等）をaptで導入していたが、コメント上の理由は「manylinuxホイールが無い一部依存のソースビルドに備えた予防的措置」であり、実際にソースビルドが発生している依存は存在しなかった（`requirements.txt`の全依存がaarch64/manylinuxのバイナリwheelで導入できる）。
@@ -207,7 +197,21 @@
 - **理由**: 予防的に含めていた約280MBのツールチェーンが実際には使われておらず、除去してもビルド（wheel導入のみ）・実行（実PDF変換の結合テストを含むpytest全通過）に影響がないことを実測で確認した。イメージ縮小はビルド・pull・Lambdaのコールドスタートいずれにも寄与する。
 - **トレードオフ**: 将来`requirements.txt`にwheel未提供の依存を追加した場合、pip installがソースビルドに失敗する。その際は当該Dockerfileに`build-essential`を再追加する（マルチステージ化でビルド専用ステージに閉じ込める案はフェーズ4のLambda向け本番イメージ設計時に検討する）。
 - **実測**: `backend` 939MB → 494MB、`docling` 2.81GB → 2.36GB（合計約900MB削減）。
-- **関連**: ADR-010（Docker Compose化）、ADR-014（docling-service分離）。フェーズ4ステップ24（コールドスタート高速化・Doclingモデル焼き込み）の前段整備。
+- **関連**: ADR-009（Docker Compose化）、ADR-013（docling-service分離）。フェーズ4ステップ24（コールドスタート高速化）の前段整備。
+
+---
+
+## ADR-017: Lambda本番イメージ設計（Web Adapter・Parameter Storeのグローバル取得・ECR Public）
+
+- **ステータス**: Accepted
+- **コンテキスト**: フェーズ4ステップ24として、軽量な入口エンドポイント（`backend`）をAWS Lambda（コンテナイメージ）へ載せる本番イメージを設計する。決めるべきは、(1) FastAPIをLambda上で動かす方式、(2) 生成AIのAPIキーをLambda上で安全かつ低コストに供給する方式、(3) コンテナイメージの置き場（レジストリ）である。
+- **決定**:
+  - **AWS Lambda Web Adapter**を採用する。本番用は開発用`backend/Dockerfile`とは別の`backend/Dockerfile.lambda`とし、`COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:...`でLambda拡張バイナリを取り込み、既存のFastAPIコードを改変せず`uvicorn`を`--reload`無しで起動する。
+  - **APIキーはParameter Store（SecureString）から実行時取得し、イメージにもコードにも焼き込まない**。取得は`app/secrets_loader.py`が担い、**Lambdaのコールドスタート時（モジュールimport＝グローバルスコープ）に一度だけ**SSM `GetParameters`を呼び、値を`os.environ`へ展開する。ハンドラ内で毎リクエストSSMを叩くことは、Lambdaの実行時間課金の増加とSSMのレートリミット抵触の原因になるため禁止する。冪等性は「既に`os.environ`にあるキーは取得対象から外す」ことで担保し、`SSM_PARAMETER_PREFIX`未設定のローカル/pytestでは何もしない（boto3・AWS認証情報を開発の必須依存にしない）。
+  - **コンテナイメージはECR Public（`public.ecr.aws`）へpushする**。ECR Privateのストレージ無料枠は500MBと小さく、`backend`イメージ（約500MB）でも逼迫するため、無料枠の広いパブリックリポジトリを用いる。
+- **理由**: Lambda Web Adapterによりローカル・サーバーレス間のコード差分を最小化できる。キーをグローバルスコープで一度だけ取得してメモリ保持することで、実行コスト・レート制限・秘密情報のイメージ非混入を同時に満たす。ECR Publicは無料枠の制約を回避できる。
+- **トレードオフ**: APIキーのローテーションはコールドスタート単位でしか反映されない（更新後はLambda実行環境の入れ替えが必要）。ECR Publicはイメージが公開されるため、イメージ内に秘密情報を一切含めない前提を厳守する（本ADRのキー実行時取得により担保）。`docling-service`/`pdf2htmlex-service`のLambda化は本ステップの対象外とし、後続で対応する（`backend`のみを先行してLambda化する）。
+- **関連**: ADR-013（docling-service分離）、ADR-011（機微情報の非ログ出力）、ADR-016（イメージ軽量化）。
 
 ---
 

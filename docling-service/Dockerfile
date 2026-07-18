@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # opencv-python(cv2)がlibGL.so.1 / libglib2.0を、torchがlibgomp1(OpenMP)を実行時に要求するため、
 # slimイメージには含まれないこれらの共有ライブラリを明示的に追加する。
 # requirements.txtの全依存（torch/opencv-python等を含む）はバイナリwheelで導入でき、
-# ソースビルドが発生しないため、build-essential（gcc/g++等で約280MB）は含めない（ADR-024）。
+# ソースビルドが発生しないため、build-essential（gcc/g++等で約280MB）は含めない（ADR-016）。
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# requirements.txtにはLinux(コンテナ)向けの依存のみを含む（ADR-014）。DoclingはOcrAutoOptionsで
+# requirements.txtにはLinux(コンテナ)向けの依存のみを含む（ADR-013）。DoclingはOcrAutoOptionsで
 # 実行時に利用可能なOCRエンジンを自動選択する仕組みのため、requirements.txtに含まれる
 # クロスプラットフォームなrapidocrが自動選択されて動作する。
 RUN pip install --no-cache-dir --upgrade pip \

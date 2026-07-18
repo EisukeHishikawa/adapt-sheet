@@ -1,6 +1,6 @@
 """openapi.json書き出しスクリプト。
 
-フロントエンドの型生成（`npm run generate-types`。docs/spec.md 3.2 / ADR-006）は
+フロントエンドの型生成（`npm run generate-types`。docs/spec.md 3.2 / ADR-005）は
 `backend/openapi.json` を入力とする。サーバー起動なしで`app.openapi()`を直接呼び出し
 JSONへダンプすることで、フロント側はバックエンドプロセスを立ち上げずに型生成できる。
 `python scripts/export_openapi.py` で実行する。

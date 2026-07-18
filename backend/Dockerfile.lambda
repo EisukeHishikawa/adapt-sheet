@@ -1,0 +1,37 @@
+# 本番用（AWS Lambda コンテナイメージ）Dockerfile（ADR-017）。
+# 開発用の backend/Dockerfile（docker-compose、uvicorn --reload、bind mount）とは別物。
+# backendはADR-013でDocling本体を別コンテナへ分離済みの軽量な入口エンドポイントで、当面の
+# Lambda化対象はこのbackendのみ。
+#
+# ・APIキーはイメージに一切含めず、実行時にParameter Storeから取得する（app/secrets_loader.py）。
+# ・イメージはECR Public（public.ecr.aws）へpushする。ECR Privateの無料枠500MBを避けるため（ADR-017）。
+FROM python:3.9-slim
+
+# AWS Lambda Web Adapter: uvicorn(FastAPI)をLambdaのHTTPイベントで駆動するためのLambda拡張
+# バイナリ。公式のマルチアーキ対応イメージからCOPYするだけで、既存のFastAPIコードを改変せず
+# サーバーレス上で動かせる（ADR-017）。イメージ名は`aws-lambda-adapter`（`web`は付かない）。
+# バージョンはデプロイ時に最新安定版へ更新してよい。
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Lambda Web Adapterへアプリの待受ポートを知らせる（下のuvicorn --portと一致させる）。
+    AWS_LWA_PORT=8000
+
+# ADR-016と同様、requirements.txtの全依存はwheel導入のみでソースビルドが発生しないため
+# build-essentialは含めない。curlはヘルスチェック等の運用で用いる。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# 本番は焼き込んだコードで起動するため --reload は付けない。--host 0.0.0.0でLambda Web Adapter
+# から到達可能にし、AWS_LWA_PORTと同じ8000で待ち受ける。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

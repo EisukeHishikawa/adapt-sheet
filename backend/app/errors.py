@@ -1,4 +1,4 @@
-"""API通信の構造化エラーレスポンス（ADR-013）。
+"""API通信の構造化エラーレスポンス（ADR-012）。
 
 エラー応答を `{"error": {"code", "message", "request_id"}}` のエンベロープへ統一する。
 生の例外メッセージ（英語・内部情報を含みうる）はサーバーログにのみ残し、レスポンスへは漏らさない。
@@ -96,6 +96,6 @@ def _domain_error_handler(
 
 
 # app/main.pyがPDFConversionError / AIGenerationErrorに対して登録する。ドメイン例外はmain.py内で
-# HTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する（ADR-013）。
+# HTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する（ADR-012）。
 pdf_conversion_error_handler = _domain_error_handler(422, "PDF conversion failed")
 ai_generation_error_handler = _domain_error_handler(502, "AI generation failed")

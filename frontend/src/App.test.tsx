@@ -21,7 +21,7 @@ const initialSheetState = {
   // history等が前テストの値のまま残る（テスト間の状態漏れ防止）。
   widthMm: null,
   heightMm: null,
-  // ADR-016で追加したエンジン選択。リセット漏れ防止のため初期値を明示する。
+  // ADR-015で追加したエンジン選択。リセット漏れ防止のため初期値を明示する。
   engine: 'gemini_free' as const,
   history: [],
   // 履歴の通し番号カウンタ。リセット漏れ防止のため初期値を明示する。

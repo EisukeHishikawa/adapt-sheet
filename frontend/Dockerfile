@@ -1,4 +1,4 @@
-# 開発用のフロントエンドイメージ（docker-compose.yml参照）。開発環境はこのコンテナのみを対象とする（ADR-014）。
+# 開発用のフロントエンドイメージ（docker-compose.yml参照）。開発環境はこのコンテナのみを対象とする（ADR-013）。
 # vite 8 / vitest 4はNode 20以降を前提とするためnode:20を採用する。
 FROM node:20-alpine
 

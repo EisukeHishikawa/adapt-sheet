@@ -1,4 +1,4 @@
-"""構造化ログ基盤（ADR-012、DEVELOPMENT.md ステップ13）の検証テスト。
+"""構造化ログ基盤（ADR-011、DEVELOPMENT.md ステップ13）の検証テスト。
 
 - 全レスポンスにX-Request-IDヘッダーが付くこと
 - アクセスログが構造化フィールド（request_id/method/path/status_code/duration_ms）付きで出ること

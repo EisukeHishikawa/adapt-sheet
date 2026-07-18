@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from app.logging_config import JsonLogFormatter
 from app.main import app
-from app.services.ai_client import RenderResult, get_ai_client
+from app.services.ai_client import RenderResult, get_ai_client_factory
 
 client = TestClient(app)
 
@@ -47,10 +47,10 @@ def test_access_log_contains_structured_fields(caplog):
 
 def test_unhandled_exception_is_logged_with_traceback(caplog):
     class _BrokenAIClient:
-        def generate(self, prompt: str) -> RenderResult:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise ValueError("想定外の内部エラー（テスト用）")
 
-    app.dependency_overrides[get_ai_client] = lambda: _BrokenAIClient()
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _BrokenAIClient())
     try:
         with caplog.at_level(logging.ERROR, logger="app.access"):
             response = client.post("/api/render", data={})
@@ -65,7 +65,7 @@ def test_unhandled_exception_is_logged_with_traceback(caplog):
         # 相関IDが付いており、レスポンスヘッダーと一致する。
         assert error_logs[0].request_id == response.headers["X-Request-ID"]
     finally:
-        app.dependency_overrides.pop(get_ai_client, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
 
 
 def test_json_formatter_outputs_ai_payload_fields():

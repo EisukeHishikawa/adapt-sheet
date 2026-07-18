@@ -16,6 +16,18 @@ export type SizePresetName = keyof typeof SIZE_PRESETS
 export type Orientation = 'tate' | 'yoko'
 export type Dimensions = { widthMm: number; heightMm: number }
 
+// モデル選択（EngineSelect）の7エンジン（ADR-023）。gemini_free/gemini/claude/openaiは
+// 生成AI（LLMがHTML/CSS/JSONを作る）、docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン
+// （変換結果をそのまま描画結果にする）。アイコン・説明文などの表示情報はEngineSelect.tsx側が持つ。
+export type RenderEngineId =
+  | 'gemini_free'
+  | 'gemini'
+  | 'claude'
+  | 'openai'
+  | 'docling'
+  | 'pdf2htmlex'
+  | 'pymupdf'
+
 // たて（ポートレート）は短辺が幅・長辺が高さ。よこ（ランドスケープ）は用紙を90度回すため入れ替わる。
 // ストアのサイズ適用とSizeControlsの選択肢表示が同じ変換を二重に持たないよう、ここへ集約する。
 export function dimensionsFor(size: SizePresetName, orientation: Orientation): Dimensions {
@@ -87,6 +99,8 @@ function messageForStatus(status: number): string {
       return 'PDFファイルのサイズが上限を超えています。'
     case 422:
       return 'PDFの解析に失敗しました。ファイルの内容をご確認ください。'
+    case 403:
+      return '現在、この生成AIは登録ユーザーのみご利用いただけます。アカウント機能の追加までお待ちください。'
     case 429:
       return 'リクエストが混み合っています。しばらくしてから再度お試しください。'
     case 502:
@@ -109,6 +123,8 @@ type SheetState = {
   // nullは「未入力」。fetchRenderではAPIへ送らない（backendのOptional[float] = Form(None)に対応）。
   widthMm: number | null
   heightMm: number | null
+  // 描画ボタンの隣（EngineSelect）で選択する生成エンジン（ADR-023）。既定は無料枠のGemini。
+  engine: RenderEngineId
   history: HistoryItem[]
   historySeq: number
   // 未描画・未保存の編集内容の退避スロット。履歴を選ぶとエディタが上書きされてしまうため、
@@ -123,6 +139,7 @@ type SheetState = {
   setPdfFile: (file: File | null) => void
   setWidthMm: (widthMm: number | null) => void
   setHeightMm: (heightMm: number | null) => void
+  setEngine: (engine: RenderEngineId) => void
   applySizePreset: (size: SizePresetName, orientation: Orientation) => void
   restoreFromHistory: (index: number) => void
   restoreDraft: () => void
@@ -139,6 +156,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   pdfFile: null,
   pdfFileName: null,
   ...dimensionsFor('A4', 'tate'),
+  engine: 'gemini_free',
   history: [],
   historySeq: 0,
   draft: null,
@@ -151,6 +169,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   setPdfFile: (file) => set({ pdfFile: file, pdfFileName: file?.name ?? null }),
   setWidthMm: (widthMm) => set({ widthMm }),
   setHeightMm: (heightMm) => set({ heightMm }),
+  setEngine: (engine) => set({ engine }),
   applySizePreset: (size, orientation) => set(dimensionsFor(size, orientation)),
   // 復元は破壊的にしない。エディタの内容がまだ履歴にもドラフトにも無い「意味のある入力」なら、
   // 上書きで失わないようdraftへ退避してから復元する。
@@ -183,13 +202,15 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     try {
       // cssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提。ADR-019）。
       // jsonContentも送らない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
-      const { htmlContent, promptContent, pdfFile, widthMm, heightMm } = get()
+      // htmlContentも送らない（ADR-023：生成AIへの入力からHTML・Docling抽出テキストを外し、
+      // PDFファイルを直接添付する方式に変更したため）。
+      const { promptContent, pdfFile, widthMm, heightMm, engine } = get()
       const result = await renderSheet({
-        html: htmlContent,
         prompt: promptContent,
         pdf: pdfFile ?? undefined,
         width_mm: widthMm ?? undefined,
         height_mm: heightMm ?? undefined,
+        engine,
       })
 
       const newEntry: HistoryEntry = {

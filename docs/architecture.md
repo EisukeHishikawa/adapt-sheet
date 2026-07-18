@@ -16,21 +16,27 @@ flowchart LR
         CF["CloudFront"]
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
-        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-019)"]
-        LambdaDocling["Lambda (Doclingテキスト抽出)\nDoclingモデル焼き込み済み"]
+        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-019)\nengineごとの分岐・ゲート判定 (ADR-023)"]
+        LambdaDocling["Lambda (DoclingのPDF→HTML変換)\nDoclingモデル焼き込み済み (ADR-023)"]
+        LambdaPdf2HtmlEx["Lambda (pdf2htmlEXのPDF→HTML変換)\n(ADR-023)"]
         WAF["AWS WAF"]
     end
 
     subgraph External["外部サービス"]
         Gemini["Gemini API (Google AI Studio)"]
+        Claude["Claude API (Anthropic)"]
+        OpenAI["OpenAI API"]
         Auth0["Auth0"]
         Supabase["Supabase (PostgreSQL)"]
     end
 
     Browser -->|静的アセット取得| CF --> S3
     Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
-    LambdaEntry -->|テキスト抽出リクエスト (HTTP・並列)| LambdaDocling
-    LambdaEntry -->|生成AI呼び出し| Gemini
+    LambdaEntry -->|変換エンジン選択時 (HTTP)| LambdaDocling
+    LambdaEntry -->|変換エンジン選択時 (HTTP)| LambdaPdf2HtmlEx
+    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-023)| Gemini
+    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-023)| Claude
+    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-023)| OpenAI
     LambdaEntry -->|認証トークン検証| Auth0
     LambdaEntry -->|データ保存/取得| Supabase
 ```
@@ -41,29 +47,35 @@ flowchart LR
 
 `POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。
 
+エンジン選択（`engine`、ADR-023）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
+
 ```mermaid
 sequenceDiagram
     participant FE as フロントエンド
     participant API as FastAPI (/api/render)
-    participant Layout as PyMuPDF (レイアウト・backend内)
-    participant Docling as Docling (テキスト)
-    participant Gemini as Gemini API
+    participant Layout as PyMuPDF (backend内)
+    participant Docling as Docling
+    participant Pdf2HtmlEx as pdf2htmlEX
+    participant AI as Gemini/Claude/OpenAI
 
-    FE->>API: PDF/HTML/プロンプト/サイズ送信
-    alt PDFが存在する
-        Note over API,Docling: 2つの変換は並列に実行する（ADR-019）
-        par レイアウト変換（backend内・PyMuPDF）
-            API->>Layout: PDF（1ページ目）
-            Layout-->>API: レイアウトHTML（見た目の正）
-        and テキスト抽出
-            API->>Docling: PDF（1ページ目）
-            Docling-->>API: Markdown（テキストの正）
-        end
+    FE->>API: PDF/プロンプト/サイズ/engine送信
+    alt engineが標準プラン（Gemini標準/Claude/OpenAI）
+        API-->>FE: 403（フェーズ5まで自由アクセス不可、ADR-023）
+    else engineが変換エンジン（Docling/pdf2htmlEX/PyMuPDF）
+        Note over API,Pdf2HtmlEx: いずれか1つをengineに応じて呼び出す。AIは介さない
+        API->>Layout: PDF（pymupdf選択時）
+        API->>Docling: PDF（docling選択時）
+        API->>Pdf2HtmlEx: PDF（pdf2htmlex選択時）
+        Layout-->>API: HTML
+        Docling-->>API: HTML
+        Pdf2HtmlEx-->>API: HTML
+        API-->>FE: 200 OK { html, css: "", json: {} }
+    else engineがGemini（無料）
+        API->>API: プロンプトを動的構築（PDFがあれば見た目の正として扱う指示）
+        API->>AI: PDF（マルチモーダル添付、あれば）+ 指示
+        AI-->>API: HTML/CSS/JSON
+        API-->>FE: 200 OK { html, css, json }
     end
-    API->>API: 送信要素の有無に応じてプロンプトを動的構築
-    API->>Gemini: レイアウトHTML + Markdown + 指示
-    Gemini-->>API: HTML/CSS/JSON
-    API-->>FE: 200 OK { html, css, json }
     Note over API,FE: バリデーション/AI生成/PDF解析エラーは<br/>例外種別に応じたHTTPステータスで返却
 ```
 

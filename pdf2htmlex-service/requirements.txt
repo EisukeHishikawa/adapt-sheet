@@ -1,0 +1,8 @@
+# backend/docling-serviceと同じPython 3.9系・同じバージョン（ADR-023）。ベースイメージ
+# （pdf2htmlex/pdf2htmlex、Ubuntu 20.04 focal）にpython3.9を追加導入して揃えている。
+fastapi==0.128.8
+uvicorn[standard]==0.39.0
+python-multipart==0.0.20
+httpx==0.28.1  # fastapi.testclient.TestClientの依存（pytest実行時に使用）
+pytest==8.4.2
+ruff==0.15.20

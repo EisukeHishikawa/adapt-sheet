@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Moon, Sparkles, Sun } from 'lucide-react'
 import { EditorPanel } from '@/components/EditorPanel'
+import { EngineSelect } from '@/components/EngineSelect'
 import { PreviewPanel } from '@/components/PreviewPanel'
 import { PromptInput } from '@/components/PromptInput'
 import { PdfDropzone } from '@/components/PdfDropzone'
@@ -32,7 +33,10 @@ function App() {
           <div className={previewExpanded ? 'hidden' : 'contents'}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <SizeControls />
-              <RenderButton />
+              <div className="flex flex-wrap items-center gap-2">
+                <EngineSelect />
+                <RenderButton />
+              </div>
             </div>
             <PdfDropzone />
             <PromptInput />

@@ -1,12 +1,12 @@
 import re
-import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client
-from app.services.docling_client import get_markdown_extractor
+from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client_factory
+from app.services.docling_client import get_html_extractor
+from app.services.pdf2htmlex_client import get_pdf2htmlex_extractor
 from app.services.pdf_layout import get_layout_converter
 from app.services.pdf_common import PDFConversionError
 
@@ -19,6 +19,11 @@ SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 # ステップ6でAI生成に差し替えた後も、レスポンス契約（docs/spec.md 3.1）自体は変わらないため
 # このテストは維持し、AI生成特有の挙動（エラー時502等）をテストを追加する形で検証する。
 client = TestClient(app)
+
+
+def _override_ai_client(fake_client) -> None:
+    # ADR-023: ai_client_factoryはengineがリクエスト時にしか決まらないため関数を注入する。
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: fake_client)
 
 
 def test_render_returns_dummy_html_css_json():
@@ -46,88 +51,70 @@ def test_render_response_placeholders_exist_in_json():
 
 
 def test_render_returns_502_when_ai_generation_fails():
-    # docs/spec.md エラーコード定義: AI生成エラー（Claude API呼び出し失敗等）は502 Bad Gatewayとする。
+    # docs/spec.md エラーコード定義: AI生成エラー（AI API呼び出し失敗等）は502 Bad Gatewayとする。
     # dependency_overridesでAIクライアントを失敗させ、エンドポイントのエラーハンドリングを検証する。
     class _FailingAIClient:
-        def generate(self, prompt: str) -> RenderResult:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise AIGenerationError("AI呼び出しに失敗しました（テスト用）")
 
-    app.dependency_overrides[get_ai_client] = lambda: _FailingAIClient()
+    _override_ai_client(_FailingAIClient())
     try:
         response = client.post("/api/render", data={})
         assert response.status_code == 502
     finally:
-        app.dependency_overrides.pop(get_ai_client, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
 
 
-def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
-    # ADR-019: PDFが送信された場合、PyMuPDF由来のレイアウトHTML（見た目）とDocling由来の
-    # Markdown（テキスト）の両方がプロンプトへ渡ることを検証する。実変換は重いため、
-    # dependency_overridesで高速なフェイクに差し替え、main.pyの配線のみを検証する。
-    captured_prompts = []
+def test_render_sends_pdf_bytes_to_ai_client_when_uploaded():
+    # ADR-023: 生成AIエンジンへはPDFファイルをそのままマルチモーダル入力として渡し、
+    # PyMuPDF/Docling経由の事前変換は行わない。
+    captured = {}
 
     class _RecordingAIClient:
-        def generate(self, prompt: str) -> RenderResult:
-            captured_prompts.append(prompt)
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            captured["pdf"] = pdf
+            captured["prompt"] = prompt
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    class _FakeMarkdownExtractor:
-        def convert_to_markdown(self, filename: str, content: bytes) -> str:
-            return "# docling-extracted-markdown-marker"
-
-    class _FakeLayoutConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
-            return "<html><body>layout-html-marker</body></html>"
-
-    app.dependency_overrides[get_ai_client] = lambda: _RecordingAIClient()
-    app.dependency_overrides[get_markdown_extractor] = lambda: _FakeMarkdownExtractor()
-    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
+    _override_ai_client(_RecordingAIClient())
     try:
+        pdf_bytes = SAMPLE_PDF.read_bytes()
         response = client.post(
             "/api/render",
-            data={"html": "<p>pdfがある場合はこちらは使われない想定</p>"},
-            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+            files={"pdf": ("sample.pdf", pdf_bytes, "application/pdf")},
         )
         assert response.status_code == 200
-        assert "layout-html-marker" in captured_prompts[0]
-        assert "docling-extracted-markdown-marker" in captured_prompts[0]
+        assert captured["pdf"] == pdf_bytes
+        assert "添付したPDF" in captured["prompt"]
     finally:
-        app.dependency_overrides.pop(get_ai_client, None)
-        app.dependency_overrides.pop(get_markdown_extractor, None)
-        app.dependency_overrides.pop(get_layout_converter, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
 
 
-def test_render_calls_docling_and_layout_in_parallel():
-    # ADR-019: Doclingの呼び出しとPyMuPDF変換はどちらも秒単位の処理時間がかかるため、直列ではなく並列に呼ぶ。
-    # 各変換を0.5秒スリープさせ、合計所要時間が直列（1.0秒）ではなく並列（0.5秒強）に収まることで
-    # 並列実行を検証する。
-    delay_seconds = 0.5
+def test_render_does_not_invoke_converters_for_ai_engine_with_pdf():
+    # ADR-023: AIエンジン選択時はPyMuPDF/Docling/pdf2htmlEXの事前変換を一切呼ばない。
+    class _RecordingAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    class _SlowMarkdownExtractor:
-        def convert_to_markdown(self, filename: str, content: bytes) -> str:
-            time.sleep(delay_seconds)
-            return "# markdown"
+    class _ExplodingConverter:
+        def convert_to_html(self, filename, content):
+            raise AssertionError("AIエンジンでは呼ばれないはず")
 
-    class _SlowLayoutConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
-            time.sleep(delay_seconds)
-            return "<html></html>"
-
-    app.dependency_overrides[get_markdown_extractor] = lambda: _SlowMarkdownExtractor()
-    app.dependency_overrides[get_layout_converter] = lambda: _SlowLayoutConverter()
+    _override_ai_client(_RecordingAIClient())
+    app.dependency_overrides[get_layout_converter] = lambda: _ExplodingConverter()
+    app.dependency_overrides[get_html_extractor] = lambda: _ExplodingConverter()
+    app.dependency_overrides[get_pdf2htmlex_extractor] = lambda: _ExplodingConverter()
     try:
-        started_at = time.monotonic()
         response = client.post(
             "/api/render",
             files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
         )
-        elapsed = time.monotonic() - started_at
-
         assert response.status_code == 200
-        assert elapsed < delay_seconds * 2
     finally:
-        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
         app.dependency_overrides.pop(get_layout_converter, None)
+        app.dependency_overrides.pop(get_html_extractor, None)
+        app.dependency_overrides.pop(get_pdf2htmlex_extractor, None)
 
 
 def test_render_threads_prompt_into_ai_prompt():
@@ -135,11 +122,11 @@ def test_render_threads_prompt_into_ai_prompt():
     captured_prompts = []
 
     class _RecordingAIClient:
-        def generate(self, prompt: str) -> RenderResult:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
             captured_prompts.append(prompt)
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    app.dependency_overrides[get_ai_client] = lambda: _RecordingAIClient()
+    _override_ai_client(_RecordingAIClient())
     try:
         response = client.post(
             "/api/render",
@@ -148,14 +135,22 @@ def test_render_threads_prompt_into_ai_prompt():
         assert response.status_code == 200
         assert "請求書レイアウトにして" in captured_prompts[0]
     finally:
-        app.dependency_overrides.pop(get_ai_client, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
 
 
 def test_render_ignores_json_field_if_sent():
-    # jsonはGeminiへの入力として不要になったため、リクエストの宣言済みフィールドではなくなった。
+    # jsonはAIへの入力として不要なため、リクエストの宣言済みフィールドではなくなった。
     # クライアントが送っても未知のフォームフィールドとしてFastAPIが無視し、
     # エラーにならないことを確認する（ADR-019のcss同様の扱い）。
     response = client.post("/api/render", data={"json": '{"customer": "田中"}'})
+
+    assert response.status_code == 200
+
+
+def test_render_ignores_html_field_if_sent():
+    # ADR-023: htmlはリクエストの宣言済みフィールドではなくなった（生成AIへ送らないため）。
+    # クライアントが送っても未知のフォームフィールドとしてFastAPIが無視することを確認する。
+    response = client.post("/api/render", data={"html": "<p>古いHTML</p>"})
 
     assert response.status_code == 200
 
@@ -200,47 +195,174 @@ def test_render_mock_returns_invoice_for_landscape_size():
     assert "請求書" in response.json()["html"]
 
 
-def test_render_returns_422_when_pdf_conversion_fails():
-    # docs/spec.md エラーコード定義: PDF解析エラーは422 Unprocessable Entityとする。
-    # Docling・レイアウト生成のどちらが失敗しても同じPDFConversionErrorへ集約される（ADR-019）。
-    class _FailingMarkdownExtractor:
-        def convert_to_markdown(self, filename: str, content: bytes) -> str:
-            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+# ADR-023: engine（EngineSelectの選択値）によるゲート判定・分岐の検証。
 
+
+def test_render_returns_403_for_gemini_standard_engine():
+    response = client.post("/api/render", data={"engine": "gemini"})
+    assert response.status_code == 403
+
+
+def test_render_returns_403_for_claude_engine():
+    response = client.post("/api/render", data={"engine": "claude"})
+    assert response.status_code == 403
+
+
+def test_render_returns_403_for_openai_engine():
+    response = client.post("/api/render", data={"engine": "openai"})
+    assert response.status_code == 403
+
+
+def test_render_gate_check_happens_before_pdf_processing():
+    # ゲート対象engineは、PDF処理・AI呼び出しより前に判定し、無駄な処理をしない（ADR-023）。
+    class _ExplodingConverter:
+        def convert_to_html(self, filename, content):
+            raise AssertionError("ゲートで弾かれるはずなので呼ばれない")
+
+    app.dependency_overrides[get_layout_converter] = lambda: _ExplodingConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "claude"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.pop(get_layout_converter, None)
+
+
+def test_render_pymupdf_engine_returns_converted_html_without_ai():
     class _FakeLayoutConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
-            return "<html></html>"
+        def convert_to_html(self, filename, content):
+            return "<html><body>pymupdf-marker</body></html>"
 
-    app.dependency_overrides[get_markdown_extractor] = lambda: _FailingMarkdownExtractor()
     app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
     try:
         response = client.post(
             "/api/render",
-            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+            data={"engine": "pymupdf"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
         )
-        assert response.status_code == 422
+        assert response.status_code == 200
+        body = response.json()
+        assert body["html"] == "<html><body>pymupdf-marker</body></html>"
+        assert body["css"] == ""
+        assert body["json"] == {}
     finally:
-        app.dependency_overrides.pop(get_markdown_extractor, None)
         app.dependency_overrides.pop(get_layout_converter, None)
 
 
-def test_render_returns_422_when_layout_conversion_fails():
-    class _FakeMarkdownExtractor:
-        def convert_to_markdown(self, filename: str, content: bytes) -> str:
-            return "# markdown"
+def test_render_docling_engine_returns_converted_html_without_ai():
+    class _FakeExtractor:
+        def convert_to_html(self, filename, content):
+            return "<html><body>docling-marker</body></html>"
 
-    class _FailingLayoutConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
-            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
-
-    app.dependency_overrides[get_markdown_extractor] = lambda: _FakeMarkdownExtractor()
-    app.dependency_overrides[get_layout_converter] = lambda: _FailingLayoutConverter()
+    app.dependency_overrides[get_html_extractor] = lambda: _FakeExtractor()
     try:
         response = client.post(
             "/api/render",
+            data={"engine": "docling"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+        assert response.json()["html"] == "<html><body>docling-marker</body></html>"
+    finally:
+        app.dependency_overrides.pop(get_html_extractor, None)
+
+
+def test_render_pdf2htmlex_engine_returns_converted_html_without_ai():
+    class _FakeExtractor:
+        def convert_to_html(self, filename, content):
+            return "<html><body>pdf2htmlex-marker</body></html>"
+
+    app.dependency_overrides[get_pdf2htmlex_extractor] = lambda: _FakeExtractor()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "pdf2htmlex"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+        assert response.json()["html"] == "<html><body>pdf2htmlex-marker</body></html>"
+    finally:
+        app.dependency_overrides.pop(get_pdf2htmlex_extractor, None)
+
+
+def test_render_converter_engine_requires_pdf():
+    response = client.post("/api/render", data={"engine": "pymupdf"})
+    assert response.status_code == 400
+
+
+def test_render_converter_engine_does_not_call_ai_client():
+    class _ExplodingAIClient:
+        def generate(self, prompt, pdf=None):
+            raise AssertionError("変換エンジンではAIを呼ばないはず")
+
+    class _FakeLayoutConverter:
+        def convert_to_html(self, filename, content):
+            return "<html></html>"
+
+    _override_ai_client(_ExplodingAIClient())
+    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "pymupdf"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
+
+
+def test_render_returns_422_when_docling_engine_conversion_fails():
+    # docs/spec.md エラーコード定義: PDF解析エラーは422 Unprocessable Entityとする。
+    class _FailingExtractor:
+        def convert_to_html(self, filename, content):
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_html_extractor] = lambda: _FailingExtractor()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "docling"},
             files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
         )
         assert response.status_code == 422
     finally:
-        app.dependency_overrides.pop(get_markdown_extractor, None)
+        app.dependency_overrides.pop(get_html_extractor, None)
+
+
+def test_render_returns_422_when_pymupdf_engine_conversion_fails():
+    class _FailingConverter:
+        def convert_to_html(self, filename, content):
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_layout_converter] = lambda: _FailingConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "pymupdf"},
+            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+        )
+        assert response.status_code == 422
+    finally:
         app.dependency_overrides.pop(get_layout_converter, None)
+
+
+def test_render_returns_422_when_pdf2htmlex_engine_conversion_fails():
+    class _FailingConverter:
+        def convert_to_html(self, filename, content):
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_pdf2htmlex_extractor] = lambda: _FailingConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "pdf2htmlex"},
+            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_pdf2htmlex_extractor, None)

@@ -7,12 +7,16 @@ export type RenderResponse = components['schemas']['RenderResponse']
 // docs/spec.md 3.1の契約に沿ったリクエスト項目。
 // cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提。ADR-019）。
 // jsonも持たない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
+// htmlも持たない（ADR-023：生成AIへの入力からHTML・Docling抽出テキストを外し、PDFファイルを
+// 直接添付する方式に変更したため。変換エンジンはpdfのみを見る）。
 export type RenderRequestFields = {
-  html?: string
   prompt?: string
   pdf?: File
   width_mm?: number
   height_mm?: number
+  // EngineSelectで選択した生成エンジン（ADR-023）。gemini_free/gemini/claude/openai/
+  // docling/pdf2htmlex/pymupdfのいずれか。
+  engine?: string
 }
 
 // バックエンドの構造化エラーボディ（ADR-017）から取り出した情報。

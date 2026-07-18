@@ -234,6 +234,24 @@ def parse_ai_response(text: str) -> RenderResult:
         raise AIGenerationError(f"AIレスポンスに必須キーが不足しています: {exc}") from exc
 
 
+def _raise_if_truncated(response: object) -> None:
+    """出力がmax_output_tokensの上限で打ち切られていたら、原因が分かるエラーを送出する（ADR-019）。
+
+    打ち切られたJSONはparse_ai_responseで「不正JSON」として弾かれるが、それだけでは真因（上限到達）
+    が判別できない。finish_reason=MAX_TOKENSを先に検知し、GEMINI_MODELの変更や入力短縮といった対処
+    へ繋がるメッセージを返す。
+    """
+    candidates = getattr(response, "candidates", None) or []
+    for candidate in candidates:
+        finish_reason = getattr(candidate, "finish_reason", None)
+        name = getattr(finish_reason, "name", None) or str(finish_reason or "")
+        if name == "MAX_TOKENS":
+            raise AIGenerationError(
+                "AIの出力が最大トークン数の上限に達して途中で打ち切られました。"
+                "入力（PDF）を短くするか、GEMINI_MODELで出力上限の大きいモデルへ切り替えてください。"
+            )
+
+
 class GeminiAIClient:
     """本番用のGeminiクライアント（ADR-010）。USE_MOCK_AI=false かつ GEMINI_API_KEY設定時のみ使う。"""
 
@@ -242,7 +260,6 @@ class GeminiAIClient:
     _DEFAULT_MODEL = "gemini-2.5-flash"
 
     # 帳票のHTML+CSS+JSONは長くなりやすい。出力が途中で切れると不正JSONになるため上限を広く取る。
-    # 思考モデル（Gemini 3系のflash等）は思考にも出力予算を使うため、既定より大きめに設定する。
     _MAX_OUTPUT_TOKENS = 16384
 
     def __init__(self, api_key: str, client: Optional[object] = None) -> None:
@@ -251,10 +268,15 @@ class GeminiAIClient:
         # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
         # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-019）。
         self._model = os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL).strip() or self._DEFAULT_MODEL
+        # 思考モデル（gemini-2.5-flash等）は思考トークンもmax_output_tokensの予算を消費するため、
+        # 動的思考が予算の大半を食うとJSON本体が出力途中で打ち切られ不正JSONになる。本タスクは
+        # PyMuPDF由来HTMLを保守しやすい構造へ作り替える構造化変換であり深い推論を要さないため、
+        # 思考を無効化して出力予算を全てJSON本体へ充てる（ADR-019）。
         # response_mime_typeでJSON出力を強制し、コードフェンスや前置きで壊れないようにする。
         self._config = genai_types.GenerateContentConfig(
             response_mime_type="application/json",
             max_output_tokens=self._MAX_OUTPUT_TOKENS,
+            thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
         )
 
     def generate(self, prompt: str) -> RenderResult:
@@ -279,6 +301,7 @@ class GeminiAIClient:
             text = response.text or ""
             # パース失敗の原因調査が主目的のため、parse_ai_responseの例外より前に出力全文を残す。
             _log_ai_payload("Geminiからレスポンスを受信", ai_model=self._model, ai_response=text)
+            _raise_if_truncated(response)
             return parse_ai_response(text)
 
         raise AIGenerationError("Gemini API呼び出しに失敗しました")

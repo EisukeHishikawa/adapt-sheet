@@ -10,6 +10,16 @@
     "playwright": {
       "command": "docker",
       "args": ["run", "-i", "--rm", "--init", "--pull=always", "mcr.microsoft.com/playwright/mcp"]
+    },
+    "aws": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--init", "--pull=always",
+        "--env", "AWS_REGION=ap-northeast-1",
+        "--env", "AWS_API_MCP_PROFILE_NAME=adapt-sheet",
+        "--volume", "${HOME}/.aws:/app/.aws",
+        "public.ecr.aws/awslabs-mcp/awslabs/aws-api-mcp-server:latest"
+      ]
     }
   }
 }

@@ -26,9 +26,11 @@ class PDFConverter(Protocol):
 
 
 class DoclingPDFConverter:
-    def __init__(self) -> None:
+    def __init__(self, converter: object = None) -> None:
         # モデルのロードは初回convert時に行われるため、ここは軽量なインスタンス生成のみ。
-        self._converter = DocumentConverter()
+        # converterはテスト側がDocumentConverter.convertの戻り値（status等）をフェイクへ
+        # 差し替えられるようにするための注入口（ai_client.py等と同じDI方針）。
+        self._converter = converter or DocumentConverter()
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
         # ディスクへの一時ファイル書き出しを避け、メモリ上のbytesを直接渡す。

@@ -1,46 +1,24 @@
-import email
 from io import BytesIO
 
 import httpx
 import pytest
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
 
 from app.services.docling_client import (
     PDFConversionError,
     RemoteDoclingHtmlExtractor,
     get_html_extractor,
 )
+from tests._pdf_test_helpers import (
+    build_multi_page_pdf as _build_multi_page_pdf,
+    client_with as _client_with,
+    extract_uploaded_file_bytes as _extract_uploaded_file_bytes,
+)
 
 # ADR-014/016: backend側はDoclingを直接呼ばず、docling-serviceへHTTPで委譲する。Doclingが担うのは
 # 単独のHTMLエンジンとしてのテキスト抽出のみで、レイアウトHTML（PyMuPDF由来）とは別物。
 # 実際のDocling変換の正しさはdocling-service/tests/test_converter.pyで検証済みのため、
 # ここではhttpx.MockTransportでHTTP呼び出しの配線（リクエスト形状・エラーマッピング）のみを検証する。
-
-
-def _client_with(handler) -> httpx.Client:
-    return httpx.Client(transport=httpx.MockTransport(handler))
-
-
-def _build_multi_page_pdf(page_widths: list) -> bytes:
-    # ページごとにmediaboxの幅を変えることで、どのページが送信されたかを識別できるようにする。
-    writer = PdfWriter()
-    for width in page_widths:
-        writer.add_blank_page(width=width, height=300)
-    buffer = BytesIO()
-    writer.write(buffer)
-    return buffer.getvalue()
-
-
-def _extract_uploaded_file_bytes(request: httpx.Request) -> bytes:
-    # httpxのmultipart/form-dataボディはemail.message互換の形式のため、Content-Typeヘッダー
-    # （boundary情報を含む）を先頭に付与した上でemailパーサーに渡し、"file"パートの本体を取り出す。
-    content_type = request.headers["content-type"]
-    raw = f"Content-Type: {content_type}\r\n\r\n".encode() + request.content
-    message = email.message_from_bytes(raw)
-    for part in message.get_payload():
-        if part.get_param("name", header="Content-Disposition") == "file":
-            return part.get_payload(decode=True)
-    raise AssertionError("multipartリクエストにfileパートが見つからない")
 
 
 def test_remote_extractor_returns_html_on_success():
@@ -98,7 +76,9 @@ def test_get_html_extractor_returns_remote_extractor():
 
 def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
     # adapt-sheetの帳票テンプレートは1ページ完結が前提のため、Doclingへの解析リクエスト（＝処理時間・
-    # コスト）を1ページ目分に抑える（ADR-015）。
+    # コスト）を1ページ目分に抑える（ADR-015）。first_page_only自体の切り詰め・フォールバック
+    # ロジックはtest_pdf_common.pyで純粋関数として直接検証済みのため、ここでは
+    # convert_to_htmlが実際にfirst_page_onlyを経由して送信する配線のみを確認する。
     multi_page_pdf = _build_multi_page_pdf([200, 300, 400])
     sent_page_widths = []
 
@@ -114,33 +94,3 @@ def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
 
     # 1ページ目（幅200）のみが送信され、2・3ページ目（幅300/400）は破棄されていること。
     assert sent_page_widths == [200.0]
-
-
-def test_remote_extractor_passes_through_content_unchanged_for_single_page_pdf():
-    single_page_pdf = _build_multi_page_pdf([200])
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        uploaded = _extract_uploaded_file_bytes(request)
-        reader = PdfReader(BytesIO(uploaded))
-        assert len(reader.pages) == 1
-        assert float(reader.pages[0].mediabox.width) == 200.0
-        return httpx.Response(200, json={"html": "<html>x</html>"})
-
-    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
-
-    extractor.convert_to_html("single.pdf", single_page_pdf)
-
-
-def test_remote_extractor_falls_back_to_original_bytes_when_not_a_valid_pdf():
-    # 不正なPDF（壊れている等）の切り詰めはdocling-service側の既存エラーハンドリング
-    # （422へのマッピング）に委ねるため、ページ抽出に失敗した場合は元のバイト列をそのまま送る。
-    invalid_content = b"not a real pdf content at all"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert _extract_uploaded_file_bytes(request) == invalid_content
-        return httpx.Response(422, json={"detail": "PDFの解析に失敗しました（テスト用）"})
-
-    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
-
-    with pytest.raises(PDFConversionError):
-        extractor.convert_to_html("broken.pdf", invalid_content)

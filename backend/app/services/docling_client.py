@@ -1,8 +1,8 @@
-"""Doclingによるテキスト抽出（Markdown）の呼び出しレイヤー（ADR-018/019）。
+"""Doclingによるテキスト抽出（HTML）の呼び出しレイヤー（ADR-018/023）。
 
 Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離しているため、本モジュールは
-HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。レイアウトHTMLの生成は
-pdf_layout.pyの責務（ADR-019）。
+HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。ADR-023により、Doclingは
+Markdownではなく単独のHTMLエンジンとして選択可能になった（AIを介さず変換結果をそのまま描画する）。
 """
 
 from __future__ import annotations
@@ -16,24 +16,24 @@ from app.services.pdf_common import PDFConversionError, first_page_only
 
 __all__ = [
     "PDFConversionError",
-    "PDFMarkdownExtractor",
-    "RemoteDoclingMarkdownExtractor",
-    "get_markdown_extractor",
+    "PDFHtmlExtractor",
+    "RemoteDoclingHtmlExtractor",
+    "get_html_extractor",
 ]
 
 
-class PDFMarkdownExtractor(Protocol):
+class PDFHtmlExtractor(Protocol):
     """本番/テストで差し替え可能にするための共通インターフェース（ai_client.AIClientと同じ方針）。"""
 
-    def convert_to_markdown(self, filename: str, content: bytes) -> str: ...
+    def convert_to_html(self, filename: str, content: bytes) -> str: ...
 
 
 # 未設定時の既定をcompose上のサービス名に合わせ、環境変数を明示しない単体実行でも動くようにする。
 _DEFAULT_DOCLING_SERVICE_URL = "http://docling:8100"
 
 
-class RemoteDoclingMarkdownExtractor:
-    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-018/019）。"""
+class RemoteDoclingHtmlExtractor:
+    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-018/023）。"""
 
     def __init__(
         self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None
@@ -44,7 +44,7 @@ class RemoteDoclingMarkdownExtractor:
         ).rstrip("/")
         self._client = client or httpx.Client()
 
-    def convert_to_markdown(self, filename: str, content: bytes) -> str:
+    def convert_to_html(self, filename: str, content: bytes) -> str:
         try:
             # コンテナ起動直後の初回変換ではOCRモデルのダウンロード（実測60秒超）が発生しうるため、
             # 通常の推論時間（数秒〜十数秒）より大きめのタイムアウトを取る。
@@ -62,7 +62,7 @@ class RemoteDoclingMarkdownExtractor:
                 f"{_extract_detail(response)}"
             )
 
-        return response.json()["markdown"]
+        return response.json()["html"]
 
 
 def _extract_detail(response: httpx.Response) -> str:
@@ -74,6 +74,6 @@ def _extract_detail(response: httpx.Response) -> str:
         return response.text
 
 
-def get_markdown_extractor() -> PDFMarkdownExtractor:
+def get_html_extractor() -> PDFHtmlExtractor:
     """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。"""
-    return RemoteDoclingMarkdownExtractor()
+    return RemoteDoclingHtmlExtractor()

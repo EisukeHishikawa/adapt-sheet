@@ -1,7 +1,7 @@
-"""DoclingによるPDF→Markdownテキスト抽出レイヤー（ADR-003/018/019）。
+"""DoclingによるPDF→HTMLテキスト抽出レイヤー（ADR-003/018/023）。
 
-レイアウト（座標・罫線・フォント）の再現はPyMuPDF（backend内）側が担うため、Doclingは本文テキストと
-その論理構造（見出し・表）の抽出だけを担当し、Markdownで返す（ADR-019）。
+ADR-023により、DoclingはMarkdownではなくHTMLを返す。Docling/pdf2htmlEX/PyMuPDFの3エンジンは
+AIを介さない単独の変換結果として直接プレビューされるため、出力形式をHTMLに揃えている。
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class PDFConversionError(Exception):
 class PDFConverter(Protocol):
     """テスト側がdependency_overridesで高速なフェイクへ差し替えるための共通インターフェース。"""
 
-    def convert_to_markdown(self, filename: str, content: bytes) -> str: ...
+    def convert_to_html(self, filename: str, content: bytes) -> str: ...
 
 
 class DoclingPDFConverter:
@@ -30,7 +30,7 @@ class DoclingPDFConverter:
         # モデルのロードは初回convert時に行われるため、ここは軽量なインスタンス生成のみ。
         self._converter = DocumentConverter()
 
-    def convert_to_markdown(self, filename: str, content: bytes) -> str:
+    def convert_to_html(self, filename: str, content: bytes) -> str:
         # ディスクへの一時ファイル書き出しを避け、メモリ上のbytesを直接渡す。
         stream = DocumentStream(name=filename, stream=io.BytesIO(content))
 
@@ -43,7 +43,7 @@ class DoclingPDFConverter:
         if result.status not in (ConversionStatus.SUCCESS, ConversionStatus.PARTIAL_SUCCESS):
             raise PDFConversionError(f"PDFの解析に失敗しました（status={result.status.value}）")
 
-        return result.document.export_to_markdown()
+        return result.document.export_to_html()
 
 
 def get_pdf_converter() -> PDFConverter:

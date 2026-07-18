@@ -17,13 +17,12 @@ describe('renderSheet', () => {
       .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
 
     const file = new File(['%PDF-1.4 dummy'], 'invoice.pdf', { type: 'application/pdf' })
-    await renderSheet({ html: '<p>x</p>', pdf: file })
+    await renderSheet({ prompt: '', pdf: file })
 
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const [url, init] = fetchSpy.mock.calls[0]
     expect(url).toBe('/api/render')
     const formData = init?.body as FormData
-    expect(formData.get('html')).toBe('<p>x</p>')
     expect(formData.get('pdf')).toBe(file)
   })
 
@@ -32,7 +31,7 @@ describe('renderSheet', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
 
-    await renderSheet({ html: '<p>x</p>' })
+    await renderSheet({ prompt: '' })
 
     const [, init] = fetchSpy.mock.calls[0]
     const formData = init?.body as FormData
@@ -43,19 +42,33 @@ describe('renderSheet', () => {
   // およびADR-019に基づきcssフィールドを持たないRenderRequestFieldsからは
   // cssが送信されようがないことを検証する。jsonは業務データがGeminiへの入力として
   // 不要になったためRenderRequestFieldsから削除済みで、そもそも送信されようがない
-  // （backend/app/main.pyのjson_fieldパラメータ廃止と対）。
+  // （backend/app/main.pyのjson_fieldパラメータ廃止と対）。htmlも同様の理由で
+  // ADR-023により削除済み（生成AIへPDFを直接送るため入力として不要）。
   it('promptフィールドが渡された場合、FormDataにそのまま含めて送信する', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
 
-    await renderSheet({ html: '<p>x</p>', prompt: '請求書レイアウトにして' })
+    await renderSheet({ prompt: '請求書レイアウトにして' })
 
     const [, init] = fetchSpy.mock.calls[0]
     const formData = init?.body as FormData
     expect(formData.get('prompt')).toBe('請求書レイアウトにして')
     expect(formData.has('css')).toBe(false)
     expect(formData.has('json')).toBe(false)
+    expect(formData.has('html')).toBe(false)
+  })
+
+  it('engineフィールドが渡された場合、FormDataにそのまま含めて送信する（ADR-023）', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
+
+    await renderSheet({ prompt: '', engine: 'claude' })
+
+    const [, init] = fetchSpy.mock.calls[0]
+    const formData = init?.body as FormData
+    expect(formData.get('engine')).toBe('claude')
   })
 })
 
@@ -82,7 +95,7 @@ describe('renderSheet（構造化エラーレスポンスの伝播）', () => {
     )
 
     // rejectされたRenderApiErrorのプロパティを検証する。
-    await expect(renderSheet({ html: '<p>x</p>' })).rejects.toMatchObject({
+    await expect(renderSheet({ prompt: '' })).rejects.toMatchObject({
       status: 502,
       code: 'AI_GENERATION_ERROR',
       backendMessage: 'AIによる生成に失敗しました。しばらくしてから再度お試しください。',
@@ -94,8 +107,8 @@ describe('renderSheet（構造化エラーレスポンスの伝播）', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }))
 
     // 例外の型と、フォールバック用にstatusが取れることを確認する。
-    await expect(renderSheet({ html: '<p>x</p>' })).rejects.toBeInstanceOf(RenderApiError)
-    await expect(renderSheet({ html: '<p>x</p>' })).rejects.toMatchObject({
+    await expect(renderSheet({ prompt: '' })).rejects.toBeInstanceOf(RenderApiError)
+    await expect(renderSheet({ prompt: '' })).rejects.toMatchObject({
       status: 500,
       backendMessage: null,
     })

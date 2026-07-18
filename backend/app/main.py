@@ -1,7 +1,7 @@
 import asyncio
-from typing import Optional
+from typing import Callable, Optional
 
-from fastapi import Depends, FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -17,11 +17,17 @@ from app.middleware import RequestContextMiddleware
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
+    CONVERTER_ENGINES,
+    GATED_ENGINES,
     build_prompt,
-    get_ai_client,
+    get_ai_client_factory,
     validate_render_result,
 )
-from app.services.docling_client import PDFMarkdownExtractor, get_markdown_extractor
+from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
+from app.services.pdf2htmlex_client import (
+    PDFHtmlExtractor as Pdf2HtmlExExtractor,
+    get_pdf2htmlex_extractor,
+)
 from app.services.pdf_layout import PDFLayoutConverter, get_layout_converter
 from app.services.pdf_common import PDFConversionError
 
@@ -54,59 +60,73 @@ class RenderResponse(BaseModel):
 
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
 async def render(
-    html: str = Form(""),
     # セキュリティ対策: promptはプロンプトインジェクションの温床になり得る自由入力のため、
     # フロント（PromptInput.tsxのmaxLength）と合わせて長さを二重に制限する。超過時は
     # RequestValidationError経由でapp/errors.pyが400 VALIDATION_ERRORへ変換する。
     prompt: str = Form("", max_length=100),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
+    # フロント（EngineSelect）が選択した生成エンジン（ADR-023）。7値のいずれか。
+    engine: str = Form("gemini_free"),
     pdf: Optional[UploadFile] = File(None),
     # Dependsで注入することで、テスト側がdependency_overridesにより成功/失敗や高速なフェイクへ
-    # 差し替えられるようにする（ADR-007）。
-    ai_client: AIClient = Depends(get_ai_client),
-    markdown_extractor: PDFMarkdownExtractor = Depends(get_markdown_extractor),
+    # 差し替えられるようにする（ADR-007）。ai_client_factoryはengineがリクエスト時にしか
+    # 決まらないため、AIClientインスタンスではなく関数を注入する（ADR-023）。
+    ai_client_factory: Callable[[str], AIClient] = Depends(get_ai_client_factory),
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
+    html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
+    pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
 ) -> RenderResponse:
-    # PDFがある場合は、PyMuPDF由来のレイアウトHTML（見た目）とDoclingのMarkdown（テキスト）の
-    # 両方をプロンプトのベースにする（ADR-019、docs/architecture.md 2節のシーケンス図）。
-    # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う（ADR-017）。
-    effective_html = html
-    markdown = ""
-    if pdf is not None:
+    # フェーズ5（Auth0導入、DEVELOPMENT.md ステップ26）まで、標準プランの生成AI
+    # （Gemini標準/Claude/OpenAI）は自由アクセスのユーザーに提供しない（ADR-023）。
+    # PDF処理・AI呼び出しより前に判定し、無駄な処理を避ける。
+    if engine in GATED_ENGINES:
+        raise HTTPException(status_code=403)
+
+    if engine in CONVERTER_ENGINES:
+        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする（ADR-023）。
+        if pdf is None:
+            raise HTTPException(status_code=400)
         content = await pdf.read()
         filename = pdf.filename or "uploaded.pdf"
-        effective_html, markdown = await _convert_pdf(
-            layout_converter, markdown_extractor, filename, content
+        html = await _convert_with_engine(
+            engine, layout_converter, html_extractor, pdf2htmlex_extractor, filename, content
         )
+        return RenderResponse(html=html, css="", json_={})
+
+    # 生成AI（gemini_free。gemini/claude/openaiは上記ゲートにより現状ここへは到達しない）。
+    # PDFがある場合はマルチモーダル入力として直接添付し、PyMuPDF/Docling経由の事前変換は
+    # 行わない（ADR-023）。PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う
+    # （ADR-017）。
+    pdf_bytes: Optional[bytes] = None
+    if pdf is not None:
+        pdf_bytes = await pdf.read()
 
     prompt_text = build_prompt(
-        html=effective_html,
-        markdown=markdown,
-        prompt=prompt,
-        width_mm=width_mm,
-        height_mm=height_mm,
+        prompt=prompt, width_mm=width_mm, height_mm=height_mm, has_pdf=pdf_bytes is not None
     )
 
-    result = await asyncio.to_thread(ai_client.generate, prompt_text)
+    ai_client = ai_client_factory(engine)
+    result = await asyncio.to_thread(ai_client.generate, prompt_text, pdf_bytes)
     validate_render_result(result)
 
     return RenderResponse(html=result.html, css=result.css, json_=result.data)
 
 
-async def _convert_pdf(
+async def _convert_with_engine(
+    engine: str,
     layout_converter: PDFLayoutConverter,
-    markdown_extractor: PDFMarkdownExtractor,
+    html_extractor: DoclingHtmlExtractor,
+    pdf2htmlex_extractor: Pdf2HtmlExExtractor,
     filename: str,
     content: bytes,
-) -> tuple:
-    """レイアウトHTML生成（PyMuPDF、backend内）とDocling（Markdown、別コンテナ）を並列に実行する（ADR-019）。
+) -> str:
+    """変換エンジン（docling/pdf2htmlex/pymupdf）ごとにPDF→HTML変換を行う（ADR-023）。
 
-    Doclingは初回モデルロードで分単位かかり、PyMuPDFの変換もCPUバウンドで数秒かかりうるため、
-    直列に呼ぶと待ち時間が単純に加算される。どちらも同期処理のため、スレッドへ逃がして
-    asyncio.gatherで並列化する。
+    いずれもAIを介さず、変換結果をそのまま描画結果として返す単独のエンジン。
     """
-    return await asyncio.gather(
-        asyncio.to_thread(layout_converter.convert_to_html, filename, content),
-        asyncio.to_thread(markdown_extractor.convert_to_markdown, filename, content),
-    )
+    if engine == "pymupdf":
+        return await asyncio.to_thread(layout_converter.convert_to_html, filename, content)
+    if engine == "docling":
+        return await asyncio.to_thread(html_extractor.convert_to_html, filename, content)
+    return await asyncio.to_thread(pdf2htmlex_extractor.convert_to_html, filename, content)

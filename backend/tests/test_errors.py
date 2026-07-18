@@ -8,7 +8,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.ai_client import RenderResult, get_ai_client
+from app.services.ai_client import RenderResult, get_ai_client_factory
 
 client = TestClient(app)
 
@@ -39,61 +39,64 @@ def test_ai_generation_error_returns_structured_body():
     from app.services.ai_client import AIGenerationError
 
     class _FailingAIClient:
-        def generate(self, prompt: str) -> RenderResult:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise AIGenerationError("AI呼び出しに失敗しました（テスト用）")
 
-    app.dependency_overrides[get_ai_client] = lambda: _FailingAIClient()
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FailingAIClient())
     try:
         response = client.post("/api/render", data={})
         assert response.status_code == 502
         request_id = _assert_error_envelope(response.json(), "AI_GENERATION_ERROR")
         assert request_id == response.headers["X-Request-ID"]
     finally:
-        app.dependency_overrides.pop(get_ai_client, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+
+
+def test_free_access_forbidden_returns_structured_body():
+    # ADR-023: フェーズ5まで自由アクセスのユーザーは標準プランの生成AIを利用できない。
+    response = client.post("/api/render", data={"engine": "claude"})
+
+    assert response.status_code == 403
+    request_id = _assert_error_envelope(response.json(), "FREE_ACCESS_FORBIDDEN")
+    assert request_id == response.headers["X-Request-ID"]
 
 
 def test_pdf_conversion_error_returns_structured_body():
-    from app.services.docling_client import get_markdown_extractor
-    from app.services.pdf_layout import get_layout_converter
+    from app.services.docling_client import get_html_extractor
     from app.services.pdf_common import PDFConversionError
 
     class _FailingExtractor:
-        def convert_to_markdown(self, filename: str, content: bytes) -> str:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
 
-    class _FakeLayoutConverter:
-        def convert_to_html(self, filename: str, content: bytes) -> str:
-            return "<html><body>layout</body></html>"
-
-    app.dependency_overrides[get_markdown_extractor] = lambda: _FailingExtractor()
-    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
+    app.dependency_overrides[get_html_extractor] = lambda: _FailingExtractor()
     try:
         response = client.post(
             "/api/render",
+            data={"engine": "docling"},
             files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
         )
         assert response.status_code == 422
         request_id = _assert_error_envelope(response.json(), "PDF_CONVERSION_ERROR")
         assert request_id == response.headers["X-Request-ID"]
     finally:
-        app.dependency_overrides.pop(get_markdown_extractor, None)
-        app.dependency_overrides.pop(get_layout_converter, None)
+        app.dependency_overrides.pop(get_html_extractor, None)
 
 
 def test_unhandled_exception_returns_500_structured_body():
     # 登録済みハンドラで捕捉されない想定外例外は、ミドルウェアが500エンベロープへ変換する。
     class _BrokenAIClient:
-        def generate(self, prompt: str) -> RenderResult:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise ValueError("想定外の内部エラー（テスト用）")
 
-    app.dependency_overrides[get_ai_client] = lambda: _BrokenAIClient()
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _BrokenAIClient())
     try:
         response = client.post("/api/render", data={})
         assert response.status_code == 500
         request_id = _assert_error_envelope(response.json(), "INTERNAL_ERROR")
         assert request_id == response.headers["X-Request-ID"]
     finally:
-        app.dependency_overrides.pop(get_ai_client, None)
+        app.dependency_overrides.pop(get_ai_client_factory, None)
 
 
 def test_success_response_has_request_id_header():

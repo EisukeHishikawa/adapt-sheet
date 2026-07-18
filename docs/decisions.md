@@ -290,6 +290,33 @@
 
 ---
 
+## ADR-023: モデル選択機能の追加（生成AI4種＋変換エンジン3種）とPDF直接送信方式への転換
+
+- **ステータス**: Accepted
+- **コンテキスト**: 描画ボタンの隣で生成エンジンを選べるようにしたいという要望があった。選択肢はGemini API（無料）／Gemini API／Claude API／OpenAI API（生成AI、LLMがHTML/CSS/JSONを作る）と、Docling／pdf2htmlEX／PyMuPDF（AIを介さない変換エンジン、変換結果をそのまま描画結果にする）の計7つ。あわせて、生成AIへのリクエストからHTML・JSON・Docling抽出テキストを一切送らない方針への転換も求められた。これはADR-019で確立した「PyMuPDF由来のレイアウトHTML（見た目の正）とDocling由来のMarkdown（テキストの正）を両方Geminiへ渡す」という設計を実質的に置き換える。Gemini/Claude/OpenAIはいずれもPDFをファイルとして直接添付するマルチモーダル入力に対応しているため、事前変換を挟まずPDFそのものを見た目の正として読ませる方式に切り替えた。
+- **決定**:
+  - **エンジンの型**: `backend/app/services/ai_client.py`に`RenderEngine`（`gemini_free`/`gemini`/`claude`/`openai`/`docling`/`pdf2htmlex`/`pymupdf`の7値）と、`GATED_ENGINES`（`gemini`/`claude`/`openai`）・`AI_ENGINES`・`CONVERTER_ENGINES`の集合を定義する。
+  - **生成AIへの入力からHTML/JSON/Doclingテキストを排除**: `build_prompt`のシグネチャを`build_prompt(*, prompt, width_mm, height_mm, has_pdf)`に変更し、`html`・`markdown`引数を廃止した。PDFがある場合は「添付したPDFファイルが見た目の正」という指示に、無い場合は「生成方針のみから新規生成する」指示に分岐する。`AIClient.generate(prompt: str, pdf: Optional[bytes] = None)`にシグネチャを変更し、PDFバイト列を直接渡す。`GeminiAIClient`は`genai_types.Part.from_bytes(mime_type="application/pdf")`で、`ClaudeAIClient`は`{"type": "document", "source": {"type": "base64", "media_type": "application/pdf", ...}}`で、`OpenAIAIClient`はResponses APIの`input_file`（`file_data`にdata URI）でそれぞれ添付する。PDF未添付でAIエンジンを選んだ場合はプロンプトのみを送信する（既存HTMLの参照は行わない）。
+  - **標準プランのゲート**: `app/main.py`の`render`は、`engine`がPDF処理・AI呼び出しより前に`GATED_ENGINES`に含まれるかを判定し、含まれれば即座に`HTTPException(status_code=403)`を送出する。`app/errors.py`の`_ERROR_CATALOG`に`403: ("FREE_ACCESS_FORBIDDEN", ...)`を追加し、既存の`http_exception_handler`（ADR-017）がそのまま構造化エラーへ整形する。フェーズ5（Auth0導入、DEVELOPMENT.md ステップ26）でアカウント登録ユーザーのみ解禁する想定で、ゲート判定はmain.py側の1箇所に閉じているため、フェーズ5では条件を「未ログイン」へ差し替えるだけで済む。Claude/OpenAIクライアント自体はAPIキーを設定すればすぐ動く状態まで実装済み（`get_ai_client`が`ANTHROPIC_API_KEY`/`OPENAI_API_KEY`を読む）。
+  - **AIクライアントのファクトリをengine対応に変更**: `get_ai_client(engine: str = "gemini_free")`に変更し、`gemini_free`は既存のAI_PROVIDER環境変数によるLlama切り替え（ADR-011）を引き続き尊重する（後方互換）。FastAPIのDependsはengineがリクエスト時にしか決まらないため、AIClientインスタンスではなく`get_ai_client`関数自体を注入する`get_ai_client_factory()`を新設し、`app/main.py`側で`ai_client_factory(engine)`と呼び出す。
+  - **Gemini標準プランのモデル分離**: `GeminiAIClient.__init__`に`standard: bool`引数を追加し、無料枠（既定`gemini-2.5-flash`、`GEMINI_MODEL`で上書き）と標準プラン（既定`gemini-2.5-pro`、`GEMINI_STANDARD_MODEL`で上書き）の既定モデルを分ける。
+  - **Claude/OpenAIクライアントを新設**: `ClaudeAIClient`（`anthropic`パッケージ、既定モデル`claude-opus-4-8`、`CLAUDE_MODEL`で上書き）、`OpenAIAIClient`（`openai`パッケージ、Responses API、既定モデル`gpt-5.1`、`OPENAI_MODEL`で上書き）を追加した。いずれも`parse_ai_response`・`validate_render_result`（既存の共通関数）を再利用し、レスポンス契約（docs/spec.md 3.1）を崩さない。
+  - **DoclingをMarkdownからHTMLへ変更**: `docling-service/app/converter.py`の`DoclingPDFConverter.convert_to_html`（旧`convert_to_markdown`）が`result.document.export_to_html()`を返す。`docling-service`の`POST /convert`レスポンスキーも`{"markdown": ...}`から`{"html": ...}`へ変更した。`backend/app/services/docling_client.py`は`PDFHtmlExtractor`/`RemoteDoclingHtmlExtractor`/`get_html_extractor`にリネームした。DoclingはAIへのテキスト入力ではなく、単独の変換エンジン（`engine=docling`）として選択されたときのみ呼ばれる。
+  - **pdf2htmlEXを専用コンテナとして復活**: ADR-019でPyMuPDFへの置き換えにより撤去されたpdf2htmlEXを、docling-service同様の専用コンテナ（`pdf2htmlex-service`）として復活させた。pdf2htmlEXバイナリはDebian/Ubuntu標準リポジトリでの配布が終了しており、`python:3.9-slim`ベースには導入できない（apt-cache検証済み）。ベースイメージには`pdf2htmlex/pdf2htmlex`のUbuntu 20.04（focal）タグを採用し、backend/docling-serviceと合わせたPython 3.9系を`apt install python3.9`＋`get-pip.py`（Python 3.9専用URL）で追加導入し、fastapi==0.128.8等の既存バージョンをそのまま使えるようにした。当初検討したAlpineタグ（musl 1.1）は、`ruff`がmusllinux_1_2向けの配布しか持たずソースビルドも失敗するため採用を見送った。`app/converter.py`（`Pdf2HtmlExConverter`）が`pdf2htmlEX`をsubprocessで呼び出し、フォント・画像・CSSを埋め込んだ自己完結HTMLを1ページ目分のみ生成する。`backend/app/services/pdf2htmlex_client.py`（`RemotePdf2HtmlExExtractor`）がdocling_clientと同型のHTTPクライアントとして呼び出す。
+  - **PyMuPDFを単独エンジンとして公開**: 既存の`PyMuPDFLayoutConverter.convert_to_html`（`backend/app/services/pdf_layout.py`）を新規実装なしでそのまま`engine=pymupdf`の変換エンジンとして公開した。
+  - **変換エンジンの描画**: `docling`/`pdf2htmlex`/`pymupdf`はAIを介さず、変換結果をそのまま`RenderResponse(html=..., css="", json_={})`として返す。PDF必須（未添付時は400）。
+  - **フロントのEngineSelect**: `frontend/src/components/EngineSelect.tsx`を新設し、既存の`ui/select.tsx`（Base UI Select、SizeControlsと同じ「Selectの項目をアイコン化する」パターン）を用いて7項目をアイコン・ラベル・1行の説明文とともに表示する。ゲート対象（Gemini標準/Claude/OpenAI）にはロックアイコンを添えるが選択自体は無効化しない。実際に描画を押した時点でバックエンドが403を返し、既存のエラーメッセージ表示経路（`sheetStore.messageForStatus`）でトースト表示する設計にすることで、フェーズ5でゲートを解除してもフロント側の変更が不要になるようにした。`sheetStore`に`engine`（既定`gemini_free`）・`setEngine`を追加し、`fetchRender`のリクエストに含める。`htmlContent`はもはやAIへの入力として不要なため、リクエストへの送信自体をやめた（`RenderRequestFields`からも`html`を削除）。
+- **理由**: PDFを直接AIへ渡すマルチモーダル入力は、PyMuPDFの絶対座標div変換やDoclingのMarkdown化という機械的な中間表現より情報の欠落が少なく、AI自身のPDF読解能力を活かせる。変換エンジンを独立した選択肢として公開することで、ユーザーは「AIによる整形」と「機械的な変換結果そのもの」を直接比較できる。ゲート判定をmain.pyの1箇所に集約し、Claude/OpenAIクライアント自体は完成させておくことで、フェーズ5のAuth0導入時にゲート条件を差し替えるだけで済み、クライアント実装のやり直しが不要になる。
+- **トレードオフ**:
+  - **ADR-019の一部を上書き**: 「PyMuPDF由来HTML＋Docling由来Markdownを両方Geminiへ渡す」という設計は本ADRにより終了した。ADR-019に記録した罫線・フォントサイズの上限指示等のプロンプト設計自体は`build_prompt`にそのまま引き継いでいるが、入力の組み立て方（html/markdown引数）は本ADRが優先する。
+  - **pdf2htmlex-serviceの実行基盤**: ベースイメージ`pdf2htmlex/pdf2htmlex`はx86_64タグのみが提供されており、Apple Silicon等のarm64ホストでは常にQEMUエミュレーション下で動作する（ビルド・実行とも著しく遅い）。将来的にはarm64ネイティブビルドの検討、またはCI/本番をx86_64ホストに統一する運用上の配慮が必要。
+  - **pdf2htmlEXのライセンス**: AGPL（PyMuPDFと同様、ADR-019参照）。本番でSaaSとして提供する場合はAGPLの適用範囲の検討が必要。
+  - **OpenAIモデルの既定値**: `gpt-5.1`は実装時点の想定であり、実際のAPI形状（Responses APIのinput_file仕様含む）は本番投入前に公式ドキュメントで再確認が必要。`OPENAI_MODEL`環境変数で随時上書き可能にしている。
+  - **Gemini標準プランの既定モデル**: `gemini-2.5-pro`を暫定の既定値としたが、コスト・精度のバランスは運用しながら調整する前提。
+- **関連**: ADR-010（Gemini移行）、ADR-011（Llama経路）、ADR-017（構造化エラー）、ADR-018（docling-service分離）、ADR-019（本ADRが一部を上書きする帳票生成品質の改善）、ADR-021（Worktree/ブランチの最小構成維持）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

@@ -28,11 +28,6 @@ export interface components {
         /** Body_render_api_render_post */
         Body_render_api_render_post: {
             /**
-             * Html
-             * @default
-             */
-            html: string;
-            /**
              * Prompt
              * @default
              */
@@ -41,6 +36,11 @@ export interface components {
             width_mm?: number | null;
             /** Height Mm */
             height_mm?: number | null;
+            /**
+             * Engine
+             * @default gemini_free
+             */
+            engine: string;
             /** Pdf */
             pdf?: string | null;
         };

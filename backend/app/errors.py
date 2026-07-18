@@ -23,6 +23,10 @@ logger = logging.getLogger("app.errors")
 # 一次ソースとしつつ齟齬が出ないようにする。
 _ERROR_CATALOG: dict[int, tuple[str, str]] = {
     400: ("VALIDATION_ERROR", "リクエスト内容に誤りがあります。入力値をご確認ください。"),
+    403: (
+        "FREE_ACCESS_FORBIDDEN",
+        "現在、この生成AIは登録ユーザーのみご利用いただけます。アカウント機能の追加までお待ちください。",
+    ),
     413: ("PAYLOAD_TOO_LARGE", "PDFファイルのサイズが上限を超えています。"),
     422: ("PDF_CONVERSION_ERROR", "PDFの解析に失敗しました。ファイルの内容をご確認ください。"),
     429: ("RATE_LIMITED", "リクエストが混み合っています。しばらくしてから再度お試しください。"),

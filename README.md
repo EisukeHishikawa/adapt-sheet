@@ -1,13 +1,13 @@
 # adapt-sheet
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。既存PDFの解析（PyMuPDFによるレイアウト再現＋Doclingによるテキスト抽出）とGemini APIによる生成、リアルタイムプレビューを統合したSPA。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA（ADR-023）。
 
 詳細な構想・要件は [`planning/brainstorm.md`](./planning/brainstorm.md)、開発の進め方は [`DEVELOPMENT.md`](./DEVELOPMENT.md) を参照。
 
 ## 技術スタック
 
 - **フロントエンド**: React / TypeScript / Vite / Zustand / shadcn/ui / TailwindCSS
-- **バックエンド**: Python / FastAPI / PyMuPDF / Docling / Gemini SDK / SQLAlchemy
+- **バックエンド**: Python / FastAPI / PyMuPDF / Docling / pdf2htmlEX / Gemini SDK / Anthropic SDK / OpenAI SDK / SQLAlchemy
 - **型同期**: openapi-typescript（FastAPIの`openapi.json`からフロント用TypeScript型を生成。ADR-006参照）
 - **テスト**: Vitest + React Testing Library + MSW / pytest / Playwright
 - **インフラ**: Terraform / AWS (Lambda, CloudFront, S3, API Gateway, WAF) / GitHub Actions
@@ -36,16 +36,21 @@ docker compose up --build
 
 アプリは**常に同じポート**（frontend=`5173`、backend=`8000`。`docker-compose.yml`のマッピング、`frontend/vite.config.ts`の`port`/`strictPort`で固定）で起動する。別ポートへの自動退避は行わない（ポートずれで古いインスタンスを誤認する事故を防ぐため）。既に起動済みの場合は、同一ポートでのクリーンな単一インスタンスを保つため`docker compose up -d --force-recreate frontend backend`等で作り直す（複数インスタンスを別ポートで並行起動しない）。
 
-backend/frontend/doclingはそれぞれ`./backend`・`./frontend`・`./docling-service`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。
+backend/frontend/docling/pdf2htmlexはそれぞれ`./backend`・`./frontend`・`./docling-service`・`./pdf2htmlex-service`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`AI_PROVIDER=gemini`・`GEMINI_API_KEY`に上書きする。
 
-PDF解析は2つの経路を**並列**に実行する（[docs/decisions.md](./docs/decisions.md) ADR-018/019参照）。
+描画ボタンの隣（`EngineSelect`）で、7つの生成エンジンを選べる（[docs/decisions.md](./docs/decisions.md) ADR-023参照）。
 
-| 経路 | 役割 | 出力 |
+| エンジン | 種別 | 説明 |
 |---|---|---|
-| `pdf_layout`（backend内・PyMuPDF） | レイアウト（座標・罫線・背景）の再現。**見た目の正** | HTML（テキスト・罫線・背景を絶対座標のdivへ） |
-| `docling`（別コンテナ） | 本文テキストと論理構造の抽出。**テキストの正** | Markdown |
+| Gemini API（無料） | 生成AI | PDFを直接読み取り、無料枠モデルで整形。既定エンジン |
+| Gemini API | 生成AI（標準プラン） | フェーズ5まで自由アクセスのユーザーは利用不可（403） |
+| Claude API | 生成AI（標準プラン） | 同上 |
+| OpenAI API | 生成AI（標準プラン） | 同上 |
+| Docling | 変換エンジン（AIなし） | PDFのテキスト・論理構造をHTML化し、そのまま描画結果にする |
+| pdf2htmlEX | 変換エンジン（AIなし） | PDFの見た目をフォント・画像埋め込みでそのままHTML化する |
+| PyMuPDF | 変換エンジン（AIなし） | PDFのレイアウト（座標・罫線・背景）を絶対座標のdivで再現する |
 
-Geminiにはこの2つを両方渡し、「レイアウトはHTML、文字列はMarkdownを正とする」役割分担で整形させる。
+生成AI（Gemini/Claude/OpenAI）はPDFをファイルとしてそのままマルチモーダル入力に添付する。PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない（ADR-023。ADR-018/019で採用していた「レイアウトHTML＋Docling Markdownの両方をGeminiへ渡す」方式は本ADRで置き換えられた）。Docling/pdf2htmlEX/PyMuPDFを選んだ場合はAIを一切呼ばず、各エンジンの変換結果をそのまま描画結果として返す。
 
 実際にGeminiへ渡したプロンプト全文と、Geminiが返した出力全文はバックエンドのログで確認できる（`docker-compose.yml`で`LOG_AI_PAYLOAD=true`を設定済み。ADR-022）。ログは1行1レコードのJSONのため、`jq`で該当フィールドだけを取り出すと読みやすい。
 
@@ -74,10 +79,13 @@ docker compose restart frontend
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
-docker compose exec docling pytest                       # doclingサービス（テキスト抽出専用）の全テスト実行
+docker compose exec docling pytest                       # doclingサービス（PDF→HTML変換専用）の全テスト実行
 docker compose exec docling ruff check .                  # doclingサービスの静的解析
 docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
 docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8100/convert # /convertを直接叩いて動作確認（ホスト非公開のため、docling自身にexecして呼び出す）
+docker compose exec pdf2htmlex pytest                     # pdf2htmlex-service（PDF→HTML変換専用）の全テスト実行
+docker compose exec pdf2htmlex ruff check .                # pdf2htmlex-serviceの静的解析
+docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8200/convert # /convertを直接叩いて動作確認
 docker compose exec backend pytest tests/test_pdf_layout.py -v # レイアウトHTML生成（PyMuPDF、backend内モジュール・ADR-019）のテスト
 docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
 docker compose exec frontend npm run lint                # ESLint
@@ -100,10 +108,15 @@ docker compose exec -T backend python -c "from app.services.pdf_layout import Py
 docker compose cp backend:/tmp/output.html "/path/to/output.html"
 open "/path/to/output.html"   # ブラウザでレイアウトの再現度を目視確認できる
 
-# Docling（Markdown）: 同様にコピーして/convertを叩き、markdownフィールドを取り出す
+# Docling（HTML）: 同様にコピーして/convertを叩き、htmlフィールドを取り出す
 docker compose cp "/path/to/input.pdf" docling:/tmp/input.pdf
 docker compose exec -T docling curl -sf -F "file=@/tmp/input.pdf" http://localhost:8100/convert \
-  | python3 -c "import json,sys; sys.stdout.write(json.load(sys.stdin)['markdown'])" > "/path/to/output.md"
+  | python3 -c "import json,sys; sys.stdout.write(json.load(sys.stdin)['html'])" > "/path/to/docling-output.html"
+
+# pdf2htmlEX（HTML）: 同様にコピーして/convertを叩き、htmlフィールドを取り出す
+docker compose cp "/path/to/input.pdf" pdf2htmlex:/tmp/input.pdf
+docker compose exec -T pdf2htmlex curl -sf -F "file=@/tmp/input.pdf" http://localhost:8200/convert \
+  | python3 -c "import json,sys; sys.stdout.write(json.load(sys.stdin)['html'])" > "/path/to/pdf2htmlex-output.html"
 ```
 
 ### 型同期

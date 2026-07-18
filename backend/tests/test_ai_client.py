@@ -1,5 +1,6 @@
 import logging
 from types import SimpleNamespace
+from typing import Optional
 
 import pytest
 import requests
@@ -365,18 +366,24 @@ def test_parse_ai_response_rejects_missing_keys():
 
 
 class _StubGeminiModels:
-    def __init__(self, failures: int, response_text: str):
+    def __init__(self, failures: int, response_text: str, finish_reason: Optional[str] = None):
         self._remaining_failures = failures
         self._response_text = response_text
+        self._finish_reason = finish_reason
         self.call_count = 0
+        self.last_config = None
 
     def generate_content(self, model, contents, config=None):
         self.call_count += 1
         self.last_model = model
+        self.last_config = config
         if self._remaining_failures > 0:
             self._remaining_failures -= 1
             raise genai_errors.ServerError(503, {"error": {"message": "high demand"}})
-        return SimpleNamespace(text=self._response_text)
+        candidates = None
+        if self._finish_reason is not None:
+            candidates = [SimpleNamespace(finish_reason=SimpleNamespace(name=self._finish_reason))]
+        return SimpleNamespace(text=self._response_text, candidates=candidates)
 
 
 class _StubGeminiClient:
@@ -449,6 +456,30 @@ def test_gemini_client_uses_model_from_env(monkeypatch):
     client.generate("prompt")
 
     assert models.last_model == "gemini-1.5-flash"
+
+
+def test_gemini_client_disables_thinking_to_preserve_output_budget():
+    # 思考モデル（gemini-2.5-flash等）は思考にmax_output_tokensの予算を食うため、思考を無効化して
+    # 出力予算をJSON本体へ全て充て、出力途中の打ち切り（不正JSON）を防ぐ（ADR-019）。
+    models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    client.generate("prompt")
+
+    assert models.last_config.thinking_config.thinking_budget == 0
+
+
+def test_gemini_client_raises_clear_error_when_output_truncated():
+    # 出力がmax_output_tokensの上限で打ち切られた場合、opaqueな「不正JSON」ではなく、原因（上限到達）が
+    # 分かるエラーを返し、将来の再発時に切り分け可能にする（ADR-019）。
+    truncated_json = '{"html": "<p>{{x}}</p>", "css": "body'
+    models = _StubGeminiModels(
+        failures=0, response_text=truncated_json, finish_reason="MAX_TOKENS"
+    )
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with pytest.raises(AIGenerationError, match="上限"):
+        client.generate("prompt")
 
 
 def _ai_logs(caplog):

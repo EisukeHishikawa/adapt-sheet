@@ -197,6 +197,20 @@
 
 ---
 
+## ADR-024: 開発用Dockerイメージからのbuild-essential除去（イメージ軽量化）
+
+- **ステータス**: Accepted
+- **コンテキスト**: フェーズ4（インフラ構築・コールドスタート高速化）に入る前に、開発用Compose構成のDockerイメージを計測したところ、`backend`が939MB、`docling`が2.81GBだった。両イメージとも`build-essential`（gcc/g++/cpp/binutils等）をaptで導入していたが、コメント上の理由は「manylinuxホイールが無い一部依存のソースビルドに備えた予防的措置」であり、実際にソースビルドが発生している依存は存在しなかった（`requirements.txt`の全依存がaarch64/manylinuxのバイナリwheelで導入できる）。
+- **決定**:
+  - `backend/Dockerfile`・`docling-service/Dockerfile`の`apt-get install`から`build-essential`を除去する。`docling`側の`libgl1`/`libglib2.0-0`/`libgomp1`（opencv-python/torchが実行時に要求する共有ライブラリ）と、両者の`curl`は引き続き残す。
+  - dev deps（`pytest`/`ruff`）は`docker compose exec ... pytest`等のテストコマンド（CLAUDE.md参照）で使うため、開発用イメージには意図的に同梱したままとする。
+- **理由**: 予防的に含めていた約280MBのツールチェーンが実際には使われておらず、除去してもビルド（wheel導入のみ）・実行（実PDF変換の結合テストを含むpytest全通過）に影響がないことを実測で確認した。イメージ縮小はビルド・pull・Lambdaのコールドスタートいずれにも寄与する。
+- **トレードオフ**: 将来`requirements.txt`にwheel未提供の依存を追加した場合、pip installがソースビルドに失敗する。その際は当該Dockerfileに`build-essential`を再追加する（マルチステージ化でビルド専用ステージに閉じ込める案はフェーズ4のLambda向け本番イメージ設計時に検討する）。
+- **実測**: `backend` 939MB → 494MB、`docling` 2.81GB → 2.36GB（合計約900MB削減）。
+- **関連**: ADR-010（Docker Compose化）、ADR-014（docling-service分離）。フェーズ4ステップ24（コールドスタート高速化・Doclingモデル焼き込み）の前段整備。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

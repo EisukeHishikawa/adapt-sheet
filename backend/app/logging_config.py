@@ -26,7 +26,7 @@ class JsonLogFormatter(logging.Formatter):
         "status_code",
         "duration_ms",
         "detail",
-        # AI生成の入出力全文（ADR-028）。app/services/ai_client.pyがLOG_AI_PAYLOAD有効時のみ付与する。
+        # AI生成の入出力全文（ADR-022）。app/services/ai_client.pyがLOG_AI_PAYLOAD有効時のみ付与する。
         "ai_model",
         "ai_prompt",
         "ai_response",

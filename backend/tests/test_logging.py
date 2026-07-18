@@ -69,7 +69,7 @@ def test_unhandled_exception_is_logged_with_traceback(caplog):
 
 
 def test_json_formatter_outputs_ai_payload_fields():
-    # ADR-028: Geminiの入出力全文はフォーマッタの許可リストに載っている場合のみJSONへ出る。
+    # ADR-022: Geminiの入出力全文はフォーマッタの許可リストに載っている場合のみJSONへ出る。
     record = logging.LogRecord(
         name="app.ai",
         level=logging.INFO,

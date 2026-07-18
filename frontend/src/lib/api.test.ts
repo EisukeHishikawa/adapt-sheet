@@ -113,4 +113,33 @@ describe('renderSheet（構造化エラーレスポンスの伝播）', () => {
       backendMessage: null,
     })
   })
+
+  it('エラーボディにrequest_idが無くても、X-Request-IDヘッダーから相関IDを補完する', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: '想定外のエラー' } }),
+        { status: 500, headers: { 'X-Request-ID': 'header-only-request-id' } },
+      ),
+    )
+
+    await expect(renderSheet({ prompt: '' })).rejects.toMatchObject({
+      requestId: 'header-only-request-id',
+    })
+  })
+})
+
+// 200応答だがボディがJSONとして解釈できない場合、SyntaxErrorをそのまま伝播させず
+// 意味の伝わるエラーへ変換することを検証する。
+describe('renderSheet（200応答だがボディが不正な場合）', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('本文が空/不正なJSONの場合、意味の伝わるエラーメッセージを投げる', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('not json', { status: 200 }))
+
+    await expect(renderSheet({ prompt: '' })).rejects.toThrow(
+      '/api/render のレスポンスがJSONとして解釈できませんでした',
+    )
+  })
 })

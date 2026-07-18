@@ -1,4 +1,6 @@
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -23,3 +25,49 @@ def test_pdf2htmlex_converter_rejects_invalid_pdf_bytes():
 
     with pytest.raises(PDFConversionError):
         converter.convert_to_html("broken.pdf", b"not a real pdf content at all")
+
+
+# 以下、実pdf2htmlEXバイナリ（重い・環境依存）を経由せず、subprocess.run自体をフェイクへ
+# 差し替えて、convert_to_html自身のエラーハンドリング分岐を検証する。
+
+
+def test_pdf2htmlex_converter_raises_pdf_conversion_error_on_timeout():
+    def fake_run(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="pdf2htmlEX", timeout=120)
+
+    converter = Pdf2HtmlExConverter(run=fake_run)
+
+    with pytest.raises(PDFConversionError, match="タイムアウト"):
+        converter.convert_to_html("sample.pdf", b"dummy")
+
+
+def test_pdf2htmlex_converter_raises_pdf_conversion_error_on_os_error():
+    # バイナリ自体が存在しない・実行権限が無い等、起動自体に失敗するケース。
+    def fake_run(*args, **kwargs):
+        raise OSError("pdf2htmlEX not found")
+
+    converter = Pdf2HtmlExConverter(run=fake_run)
+
+    with pytest.raises(PDFConversionError, match="実行に失敗"):
+        converter.convert_to_html("sample.pdf", b"dummy")
+
+
+def test_pdf2htmlex_converter_raises_pdf_conversion_error_on_non_zero_returncode():
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=1, stderr=b"pdf2htmlEX: invalid PDF")
+
+    converter = Pdf2HtmlExConverter(run=fake_run)
+
+    with pytest.raises(PDFConversionError, match="invalid PDF"):
+        converter.convert_to_html("broken.pdf", b"dummy")
+
+
+def test_pdf2htmlex_converter_raises_pdf_conversion_error_when_output_file_missing():
+    # returncode=0（成功扱い）でも、何らかの理由で出力ファイルが生成されなかったケース。
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stderr=b"")
+
+    converter = Pdf2HtmlExConverter(run=fake_run)
+
+    with pytest.raises(PDFConversionError, match="生成しませんでした"):
+        converter.convert_to_html("sample.pdf", b"dummy")

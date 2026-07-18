@@ -1,42 +1,23 @@
-import email
 from io import BytesIO
 
 import httpx
 import pytest
-from pypdf import PdfReader, PdfWriter
+from pypdf import PdfReader
 
 from app.services.pdf2htmlex_client import (
     PDFConversionError,
     RemotePdf2HtmlExExtractor,
     get_pdf2htmlex_extractor,
 )
+from tests._pdf_test_helpers import (
+    build_multi_page_pdf as _build_multi_page_pdf,
+    client_with as _client_with,
+    extract_uploaded_file_bytes as _extract_uploaded_file_bytes,
+)
 
 # ADR-016: backend側はpdf2htmlEXを直接呼ばず、pdf2htmlex-serviceへHTTPで委譲する
 # （docling_clientと同じ分離方針）。ここではhttpx.MockTransportでHTTP呼び出しの配線
 # （リクエスト形状・エラーマッピング）のみを検証する。
-
-
-def _client_with(handler) -> httpx.Client:
-    return httpx.Client(transport=httpx.MockTransport(handler))
-
-
-def _build_multi_page_pdf(page_widths: list) -> bytes:
-    writer = PdfWriter()
-    for width in page_widths:
-        writer.add_blank_page(width=width, height=300)
-    buffer = BytesIO()
-    writer.write(buffer)
-    return buffer.getvalue()
-
-
-def _extract_uploaded_file_bytes(request: httpx.Request) -> bytes:
-    content_type = request.headers["content-type"]
-    raw = f"Content-Type: {content_type}\r\n\r\n".encode() + request.content
-    message = email.message_from_bytes(raw)
-    for part in message.get_payload():
-        if part.get_param("name", header="Content-Disposition") == "file":
-            return part.get_payload(decode=True)
-    raise AssertionError("multipartリクエストにfileパートが見つからない")
 
 
 def test_remote_extractor_returns_html_on_success():

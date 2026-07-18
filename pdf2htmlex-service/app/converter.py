@@ -11,7 +11,7 @@ from __future__ import annotations
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Optional, Protocol
 
 # ベースイメージ（pdf2htmlex/pdf2htmlex）のENTRYPOINTと同じ絶対パス。
 _PDF2HTMLEX_BIN = "/usr/local/bin/pdf2htmlEX"
@@ -30,6 +30,11 @@ class PDFConverter(Protocol):
 
 
 class Pdf2HtmlExConverter:
+    def __init__(self, run: Optional[Callable[..., subprocess.CompletedProcess]] = None) -> None:
+        # runはテスト側がsubprocess.run自体をフェイクへ差し替え、タイムアウト・異常終了等を
+        # 実バイナリなしで検証できるようにするための注入口（ai_client.py等と同じDI方針）。
+        self._run = run or subprocess.run
+
     def convert_to_html(self, filename: str, content: bytes) -> str:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
@@ -37,7 +42,7 @@ class Pdf2HtmlExConverter:
             input_path.write_bytes(content)
 
             try:
-                result = subprocess.run(
+                result = self._run(
                     [
                         _PDF2HTMLEX_BIN,
                         # フォント・画像・CSS・JavaScript・アウトラインを1つのHTMLへ埋め込み、

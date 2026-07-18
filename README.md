@@ -47,7 +47,7 @@ PDF解析は2つの経路を**並列**に実行する（[docs/decisions.md](./do
 
 Geminiにはこの2つを両方渡し、「レイアウトはHTML、文字列はMarkdownを正とする」役割分担で整形させる。
 
-実際にGeminiへ渡したプロンプト全文と、Geminiが返した出力全文はバックエンドのログで確認できる（`docker-compose.yml`で`LOG_AI_PAYLOAD=true`を設定済み。ADR-028）。ログは1行1レコードのJSONのため、`jq`で該当フィールドだけを取り出すと読みやすい。
+実際にGeminiへ渡したプロンプト全文と、Geminiが返した出力全文はバックエンドのログで確認できる（`docker-compose.yml`で`LOG_AI_PAYLOAD=true`を設定済み。ADR-022）。ログは1行1レコードのJSONのため、`jq`で該当フィールドだけを取り出すと読みやすい。
 
 ```bash
 docker compose logs backend | grep '"logger": "app.ai"' | jq -r '.ai_prompt // .ai_response'

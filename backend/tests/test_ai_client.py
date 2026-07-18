@@ -456,7 +456,7 @@ def _ai_logs(caplog):
 
 
 def test_gemini_client_logs_prompt_and_response_when_enabled(monkeypatch, caplog):
-    # ADR-028: LOG_AI_PAYLOAD=trueのときだけ、Geminiへの入力と出力の全文をログへ出す。
+    # ADR-022: LOG_AI_PAYLOAD=trueのときだけ、Geminiへの入力と出力の全文をログへ出す。
     monkeypatch.setenv("LOG_AI_PAYLOAD", "true")
     models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
     client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))

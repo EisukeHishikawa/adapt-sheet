@@ -37,7 +37,7 @@ logger = logging.getLogger("app.ai")
 
 
 def _log_ai_payload(message: str, **fields: str) -> None:
-    """Geminiの入出力全文をログへ出す（LOG_AI_PAYLOAD有効時のみ。ADR-028）。
+    """Geminiの入出力全文をログへ出す（LOG_AI_PAYLOAD有効時のみ。ADR-022）。
 
     全文は帳票の業務データを含むため、ADR-016の「機微情報の非出力」に従い既定では出さない。
     環境変数は呼び出しごとに読み、コンテナを再ビルドせず切り替えられるようにする。

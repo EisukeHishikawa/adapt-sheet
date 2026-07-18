@@ -21,6 +21,16 @@ dist/
 .env
 .env.local
 
+# Terraform（フェーズ4 ステップ25）。state・ローカルキャッシュ・実tfvars（秘密や環境依存値を含む）は
+# コミットしない。モジュール定義とexampleのみを管理対象にする。
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log
+
 # Editor / local notes
 # .claude/CLAUDE.md（個人メモ）・settings.local.json・scheduled_tasks.lock等は非公開のまま維持しつつ、
 # チームで共有すべき.claude/skills/配下のみ例外的にGit管理対象にする。

@@ -201,16 +201,16 @@
 
 ---
 
-## ADR-017: Lambda本番イメージ設計（Web Adapter・Parameter Storeのグローバル取得・ECR Public）
+## ADR-017: Lambda本番イメージ設計（Web Adapter・Parameter Storeのグローバル取得・ECR Private）
 
 - **ステータス**: Accepted
 - **コンテキスト**: フェーズ4ステップ24として、軽量な入口エンドポイント（`backend`）をAWS Lambda（コンテナイメージ）へ載せる本番イメージを設計する。決めるべきは、(1) FastAPIをLambda上で動かす方式、(2) 生成AIのAPIキーをLambda上で安全かつ低コストに供給する方式、(3) コンテナイメージの置き場（レジストリ）である。
 - **決定**:
   - **AWS Lambda Web Adapter**を採用する。本番用は開発用`backend/Dockerfile`とは別の`backend/Dockerfile.lambda`とし、`COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:...`でLambda拡張バイナリを取り込み、既存のFastAPIコードを改変せず`uvicorn`を`--reload`無しで起動する。
   - **APIキーはParameter Store（SecureString）から実行時取得し、イメージにもコードにも焼き込まない**。取得は`app/secrets_loader.py`が担い、**Lambdaのコールドスタート時（モジュールimport＝グローバルスコープ）に一度だけ**SSM `GetParameters`を呼び、値を`os.environ`へ展開する。ハンドラ内で毎リクエストSSMを叩くことは、Lambdaの実行時間課金の増加とSSMのレートリミット抵触の原因になるため禁止する。冪等性は「既に`os.environ`にあるキーは取得対象から外す」ことで担保し、`SSM_PARAMETER_PREFIX`未設定のローカル/pytestでは何もしない（boto3・AWS認証情報を開発の必須依存にしない）。
-  - **コンテナイメージはECR Public（`public.ecr.aws`）へpushする**。ECR Privateのストレージ無料枠は500MBと小さく、`backend`イメージ（約500MB）でも逼迫するため、無料枠の広いパブリックリポジトリを用いる。
-- **理由**: Lambda Web Adapterによりローカル・サーバーレス間のコード差分を最小化できる。キーをグローバルスコープで一度だけ取得してメモリ保持することで、実行コスト・レート制限・秘密情報のイメージ非混入を同時に満たす。ECR Publicは無料枠の制約を回避できる。
-- **トレードオフ**: APIキーのローテーションはコールドスタート単位でしか反映されない（更新後はLambda実行環境の入れ替えが必要）。ECR Publicはイメージが公開されるため、イメージ内に秘密情報を一切含めない前提を厳守する（本ADRのキー実行時取得により担保）。`docling-service`/`pdf2htmlex-service`のLambda化は本ステップの対象外とし、後続で対応する（`backend`のみを先行してLambda化する）。
+  - **コンテナイメージはECR Private（`<account>.dkr.ecr.<region>.amazonaws.com`）へpushする**。Lambdaのコンテナイメージは同一アカウント・同一リージョンのECR Privateからのみ取得でき、ECR Publicはイメージソースとしてサポートされないため（当初ステップ24ではECR Publicとしていたが、ステップ25のTerraform設計時にこの制約が判明し訂正した）。ストレージ無料枠500MBの逼迫は、ライフサイクルポリシー（最新数世代のみ保持）で抑える（超過コストは`backend`イメージ約500MBでも月$0.01未満と軽微）。
+- **理由**: Lambda Web Adapterによりローカル・サーバーレス間のコード差分を最小化できる。キーをグローバルスコープで一度だけ取得してメモリ保持することで、実行コスト・レート制限・秘密情報のイメージ非混入を同時に満たす。ECR PrivateはLambdaコンテナの前提であり、ライフサイクルで容量も抑えられる。
+- **トレードオフ**: APIキーのローテーションはコールドスタート単位でしか反映されない（更新後はLambda実行環境の入れ替えが必要）。`docling-service`/`pdf2htmlex-service`のLambda化は本ステップの対象外とし、後続で対応する（`backend`のみを先行してLambda化する）。
 - **関連**: ADR-013（docling-service分離）、ADR-011（機微情報の非ログ出力）、ADR-016（イメージ軽量化）。
 
 ---

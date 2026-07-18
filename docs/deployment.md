@@ -51,7 +51,7 @@
 
 1. 本番用`backend/Dockerfile.lambda`に`AWS Lambda Web Adapter`のバイナリを`COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:...`で追加（開発用`backend/Dockerfile`とは別ファイル。イメージ名は`aws-lambda-adapter`で`web`は付かない）。
 2. APIキーはイメージに焼き込まず、`SSM_PARAMETER_PREFIX`を設定してParameter Store（SecureString）から実行時に取得する。取得はLambdaのコールドスタート時（`app/secrets_loader.py`のグローバルスコープ呼び出し）に一度だけ行い、ハンドラ内では毎リクエストSSMを叩かない（ADR-017）。
-3. イメージは**ECR Public（`public.ecr.aws`）**へpushする（ECR Privateの無料枠500MBを避けるため。ADR-017）。
+3. イメージは**ECR Private（`<account>.dkr.ecr.<region>.amazonaws.com`）**へpushする（Lambdaのコンテナイメージは同一リージョンのECR Privateからのみ取得できるため。無料枠500MBの逼迫はライフサイクルポリシーで抑える。ADR-017）。
 4. コンテナ内で`pytest`を実行し、環境依存なくテストがパスすることを確認。
 
 > 当面のLambda化対象は軽量な`backend`のみ。`docling-service`/`pdf2htmlex-service`のLambda化は後続で対応する（ADR-017）。
@@ -62,11 +62,17 @@
 
 ## 4. インフラのコード化（フェーズ4 ステップ25）
 
-- Terraformで以下を定義・構築する。
-  - フロントエンド: CloudFront + S3
-  - バックエンド: Lambda（メモリ4GB〜8GB推奨） + API Gateway
-  - セキュリティ: AWS WAF
-- AWS認証はOIDC等の安全な方式でGitHub Actionsから利用する（長期の静的アクセスキーは発行しない）。
+Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`infra/README.md`](../infra/README.md)）。本ステップは**コード定義まで**で、`terraform apply`（実AWSリソース作成）は未実施。
+
+- モジュール構成（`infra/modules/`）
+  - `frontend`: CloudFront + S3（非公開バケット＋OAC、SPAフォールバック）
+  - `lambda`: 入口エンドポイント（メモリ4GB既定）。実行ロールはSSM読み取り＋SSM経由KMS復号の最小権限
+  - `api_gateway`: REST API（REGIONAL）→ Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）
+  - `waf`: AWSマネージドルール＋IPレート制限。API Gatewayステージへ関連付け
+  - `ecr`: backendコンテナイメージのECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制）
+  - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
+- state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
+- AWS認証はOIDC等の安全な方式でGitHub Actionsから利用する（長期の静的アクセスキーは発行しない）。OIDCプロバイダ/デプロイロールはステップ26で定義する。
 - デプロイ後、ステージング環境のエンドポイントに対してローカルからAPIテストを実行し疎通を確認する。
 
 ---

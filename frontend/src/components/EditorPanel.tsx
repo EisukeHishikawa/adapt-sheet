@@ -4,7 +4,7 @@ import { CodeEditor } from '@/components/CodeEditor'
 import { useSheetStore } from '@/store/sheetStore'
 
 // 右カラムのコード入力。HTMLとJSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
-// 1つの入力に使えて編集しやすくする。CSS入力は持たない（ADR-019）。
+// 1つの入力に使えて編集しやすくする。CSS入力は持たない（ADR-015）。
 // 見出しは画面に出さないため、名前はtextareaのaria-labelで保持する（SizeControlsと同じ方針）。
 type EditorTab = 'html' | 'json'
 

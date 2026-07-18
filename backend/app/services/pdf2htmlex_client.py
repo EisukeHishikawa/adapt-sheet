@@ -1,4 +1,4 @@
-"""pdf2htmlEXによるPDF→HTML変換の呼び出しレイヤー（ADR-023）。
+"""pdf2htmlEXによるPDF→HTML変換の呼び出しレイヤー（ADR-016）。
 
 pdf2htmlEXバイナリ（AGPL、特殊パッチ済みpoppler/libfontforgeに依存する重量級ネイティブ依存）は
 docling-service同様、専用コンテナ（pdf2htmlex-service）へ分離している。本モジュールはHTTP経由で
@@ -33,7 +33,7 @@ _DEFAULT_PDF2HTMLEX_SERVICE_URL = "http://pdf2htmlex:8200"
 
 
 class RemotePdf2HtmlExExtractor:
-    """pdf2htmlex-serviceへHTTPで変換を委譲する本番実装（ADR-023）。"""
+    """pdf2htmlex-serviceへHTTPで変換を委譲する本番実装（ADR-016）。"""
 
     def __init__(
         self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None

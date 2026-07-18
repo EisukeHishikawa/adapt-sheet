@@ -9,13 +9,13 @@ type EngineDefinition = {
   label: string
   description: string
   icon: ComponentType<{ className?: string }>
-  // フェーズ5（Auth0導入）まで自由アクセスのユーザーは利用できない標準プランの生成AI（ADR-023）。
+  // フェーズ5（Supabase Auth導入）まで自由アクセスのユーザーは利用できない標準プランの生成AI（ADR-016）。
   // 選択自体は許可し、実際に描画を押した時点でバックエンドが403を返しメッセージを表示する
   // （フロント側で無効化すると、フェーズ5解禁時にフロントの変更が必要になってしまうため）。
   gated: boolean
 }
 
-// 描画エンジンの一覧（ADR-023）。生成AI（LLMがHTML/CSS/JSONを作る）4種と、
+// 描画エンジンの一覧（ADR-016）。生成AI（LLMがHTML/CSS/JSONを作る）4種と、
 // AIを介さない変換エンジン（PDF→HTML変換結果をそのまま描画結果にする）3種。
 const ENGINES: readonly EngineDefinition[] = [
   {
@@ -71,7 +71,7 @@ const ENGINES: readonly EngineDefinition[] = [
 
 const ENGINE_BY_ID = new Map(ENGINES.map((engine) => [engine.id, engine]))
 
-// 描画ボタンの隣に置く、生成エンジン選択のSelect（ADR-023）。SizeControlsと同じ
+// 描画ボタンの隣に置く、生成エンジン選択のSelect（ADR-016）。SizeControlsと同じ
 // 「Selectの項目をアイコン化する」パターンを踏襲し、各項目にはアイコン・ラベルに加えて
 // 1行の説明文を添えて選び分けやすくする。
 export function EngineSelect() {

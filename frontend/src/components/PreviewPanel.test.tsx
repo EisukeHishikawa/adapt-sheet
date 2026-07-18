@@ -3,11 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { PreviewPanel } from './PreviewPanel'
 import { useSheetStore } from '@/store/sheetStore'
 
-// ステップ22b: 拡大表示（expanded）中に用紙が小さく読み取りづらいというユーザー要望を受けて
-// 追加したズーム機能（ズームイン/ズームアウト/リセット）の検証。
+// 拡大表示（expanded）中のズーム機能（ズームイン/ズームアウト/リセット）の検証。
 // jsdomはResizeObserver/clientWidth等の実測ができないため、実際のpx倍率(iframeのtransform)は
 // 検証対象にせず、UIの表示切り替え・ズーム率表示・状態のリセットに絞って検証する。
-describe('PreviewPanel（拡大表示中のズーム操作、ステップ22b）', () => {
+describe('PreviewPanel（拡大表示中のズーム操作）', () => {
   beforeEach(() => {
     useSheetStore.setState({
       htmlContent: '<p>ok</p>',

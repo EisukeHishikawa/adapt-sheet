@@ -22,7 +22,7 @@ client = TestClient(app)
 
 
 def _override_ai_client(fake_client) -> None:
-    # ADR-023: ai_client_factoryはengineがリクエスト時にしか決まらないため関数を注入する。
+    # ADR-016: ai_client_factoryはengineがリクエスト時にしか決まらないため関数を注入する。
     app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: fake_client)
 
 
@@ -66,7 +66,7 @@ def test_render_returns_502_when_ai_generation_fails():
 
 
 def test_render_sends_pdf_bytes_to_ai_client_when_uploaded():
-    # ADR-023: 生成AIエンジンへはPDFファイルをそのままマルチモーダル入力として渡し、
+    # ADR-016: 生成AIエンジンへはPDFファイルをそのままマルチモーダル入力として渡し、
     # PyMuPDF/Docling経由の事前変換は行わない。
     captured = {}
 
@@ -91,7 +91,7 @@ def test_render_sends_pdf_bytes_to_ai_client_when_uploaded():
 
 
 def test_render_does_not_invoke_converters_for_ai_engine_with_pdf():
-    # ADR-023: AIエンジン選択時はPyMuPDF/Docling/pdf2htmlEXの事前変換を一切呼ばない。
+    # ADR-016: AIエンジン選択時はPyMuPDF/Docling/pdf2htmlEXの事前変換を一切呼ばない。
     class _RecordingAIClient:
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
@@ -141,14 +141,14 @@ def test_render_threads_prompt_into_ai_prompt():
 def test_render_ignores_json_field_if_sent():
     # jsonはAIへの入力として不要なため、リクエストの宣言済みフィールドではなくなった。
     # クライアントが送っても未知のフォームフィールドとしてFastAPIが無視し、
-    # エラーにならないことを確認する（ADR-019のcss同様の扱い）。
+    # エラーにならないことを確認する（ADR-015のcss同様の扱い）。
     response = client.post("/api/render", data={"json": '{"customer": "田中"}'})
 
     assert response.status_code == 200
 
 
 def test_render_ignores_html_field_if_sent():
-    # ADR-023: htmlはリクエストの宣言済みフィールドではなくなった（生成AIへ送らないため）。
+    # ADR-016: htmlはリクエストの宣言済みフィールドではなくなった（生成AIへ送らないため）。
     # クライアントが送っても未知のフォームフィールドとしてFastAPIが無視することを確認する。
     response = client.post("/api/render", data={"html": "<p>古いHTML</p>"})
 
@@ -171,7 +171,7 @@ def test_render_accepts_prompt_at_max_length():
 
 
 def test_render_ignores_css_field_if_sent():
-    # ADR-019: cssはリクエストの宣言済みフィールドではなくなったため、クライアントが送っても
+    # ADR-015: cssはリクエストの宣言済みフィールドではなくなったため、クライアントが送っても
     # FastAPIが未知のフォームフィールドとして無視し、エラーにならないことを確認する。
     response = client.post("/api/render", data={"css": "body { color: red; }"})
 
@@ -179,7 +179,7 @@ def test_render_ignores_css_field_if_sent():
 
 
 def test_render_mock_returns_delivery_note_for_portrait_size():
-    # ADR-019: 既定のMockAIClient（USE_MOCK_AI未設定時）が、width_mm/height_mmから
+    # ADR-015: 既定のMockAIClient（USE_MOCK_AI未設定時）が、width_mm/height_mmから
     # 用紙の向きを判定して縦=納品書のモックを返すことをエンドツーエンドで検証する。
     response = client.post("/api/render", data={"width_mm": "210", "height_mm": "297"})
 
@@ -195,7 +195,7 @@ def test_render_mock_returns_invoice_for_landscape_size():
     assert "請求書" in response.json()["html"]
 
 
-# ADR-023: engine（EngineSelectの選択値）によるゲート判定・分岐の検証。
+# ADR-016: engine（EngineSelectの選択値）によるゲート判定・分岐の検証。
 
 
 def test_render_returns_403_for_gemini_standard_engine():
@@ -214,7 +214,7 @@ def test_render_returns_403_for_openai_engine():
 
 
 def test_render_gate_check_happens_before_pdf_processing():
-    # ゲート対象engineは、PDF処理・AI呼び出しより前に判定し、無駄な処理をしない（ADR-023）。
+    # ゲート対象engineは、PDF処理・AI呼び出しより前に判定し、無駄な処理をしない（ADR-016）。
     class _ExplodingConverter:
         def convert_to_html(self, filename, content):
             raise AssertionError("ゲートで弾かれるはずなので呼ばれない")

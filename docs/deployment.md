@@ -23,21 +23,19 @@
 
 | 変数名 | 説明 | 備考 |
 |---|---|---|
-| `GEMINI_API_KEY` | Gemini API（Google AI Studio）利用のためのAPIキー | `USE_MOCK_AI=false`かつ`AI_PROVIDER=llama`以外のときのみ必須（[CLAUDE.md](../CLAUDE.md)、ADR-010参照） |
-| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`AI_PROVIDER`に応じた実経路を呼び出す（ADR-007） |
-| `AI_PROVIDER` | `USE_MOCK_AI=false`時に使う実経路の選択 | `gemini`（既定）または`llama`。`llama`はOllama（`llama3.2:3b`）を使いAPIキー不要だが、Ollama自体はDocker Compose環境にもセットアップ手順にも含まれておらず、利用する場合は開発者が自前で用意する必要がある（ADR-011、ADR-013/014） |
-| `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-019） |
-| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-016/022） |
+| `GEMINI_API_KEY` | Gemini API（Google AI Studio）利用のためのAPIキー | `USE_MOCK_AI=false`のときのみ必須（[CLAUDE.md](../CLAUDE.md)参照） |
+| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す（ADR-007） |
+| `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-015） |
+| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-012） |
 | `DOCLING_SERVE_ARTIFACTS_PATH` | Doclingモデルの焼き込み先絶対パス | コンテナ内で完全オフライン動作させるために必須 |
-| `AUTH0_DOMAIN` / `AUTH0_AUDIENCE` | Auth0テナント情報 | フェーズ5以降で使用 |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報 | フェーズ5以降で使用。ローカルは `Supabase Local CLI` の値を使用 |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（認証・DB共通） | フェーズ5以降で使用。ローカルは `Supabase Local CLI` の値を使用 |
 
 ### フロントエンド
 
 | 変数名 | 説明 |
 |---|---|
 | `VITE_API_BASE_URL` | バックエンドAPIのベースURL（ローカル/ステージング/本番で切替） |
-| `VITE_AUTH0_DOMAIN` / `VITE_AUTH0_CLIENT_ID` | Auth0 SDK設定（フェーズ5以降） |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDK設定（フェーズ5以降） |
 
 ### ClaudeCode / MCP
 
@@ -90,4 +88,4 @@
 ## 7. 今後の追記予定
 
 - フェーズ4のTerraform実装完了後、実際の`terraform apply`手順・モジュール構成を追記する。
-- フェーズ5のAuth0/Supabase統合完了後、実際の環境変数値の取得手順（ダッシュボードのどこを見るか等）を追記する。
+- フェーズ5のSupabase統合完了後、実際の環境変数値の取得手順（ダッシュボードのどこを見るか等）を追記する。

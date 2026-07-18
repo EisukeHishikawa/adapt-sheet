@@ -3,16 +3,10 @@ import { Check, ChevronDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-// ステップ17: docs/spec.md 2.2「定型サイズ自動入力」のUIを、1つのSelect（トリガー+
-// ドロップダウン）に統合するための土台。shadcn/uiのBase UI版Select
-// （https://www.shadcn.net/ja/docs/components/select）と同じ、標準的なRoot/Trigger/Content/Item
-// 構成のシンプルな実装にしている。
-// トリガーとポップアップの選択中の項目を重ね合わせる特殊な見た目・ポップアップの背景透明化を
-// 一時試みたが、保守性が落ちる割に見た目の効果が薄かったため撤回し、ポップアップはBase UIの
-// 既定どおりトリガーの下に開く、ごく標準的なSelectの挙動に戻した
-// （ユーザーレビュー: 「ポップアップはやめてください。selectを使って、selectの項目を
-// アイコンにする動きにしてください」）。中身（紙のスウォッチアイコン）はSizeControls側で
-// そのまま維持する。
+// docs/spec.md 2.2「定型サイズ自動入力」のUIを、1つのSelect（トリガー+ドロップダウン）に
+// 統合するための土台。shadcn/uiのBase UI版Selectと同じ、標準的なRoot/Trigger/Content/Item
+// 構成で、ポップアップの位置・見た目もBase UIの既定に従う（独自の重ね合わせ配置は保守性が
+// 落ちるため採用しない）。中身（紙のスウォッチアイコン）はSizeControls側で渡す。
 
 const Select = SelectPrimitive.Root
 
@@ -54,8 +48,8 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            // ユーザーレビュー（「スクロールバーを小さくしてほしい」）を受け、Firefox向けに
-            // scrollbar-width:thin、WebKit系ブラウザ向けに::-webkit-scrollbarの幅を細くする。
+            // Firefox向けにscrollbar-width:thin、WebKit系ブラウザ向けに
+            // ::-webkit-scrollbarの幅を細くし、ドロップダウンのスクロールバーを目立たせない。
             "max-h-(--available-height) min-w-(--anchor-width) overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
             className,
           )}

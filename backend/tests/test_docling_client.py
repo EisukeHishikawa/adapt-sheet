@@ -11,7 +11,7 @@ from app.services.docling_client import (
     get_html_extractor,
 )
 
-# ADR-018/023: backend側はDoclingを直接呼ばず、docling-serviceへHTTPで委譲する。Doclingが担うのは
+# ADR-014/016: backend側はDoclingを直接呼ばず、docling-serviceへHTTPで委譲する。Doclingが担うのは
 # 単独のHTMLエンジンとしてのテキスト抽出のみで、レイアウトHTML（PyMuPDF由来）とは別物。
 # 実際のDocling変換の正しさはdocling-service/tests/test_converter.pyで検証済みのため、
 # ここではhttpx.MockTransportでHTTP呼び出しの配線（リクエスト形状・エラーマッピング）のみを検証する。
@@ -98,7 +98,7 @@ def test_get_html_extractor_returns_remote_extractor():
 
 def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
     # adapt-sheetの帳票テンプレートは1ページ完結が前提のため、Doclingへの解析リクエスト（＝処理時間・
-    # コスト）を1ページ目分に抑える（ADR-019）。
+    # コスト）を1ページ目分に抑える（ADR-015）。
     multi_page_pdf = _build_multi_page_pdf([200, 300, 400])
     sent_page_widths = []
 

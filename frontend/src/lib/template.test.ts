@@ -6,7 +6,7 @@ import { renderTemplate } from './template'
 // 置換対象・非対象・不正JSON時のフォールバックを、バックエンドの_PLACEHOLDER_PATTERNと
 // 同じ {{key}} 契約に沿って固定する。
 describe('renderTemplate', () => {
-  it('{{key}}をJSONの対応する値で置換する（ユーザー報告のモック太郎ケース）', () => {
+  it('{{key}}をJSONの対応する値で置換する', () => {
     const html = '<h1>帳票タイトル</h1><p>{{customer_name}}</p>'
     const json = JSON.stringify({ customer_name: 'モック太郎' })
     expect(renderTemplate(html, json)).toBe('<h1>帳票タイトル</h1><p>モック太郎</p>')

@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.converter import PDFConversionError, get_pdf_converter
 from app.main import app
 
-# 内部契約（ADR-023）: POST /convert に file を送ると {"html": ...} が返る。
+# 内部契約（ADR-016）: POST /convert に file を送ると {"html": ...} が返る。
 # 実際のpdf2htmlEX変換の正しさはtest_converter.pyで検証済みのため、ここではDIをフェイクに
 # 差し替えてHTTPレイヤーの配線（成功時200/失敗時422）のみを検証する。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"

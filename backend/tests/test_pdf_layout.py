@@ -13,7 +13,7 @@ from app.services.pdf_layout import (
     get_layout_converter,
 )
 
-# ADR-019: PDFの1ページ目を、テキスト・罫線・背景を絶対座標のdivへ写した1枚のHTMLへ変換する。
+# ADR-015: PDFの1ページ目を、テキスト・罫線・背景を絶対座標のdivへ写した1枚のHTMLへ変換する。
 # text-element/border-element/bg-elementの3種のdivと、PDFのページサイズを持つコンテナを出力する。
 LAYOUT_PDF = Path(__file__).resolve().parent / "fixtures" / "layout_sample.pdf"
 

@@ -34,7 +34,7 @@ def test_build_prompt_includes_context():
 
 
 def test_build_prompt_includes_layout_html_and_markdown_with_roles():
-    # ADR-023/025: PyMuPDF由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
+    # ADR-019: PyMuPDF由来のHTML（見た目のソース）とDocling由来のMarkdown（テキストのソース）を
     # 両方渡し、それぞれの役割をGeminiへ明示する契約を固定する。
     prompt = build_prompt(
         html="<html>layout-marker</html>",
@@ -51,7 +51,7 @@ def test_build_prompt_includes_layout_html_and_markdown_with_roles():
 
 
 def test_build_prompt_instructs_reading_layout_divs_as_ruling_lines():
-    # ADR-025: PyMuPDF由来HTMLはborder-element/bg-elementのdivで罫線・背景を表す。Geminiに
+    # ADR-019: PyMuPDF由来HTMLはborder-element/bg-elementのdivで罫線・背景を表す。Geminiに
     # これをCSSのborder/background-colorへ翻訳させる役割分担を指示する契約を固定する。
     prompt = build_prompt(
         html='<div class="border-element"></div>',
@@ -66,7 +66,7 @@ def test_build_prompt_instructs_reading_layout_divs_as_ruling_lines():
 
 
 def test_build_prompt_instructs_not_to_enlarge_font_sizes():
-    # ADR-026: 帳票として過大にならないよう、Geminiにフォントを大きくしない指示を与える契約を固定する。
+    # ADR-019: 帳票として過大にならないよう、Geminiにフォントを大きくしない指示を与える契約を固定する。
     prompt = build_prompt(html="<div></div>", prompt="x", width_mm=None, height_mm=None)
 
     assert "フォントサイズ" in prompt
@@ -140,7 +140,7 @@ def test_mock_client_returns_valid_render_result():
     validate_render_result(result)
 
 
-# ADR-020: MockAIClientはbuild_promptが埋め込んだ帳票サイズから用紙の向きを判定し、
+# ADR-019: MockAIClientはbuild_promptが埋め込んだ帳票サイズから用紙の向きを判定し、
 # 縦（高さ>=幅）なら納品書、横（幅>高さ）なら請求書のモックを返す。
 
 
@@ -360,7 +360,7 @@ def test_parse_ai_response_rejects_missing_keys():
         parse_ai_response('{"html": "<p>ok</p>"}')
 
 
-# ADR-023: Gemini APIは高負荷時に503 UNAVAILABLE（"experiencing high demand"）を返すことがある。
+# ADR-019: Gemini APIは高負荷時に503 UNAVAILABLE（"experiencing high demand"）を返すことがある。
 # 一過性の失敗で帳票生成が落ちないよう、503のみバックオフして再試行する。
 
 

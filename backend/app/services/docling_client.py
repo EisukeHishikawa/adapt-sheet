@@ -1,8 +1,8 @@
-"""Doclingによるテキスト抽出（Markdown）の呼び出しレイヤー（ADR-018/023）。
+"""Doclingによるテキスト抽出（Markdown）の呼び出しレイヤー（ADR-018/019）。
 
 Docling本体（torch等の大容量ML依存）はdocling-serviceコンテナへ分離しているため、本モジュールは
 HTTP経由で`POST /convert`を呼び出すクライアントのみを持つ。レイアウトHTMLの生成は
-pdf_layout.pyの責務（ADR-023/025）。
+pdf_layout.pyの責務（ADR-019）。
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ _DEFAULT_DOCLING_SERVICE_URL = "http://docling:8100"
 
 
 class RemoteDoclingMarkdownExtractor:
-    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-018/023）。"""
+    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-018/019）。"""
 
     def __init__(
         self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None

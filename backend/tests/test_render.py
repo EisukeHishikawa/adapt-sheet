@@ -61,7 +61,7 @@ def test_render_returns_502_when_ai_generation_fails():
 
 
 def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
-    # ADR-023: PDFが送信された場合、PyMuPDF由来のレイアウトHTML（見た目）とDocling由来の
+    # ADR-019: PDFが送信された場合、PyMuPDF由来のレイアウトHTML（見た目）とDocling由来の
     # Markdown（テキスト）の両方がプロンプトへ渡ることを検証する。実変換は重いため、
     # dependency_overridesで高速なフェイクに差し替え、main.pyの配線のみを検証する。
     captured_prompts = []
@@ -98,7 +98,7 @@ def test_render_passes_layout_html_and_markdown_to_prompt_when_pdf_uploaded():
 
 
 def test_render_calls_docling_and_layout_in_parallel():
-    # ADR-023: Doclingの呼び出しとPyMuPDF変換はどちらも秒単位の処理時間がかかるため、直列ではなく並列に呼ぶ。
+    # ADR-019: Doclingの呼び出しとPyMuPDF変換はどちらも秒単位の処理時間がかかるため、直列ではなく並列に呼ぶ。
     # 各変換を0.5秒スリープさせ、合計所要時間が直列（1.0秒）ではなく並列（0.5秒強）に収まることで
     # 並列実行を検証する。
     delay_seconds = 0.5
@@ -184,7 +184,7 @@ def test_render_ignores_css_field_if_sent():
 
 
 def test_render_mock_returns_delivery_note_for_portrait_size():
-    # ADR-020: 既定のMockAIClient（USE_MOCK_AI未設定時）が、width_mm/height_mmから
+    # ADR-019: 既定のMockAIClient（USE_MOCK_AI未設定時）が、width_mm/height_mmから
     # 用紙の向きを判定して縦=納品書のモックを返すことをエンドツーエンドで検証する。
     response = client.post("/api/render", data={"width_mm": "210", "height_mm": "297"})
 
@@ -202,7 +202,7 @@ def test_render_mock_returns_invoice_for_landscape_size():
 
 def test_render_returns_422_when_pdf_conversion_fails():
     # docs/spec.md エラーコード定義: PDF解析エラーは422 Unprocessable Entityとする。
-    # Docling・レイアウト生成のどちらが失敗しても同じPDFConversionErrorへ集約される（ADR-023）。
+    # Docling・レイアウト生成のどちらが失敗しても同じPDFConversionErrorへ集約される（ADR-019）。
     class _FailingMarkdownExtractor:
         def convert_to_markdown(self, filename: str, content: bytes) -> str:
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")

@@ -16,7 +16,7 @@ flowchart LR
         CF["CloudFront"]
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
-        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-025)"]
+        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-019)"]
         LambdaDocling["Lambda (Doclingテキスト抽出)\nDoclingモデル焼き込み済み"]
         WAF["AWS WAF"]
     end
@@ -51,7 +51,7 @@ sequenceDiagram
 
     FE->>API: PDF/HTML/プロンプト/サイズ送信
     alt PDFが存在する
-        Note over API,Docling: 2つの変換は並列に実行する（ADR-023/025）
+        Note over API,Docling: 2つの変換は並列に実行する（ADR-019）
         par レイアウト変換（backend内・PyMuPDF）
             API->>Layout: PDF（1ページ目）
             Layout-->>API: レイアウトHTML（見た目の正）

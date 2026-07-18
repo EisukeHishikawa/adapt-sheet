@@ -15,7 +15,7 @@ export default defineConfig({
   },
   server: {
     // Viteの既定は127.0.0.1のみへのbindだが、コンテナ外（ホストPC）からアクセスするため
-    // 全interfaceでlistenする（ADR-014）。
+    // 全interfaceでlistenする（ADR-010）。
     host: true,
     // ポートを固定し、5173が使用中でも別ポートへ自動退避させない。自動退避を許すと
     // 「コンテナが公開している5173に実アプリが居ない」というポートずれが起き、

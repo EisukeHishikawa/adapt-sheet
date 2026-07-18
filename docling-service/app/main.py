@@ -1,4 +1,4 @@
-"""Doclingによるテキスト抽出専用の内部サービス（ADR-018/023）。
+"""Doclingによるテキスト抽出専用の内部サービス（ADR-014/016）。
 
 Docker Compose内部ネットワーク経由でbackendからのみ呼ばれ、ホストへは公開しないため、
 CORS設定や認証は行わない。
@@ -23,7 +23,7 @@ def convert(
         html = pdf_converter.convert_to_html(file.filename or "uploaded.pdf", file.file.read())
     except PDFConversionError as exc:
         # backend側のRemoteDoclingHtmlExtractorがこの422を検知し、自身のPDFConversionErrorへ
-        # 再マッピングする（ADR-017により最終的に422レスポンスになる）。
+        # 再マッピングする（ADR-013により最終的に422レスポンスになる）。
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return {"html": html}

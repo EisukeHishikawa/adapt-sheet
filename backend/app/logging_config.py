@@ -1,4 +1,4 @@
-"""構造化ログ（1レコード=1行のJSON）の設定（ADR-016）。
+"""構造化ログ（1レコード=1行のJSON）の設定（ADR-012）。
 
 コンテナ・AWS Lambdaは標準出力のログを収集する運用のため、追加依存（structlog等）を入れず
 標準の`logging`のみで、標準出力へ1行1レコードのJSONを出す。
@@ -26,7 +26,7 @@ class JsonLogFormatter(logging.Formatter):
         "status_code",
         "duration_ms",
         "detail",
-        # AI生成の入出力全文（ADR-022）。app/services/ai_client.pyがLOG_AI_PAYLOAD有効時のみ付与する。
+        # AI生成の入出力全文。app/services/ai_client.pyがLOG_AI_PAYLOAD有効時のみ付与する。
         "ai_model",
         "ai_prompt",
         "ai_response",

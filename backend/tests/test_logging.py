@@ -1,4 +1,4 @@
-"""構造化ログ基盤（ADR-016、DEVELOPMENT.md ステップ13）の検証テスト。
+"""構造化ログ基盤（ADR-012、DEVELOPMENT.md ステップ13）の検証テスト。
 
 - 全レスポンスにX-Request-IDヘッダーが付くこと
 - アクセスログが構造化フィールド（request_id/method/path/status_code/duration_ms）付きで出ること
@@ -69,7 +69,7 @@ def test_unhandled_exception_is_logged_with_traceback(caplog):
 
 
 def test_json_formatter_outputs_ai_payload_fields():
-    # ADR-022: Geminiの入出力全文はフォーマッタの許可リストに載っている場合のみJSONへ出る。
+    # Geminiの入出力全文はフォーマッタの許可リストに載っている場合のみJSONへ出る。
     record = logging.LogRecord(
         name="app.ai",
         level=logging.INFO,

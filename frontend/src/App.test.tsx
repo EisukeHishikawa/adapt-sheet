@@ -21,7 +21,7 @@ const initialSheetState = {
   // history等が前テストの値のまま残る（テスト間の状態漏れ防止）。
   widthMm: null,
   heightMm: null,
-  // ADR-023で追加したエンジン選択。リセット漏れ防止のため初期値を明示する。
+  // ADR-016で追加したエンジン選択。リセット漏れ防止のため初期値を明示する。
   engine: 'gemini_free' as const,
   history: [],
   // 履歴の通し番号カウンタ。リセット漏れ防止のため初期値を明示する。
@@ -67,9 +67,8 @@ describe('App（2カラム最小画面）', () => {
     expect(preview.srcdoc).toBe('<p>更新後</p>')
   })
 
-  // ユーザー報告バグの再現・回帰防止: HTMLの {{customer_name}} が生のまま表示され、
-  // JSONと連動しなかった。HTMLのテンプレート変数がJSONの値で置換され、JSONを編集すると
-  // プレビューが即時に追従することを検証する（CLAUDE.md「固定情報と業務データの分離」）。
+  // HTMLのテンプレート変数がJSONの値で置換され、JSONを編集するとプレビューが即時に
+  // 追従することを検証する（CLAUDE.md「固定情報と業務データの分離」）。
   it('JSON入力を編集すると、HTMLのテンプレート変数が置換されてプレビューにリアルタイム反映される', () => {
     render(<App />)
 
@@ -217,11 +216,8 @@ describe('描画中の経過秒数表示（ステップ22）', () => {
     expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(0秒)')
   })
 
-  // ユーザー報告バグの再現・回帰防止: 描画中にプレビューを全画面（拡大）表示すると、
-  // RenderButtonを含む上段一帯が{!previewExpanded && (...)}でアンマウントされ、
-  // 縮小して戻したときに経過秒数が0秒に戻ってしまっていた。App.tsxの修正で
-  // 「display:contentsで見た目だけ隠しマウントは維持する」形に変え、拡大表示中も
-  // 経過秒数のstateが失われないことを検証する。
+  // 拡大表示中もRenderButtonはdisplay:contentsで見た目だけ隠してマウントし続けるため、
+  // 経過秒数のstateは拡大/縮小をまたいでも保持されることを検証する。
   it('描画中にプレビューを拡大→縮小しても、経過秒数はリセットされない', () => {
     render(<App />)
 
@@ -233,7 +229,6 @@ describe('描画中の経過秒数表示（ステップ22）', () => {
     })
     expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(2秒)')
 
-    // プレビューを拡大表示する（従来はここでRenderButtonごとアンマウントされていた）。
     fireEvent.click(screen.getByRole('button', { name: 'プレビューを拡大' }))
 
     act(() => {

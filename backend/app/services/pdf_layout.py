@@ -1,8 +1,8 @@
-"""PyMuPDF（fitz）によるレイアウトHTML生成（ADR-019）。
+"""PyMuPDF（fitz）によるレイアウトHTML生成（ADR-015）。
 
 PDFの1ページ目を、テキスト・罫線・背景色を絶対座標のdivへ写した1枚のHTMLに変換する。
 出力の唯一の宛先はGeminiのプロンプトであり、Geminiがこれを「見た目の正」として読み、
-保守しやすいHTML/CSSへ作り替える（テキストの正はDocling由来のMarkdown。ADR-019の役割分担を踏襲）。
+保守しやすいHTML/CSSへ作り替える（テキストの正はDocling由来のMarkdown。ADR-015の役割分担を踏襲）。
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ _BOLD_FONT_MARKERS = ("bold", "black", "heavy", "gothic")
 # サーバー環境にPDF埋め込みフォントが無くても字形が崩れないよう、Webフォントを最優先に指定する。
 _FONT_STACK = "'Noto Sans JP', sans-serif"
 
-# 一般的な請求書・帳票として過大にならないフォントサイズ上限（px）。役割（エリア）別に分ける（ADR-019）。
+# 一般的な請求書・帳票として過大にならないフォントサイズ上限（px）。役割（エリア）別に分ける（ADR-015）。
 # PDFが大きめの字で作られていてもここで頭打ちにする。上限を超えない元の小さい字は縮めない（min）。
 # GeminiはこのHTMLを見た目の参照にするため、入力段階で過大なサイズを抑えると出力も過大になりにくい。
 _MAX_FONT_PX_TITLE = 22.0    # 帳票名・大見出し
@@ -45,7 +45,7 @@ class PDFLayoutConverter(Protocol):
 
 
 class PyMuPDFLayoutConverter:
-    """PDFの1ページ目をレイアウト保持HTMLへ変換するbackend内実装（ADR-019）。"""
+    """PDFの1ページ目をレイアウト保持HTMLへ変換するbackend内実装（ADR-015）。"""
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
         try:
@@ -56,7 +56,7 @@ class PyMuPDFLayoutConverter:
         try:
             if doc.page_count == 0:
                 raise PDFConversionError("PDFにページがありません")
-            # 帳票テンプレートは1ページ完結が前提（ADR-019）。
+            # 帳票テンプレートは1ページ完結が前提（ADR-015）。
             return _render_page(doc[0])
         finally:
             doc.close()
@@ -130,7 +130,7 @@ def _is_bold(font_name: str) -> bool:
 
 
 def _capped_font_size(size: float) -> float:
-    """フォントサイズを役割別の上限で頭打ちにする（ADR-019）。
+    """フォントサイズを役割別の上限で頭打ちにする（ADR-015）。
 
     元のサイズから役割（タイトル/見出し/明細・本文）を推定し、その上限を超える分だけ縮める。
     元が上限以下ならそのまま返す（小さい字は縮めない）。明細と本文・その他は同じ本文サイズ帯として

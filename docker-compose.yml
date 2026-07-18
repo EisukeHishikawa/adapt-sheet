@@ -1,14 +1,10 @@
 # 開発環境用のDocker Compose定義。開発はこの構成のみを対象とし、ローカル（非Docker）での
-# 直接実行はサポートしない（ADR-014）。frontend/backend/doclingの3コンテナを連携させ、
+# 直接実行はサポートしない（ADR-010）。frontend/backend/doclingの3コンテナを連携させ、
 # `docker compose up --build` 一発で開発環境を構築する。
 # 本番デプロイ（AWS Lambda等）はdocs/deployment.mdのTerraform経由の別構成であり、本ファイルの対象外。
 #
 # 補足: Compose Specification移行に伴い`version:`キーは現行のDocker Compose CLIでは
 # 不要（指定すると警告が出る）ため、あえて記載しない。
-#
-# 補足: 当初はOllamaコンテナ（llama3.2:3b）も含めていたが、docs/decisions.md ADR-013の
-# とおり廃止した。小型モデルではDocling抽出後の長いプロンプトに対しJSON整形の失敗率が高く
-# 実用に耐えなかったため、backendの既定AI経路はMockAIClientに戻している。
 
 services:
   # ① フロントエンド (Vite + React)
@@ -29,7 +25,7 @@ services:
       - backend
 
   # ② バックエンド (FastAPI、入口エンドポイント)
-  # ADR-018により、Docling本体（重量級ML依存）は③のdoclingコンテナへ分離した。
+  # ADR-014により、Docling本体（重量級ML依存）は③のdoclingコンテナへ分離した。
   backend:
     build: ./backend
     ports:
@@ -37,27 +33,27 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      # ADR-013によりOllama経由の実生成は廃止。USE_MOCK_AI未設定時の既定（true）と同じだが、
-      # docker-compose環境の意図を明示するためあえて記載する。実Gemini APIを使いたい場合は
-      # USE_MOCK_AI=false/AI_PROVIDER=gemini/GEMINI_API_KEYを上書き設定する。
+      # USE_MOCK_AI未設定時の既定（true）と同じだが、docker-compose環境の意図を明示するため
+      # あえて記載する。実Gemini APIを使いたい場合はUSE_MOCK_AI=false/GEMINI_API_KEYを
+      # 上書き設定する。
       - USE_MOCK_AI=true
       # GEMINI_API_KEYはプロジェクトルートの.env（Git管理外）から`${...}`展開でコンテナに渡す。
       # 既定（USE_MOCK_AI=true）では未使用だが、上記のとおりモックを無効化した際に
       # そのまま実Gemini APIを呼び出せるよう、キー自体は常に注入しておく。
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # 使用モデルは環境変数GEMINI_MODELで切り替え可能（未設定時はgemini-2.5-flash）。無料枠の
-      # 日次クォータ（20回/日）はモデル単位のため、上限に達したら別モデルへ切り替えて継続できる（ADR-019）。
-      # Geminiへの入力プロンプト全文と出力全文をログへ出す（ADR-022）。業務データを含むため
+      # 日次クォータ（20回/日）はモデル単位のため、上限に達したら別モデルへ切り替えて継続できる（ADR-015）。
+      # Geminiへの入力プロンプト全文と出力全文をログへ出す。業務データを含むため
       # コード側の既定は無効で、開発環境であるこの構成でのみ有効にする。
       - LOG_AI_PAYLOAD=true
-      # ADR-018: テキスト抽出をdoclingサービスへHTTP委譲するための接続先。Compose内部DNS
+      # ADR-014: テキスト抽出をdoclingサービスへHTTP委譲するための接続先。Compose内部DNS
       # （サービス名docling）で解決するため、ホストへは公開しない。
-      # レイアウトHTML生成はbackend内のPyMuPDFで完結するため、専用サービスへの接続先は不要（ADR-019）。
+      # レイアウトHTML生成はbackend内のPyMuPDFで完結するため、専用サービスへの接続先は不要（ADR-015）。
       - DOCLING_SERVICE_URL=http://docling:8100
-      # ADR-023: pdf2htmlEX専用サービスへの接続先。doclingと同じくCompose内部DNSで解決し、
+      # ADR-016: pdf2htmlEX専用サービスへの接続先。doclingと同じくCompose内部DNSで解決し、
       # ホストへは公開しない。
       - PDF2HTMLEX_SERVICE_URL=http://pdf2htmlex:8200
-      # モデル選択機能（ADR-023）のClaude/OpenAI/Gemini標準プラン用キー。プロジェクトルートの
+      # モデル選択機能（ADR-016）のClaude/OpenAI/Gemini標準プラン用キー。プロジェクトルートの
       # .env（Git管理外）から`${...}`展開でコンテナに渡す。GEMINI_API_KEYと同様、既定
       # （USE_MOCK_AI=true）では未使用だが、フェーズ5でゲートを解除した際にすぐ使えるよう
       # キー自体は常に注入しておく。
@@ -72,7 +68,7 @@ services:
       - docling
       - pdf2htmlex
 
-  # ③ Doclingによるテキスト抽出専用の内部サービス（ADR-018/019、DEVELOPMENT.md ステップ15）
+  # ③ Doclingによるテキスト抽出専用の内部サービス（ADR-014/015、DEVELOPMENT.md ステップ15）
   # torch/opencv-python等の重量級ML依存を含み、backendの起動速度に影響しないよう分離した。
   # backendコンテナからのみHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
   docling:
@@ -92,7 +88,7 @@ services:
       # 標準HTTPSダウンロードへフォールバックさせる。
       - HF_HUB_DISABLE_XET=1
 
-  # ④ pdf2htmlEXによるPDF→HTML変換専用の内部サービス（ADR-019/023）
+  # ④ pdf2htmlEXによるPDF→HTML変換専用の内部サービス（ADR-016）
   # pdf2htmlEXバイナリは特殊パッチ済みpoppler等の重量級ネイティブ依存を含み、backend
   # （python:3.9-slimベース）には導入できないため、doclingと同じく別コンテナに分離する。
   # backendコンテナからのみHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
@@ -104,7 +100,7 @@ services:
   # ⑤ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
   # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
-  # として用意する（ADR-014）。frontend/backendのように常時起動する必要はないため、
+  # として用意する（ADR-010）。frontend/backendのように常時起動する必要はないため、
   # `profiles`でopt-in化し、明示的に指定した場合のみ起動する
   # （例: `docker compose --profile e2e run --rm e2e`）。
   e2e:

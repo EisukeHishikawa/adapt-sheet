@@ -1,4 +1,4 @@
-"""Docling事前検証スクリプト（DEVELOPMENT.md ステップ15でbackend/scripts/から移動、ADR-018）。
+"""Docling事前検証スクリプト（DEVELOPMENT.md ステップ15でbackend/scripts/から移動、ADR-014）。
 
 ローカル環境（OS依存のライブラリ/MLモデル）でPDFから
 最低限テキスト抽出できるかを早期に確認するための単体スクリプト。

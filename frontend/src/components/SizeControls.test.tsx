@@ -3,16 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { SizeControls } from './SizeControls'
 import { useSheetStore } from '@/store/sheetStore'
 
-// ステップ17: docs/spec.md 2.2「定型サイズ自動入力」のUI再設計。
-// 従来の「A4 たて」等6個の独立ボタンを、1つのSelect（トリガー+ドロップダウン、
-// https://www.shadcn.net/ja/docs/components/select 相当）に統合する。
-// ユーザーレビューでの複数回のフィードバックを反映した最終形として、
-// - トリガーは選択中の紙のイラストそのもの（枠線・シェブロン等のフォーム部品的装飾は無し）
-// - ドロップダウンは6択を縦一列に並べる（2列グリッドではない）
-// - 「たて」「よこ」の文字・mm表記は画面上から排除し、方向は紙の縦横比のみで表現、
-//   A4/B5/A5の表記のみイラストの中に描く
-// - 視覚的な文字は無くてもアクセシブルネーム(aria-label)は維持する
-// を検証する。順序はA4たて/A4よこ/B5たて/B5よこ/A5たて/A5よこ、初期値はA4よこ。
+// docs/spec.md 2.2「定型サイズ自動入力」: 1つのSelect（トリガー+ドロップダウン）で
+// 6択（A4たて/A4よこ/B5たて/B5よこ/A5たて/A5よこ）を縦一列に提供する。
+// 「たて」「よこ」の文字・mm表記は画面上に出さず、方向は紙の縦横比のみで表現する
+// （視覚的な文字が無くてもaria-labelでアクセシブルネームは維持する）。
 describe('SizeControls（1つのSelect・縦一列・紙イラストへのラベル内包）', () => {
   beforeEach(() => {
     useSheetStore.setState({ widthMm: 297, heightMm: 210 })

@@ -1,6 +1,6 @@
-"""DoclingによるPDF→HTMLテキスト抽出レイヤー（ADR-003/018/023）。
+"""DoclingによるPDF→HTMLテキスト抽出レイヤー（ADR-003/014/016）。
 
-ADR-023により、DoclingはMarkdownではなくHTMLを返す。Docling/pdf2htmlEX/PyMuPDFの3エンジンは
+ADR-016により、DoclingはMarkdownではなくHTMLを返す。Docling/pdf2htmlEX/PyMuPDFの3エンジンは
 AIを介さない単独の変換結果として直接プレビューされるため、出力形式をHTMLに揃えている。
 """
 

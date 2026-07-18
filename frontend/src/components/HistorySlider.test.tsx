@@ -55,10 +55,8 @@ describe('HistorySlider（履歴スライド機能）', () => {
     expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify({ label: 'old' }))
   })
 
-  // ユーザー報告バグの再現・回帰防止: サムネイルがentry.htmlをそのままiframeに渡していたため、
-  // {{key}}形式のテンプレート変数（バックエンドの生成HTMLに含まれる）が置換されずそのまま表示され、
-  // 「履歴の内容が表示されていない」ように見えていた。PreviewPanelと同じrenderTemplateで
-  // entry.jsonの値を埋め込んでから表示することを検証する。
+  // サムネイルはentry.htmlをそのまま渡すのではなく、PreviewPanelと同じrenderTemplateで
+  // entry.jsonの値を{{key}}に埋め込んでから表示することを検証する。
   it('サムネイルはHTMLのテンプレート変数をJSONの値で置換した内容を表示する', () => {
     const entry: HistoryItem = {
       html: '<p>{{label}}</p>',

@@ -1,4 +1,4 @@
-"""構造化エラーレスポンス（ADR-017、DEVELOPMENT.md ステップ14）の検証テスト。
+"""構造化エラーレスポンス（ADR-013、DEVELOPMENT.md ステップ14）の検証テスト。
 
 各エラーが `{"error": {"code", "message", "request_id"}}` の形で返り、
 ボディのrequest_idがX-Request-IDヘッダーと一致することを検証する。
@@ -53,7 +53,7 @@ def test_ai_generation_error_returns_structured_body():
 
 
 def test_free_access_forbidden_returns_structured_body():
-    # ADR-023: フェーズ5まで自由アクセスのユーザーは標準プランの生成AIを利用できない。
+    # ADR-016: フェーズ5まで自由アクセスのユーザーは標準プランの生成AIを利用できない。
     response = client.post("/api/render", data={"engine": "claude"})
 
     assert response.status_code == 403

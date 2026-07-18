@@ -39,11 +39,11 @@ describe('renderSheet', () => {
   })
 
   // DEVELOPMENT.md ステップ16のTDD要件: promptフィールドがFormDataに正しく含まれること、
-  // およびADR-019に基づきcssフィールドを持たないRenderRequestFieldsからは
+  // およびADR-015に基づきcssフィールドを持たないRenderRequestFieldsからは
   // cssが送信されようがないことを検証する。jsonは業務データがGeminiへの入力として
   // 不要になったためRenderRequestFieldsから削除済みで、そもそも送信されようがない
   // （backend/app/main.pyのjson_fieldパラメータ廃止と対）。htmlも同様の理由で
-  // ADR-023により削除済み（生成AIへPDFを直接送るため入力として不要）。
+  // ADR-016により削除済み（生成AIへPDFを直接送るため入力として不要）。
   it('promptフィールドが渡された場合、FormDataにそのまま含めて送信する', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
@@ -59,7 +59,7 @@ describe('renderSheet', () => {
     expect(formData.has('html')).toBe(false)
   })
 
-  it('engineフィールドが渡された場合、FormDataにそのまま含めて送信する（ADR-023）', async () => {
+  it('engineフィールドが渡された場合、FormDataにそのまま含めて送信する（ADR-016）', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
@@ -72,7 +72,7 @@ describe('renderSheet', () => {
   })
 })
 
-// DEVELOPMENT.md ステップ14（ADR-017）のTDD要件: バックエンドの構造化エラーボディ
+// DEVELOPMENT.md ステップ14（ADR-013）のTDD要件: バックエンドの構造化エラーボディ
 // `{"error": {code, message, request_id}}` を RenderApiError が保持できることを検証する。
 describe('renderSheet（構造化エラーレスポンスの伝播）', () => {
   afterEach(() => {

@@ -5,7 +5,7 @@ import { useSheetStore } from '@/store/sheetStore'
 
 // ステップ18: EditorPanelはHTML入力とJSON入力を「タブ切り替え」で表示する右カラム専用コンポーネントに
 // なった（プロンプト入力は左カラムのPromptInputへ分離）。ここではタブ切り替えとストア連動、および
-// CSS入力欄が存在しないこと（ADR-019）を固定する。見出しテキストは非表示にする方針のため、
+// CSS入力欄が存在しないこと（ADR-015）を固定する。見出しテキストは非表示にする方針のため、
 // 検証は表示ラベルではなくtextareaのaria-labelとタブ（role=tab）に対して行う。
 describe('EditorPanel（HTML/JSONタブ切り替え）', () => {
   beforeEach(() => {
@@ -34,7 +34,7 @@ describe('EditorPanel（HTML/JSONタブ切り替え）', () => {
     expect(useSheetStore.getState().jsonContent).toBe('{"a":1}')
   })
 
-  it('CSS入力欄は存在しない（ADR-019: CSSはHTMLの<style>に埋め込む前提のため独立エディタを持たない）', () => {
+  it('CSS入力欄は存在しない（ADR-015: CSSはHTMLの<style>に埋め込む前提のため独立エディタを持たない）', () => {
     render(<EditorPanel />)
 
     expect(screen.queryByRole('textbox', { name: 'CSS入力' })).not.toBeInTheDocument()

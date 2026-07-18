@@ -9,7 +9,7 @@ description: adapt-sheetのバックエンド(FastAPI/uvicorn)とフロントエ
 pytest/vitest等のテストスイートは実行しない。
 
 <!-- 開発環境はDocker Composeのみを対象とし、ローカル(非Docker)での直接実行はサポートしない
-     （ルートCLAUDE.md/ADR-014）。本スキルもコンテナ起動前提に統一する。 -->
+     （ルートCLAUDE.md/ADR-010）。本スキルもコンテナ起動前提に統一する。 -->
 
 ## 前提
 

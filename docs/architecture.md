@@ -16,9 +16,9 @@ flowchart LR
         CF["CloudFront"]
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
-        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-019)\nengineごとの分岐・ゲート判定 (ADR-023)"]
-        LambdaDocling["Lambda (DoclingのPDF→HTML変換)\nDoclingモデル焼き込み済み (ADR-023)"]
-        LambdaPdf2HtmlEx["Lambda (pdf2htmlEXのPDF→HTML変換)\n(ADR-023)"]
+        LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-015)\nengineごとの分岐・ゲート判定 (ADR-016)"]
+        LambdaDocling["Lambda (DoclingのPDF→HTML変換)\nDoclingモデル焼き込み済み (ADR-016)"]
+        LambdaPdf2HtmlEx["Lambda (pdf2htmlEXのPDF→HTML変換)\n(ADR-016)"]
         WAF["AWS WAF"]
     end
 
@@ -26,19 +26,17 @@ flowchart LR
         Gemini["Gemini API (Google AI Studio)"]
         Claude["Claude API (Anthropic)"]
         OpenAI["OpenAI API"]
-        Auth0["Auth0"]
-        Supabase["Supabase (PostgreSQL)"]
+        Supabase["Supabase (Auth + PostgreSQL)"]
     end
 
     Browser -->|静的アセット取得| CF --> S3
     Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
     LambdaEntry -->|変換エンジン選択時 (HTTP)| LambdaDocling
     LambdaEntry -->|変換エンジン選択時 (HTTP)| LambdaPdf2HtmlEx
-    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-023)| Gemini
-    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-023)| Claude
-    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-023)| OpenAI
-    LambdaEntry -->|認証トークン検証| Auth0
-    LambdaEntry -->|データ保存/取得| Supabase
+    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-016)| Gemini
+    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-016)| Claude
+    LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-016)| OpenAI
+    LambdaEntry -->|認証トークン検証・データ保存/取得| Supabase
 ```
 
 ---
@@ -47,7 +45,7 @@ flowchart LR
 
 `POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。
 
-エンジン選択（`engine`、ADR-023）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
+エンジン選択（`engine`、ADR-016）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
 
 ```mermaid
 sequenceDiagram
@@ -60,7 +58,7 @@ sequenceDiagram
 
     FE->>API: PDF/プロンプト/サイズ/engine送信
     alt engineが標準プラン（Gemini標準/Claude/OpenAI）
-        API-->>FE: 403（フェーズ5まで自由アクセス不可、ADR-023）
+        API-->>FE: 403（フェーズ5まで自由アクセス不可、ADR-016）
     else engineが変換エンジン（Docling/pdf2htmlEX/PyMuPDF）
         Note over API,Pdf2HtmlEx: いずれか1つをengineに応じて呼び出す。AIは介さない
         API->>Layout: PDF（pymupdf選択時）
@@ -91,9 +89,9 @@ flowchart TD
     WAF --> Router{"認証トークンあり?"}
 
     Router -->|なし| Public["未認証エリア\n・ステートレスな変換/生成のみ\n・DBアクセス不可\n・IP単位レート制限"]
-    Router -->|あり| Auth0Check["Auth0でJWT検証"]
-    Auth0Check -->|有効| Private["認証エリア\n・Supabaseへの保存/閲覧許可\n・ユーザーID単位レート制限"]
-    Auth0Check -->|無効| Reject["401/403エラー返却"]
+    Router -->|あり| SupabaseAuthCheck["Supabase AuthでJWT検証"]
+    SupabaseAuthCheck -->|有効| Private["認証エリア\n・Supabaseへの保存/閲覧許可\n・ユーザーID単位レート制限"]
+    SupabaseAuthCheck -->|無効| Reject["401/403エラー返却"]
 ```
 
 ---

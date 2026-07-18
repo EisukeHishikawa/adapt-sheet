@@ -26,10 +26,10 @@ from app.services.mock_templates import LANDSCAPE_INVOICE, PORTRAIT_DELIVERY_NOT
 _PLACEHOLDER_PATTERN = re.compile(r"\{\{(\w+)\}\}")
 
 # MockAIClientはAIClientプロトコル（generate(prompt: str)）を変えずに用紙の向きを知る必要があるため、
-# build_promptが埋め込んだサイズ行から寸法を逆算する（ADR-020）。
+# build_promptが埋め込んだサイズ行から寸法を逆算する（ADR-019）。
 _SIZE_LINE_PATTERN = re.compile(r"帳票サイズ: 横([\d.]+)mm\s*×\s*縦([\d.]+)mm")
 
-# Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間（ADR-023）。
+# Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間（ADR-019）。
 _RETRY_MAX_ATTEMPTS = 3
 _RETRY_BACKOFF_SECONDS = 2.0
 
@@ -74,9 +74,9 @@ def build_prompt(
     height_mm: Optional[float],
     markdown: str = "",
 ) -> str:
-    """docs/spec.md 3.1のリクエスト項目からGeminiへの動的プロンプトを構築する（ADR-019/020/023/025）。
+    """docs/spec.md 3.1のリクエスト項目からGeminiへの動的プロンプトを構築する（ADR-019）。
 
-    PDFアップロード時は2つの入力を渡す（ADR-023）。
+    PDFアップロード時は2つの入力を渡す（ADR-019）。
     - html: PyMuPDF由来。テキスト・罫線・背景を絶対座標のdivに写したもの。見た目は正確だが構造の保守性は低い。
     - markdown: Docling由来。テキストと論理構造は正確だが見た目の情報を持たない。
     それぞれを「見た目の正」「テキストの正」として使い分けるようGeminiへ役割を明示する。
@@ -177,7 +177,7 @@ def validate_render_result(result: RenderResult) -> None:
 
     テンプレート変数の欠け（htmlに{{key}}があるのにjsonにキーが無い）は、実Geminiが空欄
     セルのキーを落とす挙動により起こりうる。1件の欠けで帳票全体を502にせず、欠けたキーを
-    空文字列で補完してレンダリングを成立させる（ADR-024）。空欄セルは空欄のまま描画され、
+    空文字列で補完してレンダリングを成立させる（ADR-019）。空欄セルは空欄のまま描画され、
     これはモデルが値を出さなかった意図に忠実。逆にhtmlに現れないjsonの余剰キーは、テンプレート
     適用時に使われないだけで無害なため許容する。
     """
@@ -197,7 +197,7 @@ class MockAIClient:
     """実APIを叩かないモック層（ADR-007）。
 
     ローカル開発（既定のUSE_MOCK_AI=true）でも実務帳票に近い体裁を確認できるよう、用紙の向きで
-    2種類を出し分ける（ADR-020）。サイズ情報が無い場合は、フロントの既定サイズ（A4たて）に合わせる。
+    2種類を出し分ける（ADR-019）。サイズ情報が無い場合は、フロントの既定サイズ（A4たて）に合わせる。
     """
 
     def generate(self, prompt: str) -> RenderResult:
@@ -249,7 +249,7 @@ class GeminiAIClient:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
         self._client = client or genai.Client(api_key=api_key)
         # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
-        # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-023）。
+        # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる（ADR-019）。
         self._model = os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL).strip() or self._DEFAULT_MODEL
         # response_mime_typeでJSON出力を強制し、コードフェンスや前置きで壊れないようにする。
         self._config = genai_types.GenerateContentConfig(
@@ -267,7 +267,7 @@ class GeminiAIClient:
                 )
             except genai_errors.ServerError as exc:
                 # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は
-                # Gemini側の一過性の混雑であり、待てば成功しうる（ADR-023）。
+                # Gemini側の一過性の混雑であり、待てば成功しうる（ADR-019）。
                 if attempt == _RETRY_MAX_ATTEMPTS:
                     raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
                 time.sleep(_RETRY_BACKOFF_SECONDS * attempt)

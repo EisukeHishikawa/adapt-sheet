@@ -8,7 +8,7 @@ pydantic-settings==2.11.0
 python-multipart==0.0.20
 httpx==0.28.1
 pypdf==6.14.2  # docling-serviceへ送るPDFを1ページ目のみに切り詰めるため（純Python実装で軽量、ADR-018のtorch等重量級依存とは別枠）
-PyMuPDF==1.24.14  # レイアウトHTML生成（app/services/pdf_layout.py、ADR-025）。純Pythonで導入でき罫線・塗りを座標付き図形として取得できる。ライセンスはAGPL/商用
+PyMuPDF==1.24.14  # レイアウトHTML生成（app/services/pdf_layout.py、ADR-019）。純Pythonで導入でき罫線・塗りを座標付き図形として取得できる。ライセンスはAGPL/商用
 google-genai==1.47.0
 google-auth==2.50.0
 requests==2.32.5

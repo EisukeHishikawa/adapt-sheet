@@ -69,7 +69,7 @@ async def render(
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
 ) -> RenderResponse:
     # PDFがある場合は、PyMuPDF由来のレイアウトHTML（見た目）とDoclingのMarkdown（テキスト）の
-    # 両方をプロンプトのベースにする（ADR-023/025、docs/architecture.md 2節のシーケンス図）。
+    # 両方をプロンプトのベースにする（ADR-019、docs/architecture.md 2節のシーケンス図）。
     # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う（ADR-017）。
     effective_html = html
     markdown = ""
@@ -100,7 +100,7 @@ async def _convert_pdf(
     filename: str,
     content: bytes,
 ) -> tuple:
-    """レイアウトHTML生成（PyMuPDF、backend内）とDocling（Markdown、別コンテナ）を並列に実行する（ADR-023/025）。
+    """レイアウトHTML生成（PyMuPDF、backend内）とDocling（Markdown、別コンテナ）を並列に実行する（ADR-019）。
 
     Doclingは初回モデルロードで分単位かかり、PyMuPDFの変換もCPUバウンドで数秒かかりうるため、
     直列に呼ぶと待ち時間が単純に加算される。どちらも同期処理のため、スレッドへ逃がして

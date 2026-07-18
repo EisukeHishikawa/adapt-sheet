@@ -4,7 +4,7 @@ import pytest
 
 from app.converter import DoclingPDFConverter, PDFConversionError
 
-# ADR-023: DoclingはHTML変換ではなくテキスト抽出（Markdown）を担う。
+# ADR-019: DoclingはHTML変換ではなくテキスト抽出（Markdown）を担う。
 # scripts/verify_docling.pyと同じ既知の埋め込みテキストを含むサンプルPDFを使い回す。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 
@@ -15,7 +15,7 @@ def test_docling_converter_extracts_markdown_from_real_pdf():
 
     assert isinstance(markdown, str)
     assert "Docling verification sample text" in markdown
-    # レイアウトの再現はPyMuPDF（backend内）側の責務のため、HTML文書として返さないこと（ADR-023）。
+    # レイアウトの再現はPyMuPDF（backend内）側の責務のため、HTML文書として返さないこと（ADR-019）。
     assert "<html" not in markdown.lower()
 
 

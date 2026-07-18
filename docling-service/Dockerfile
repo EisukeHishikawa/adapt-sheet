@@ -12,9 +12,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # opencv-python(cv2)がlibGL.so.1 / libglib2.0を、torchがlibgomp1(OpenMP)を実行時に要求するため、
 # slimイメージには含まれないこれらの共有ライブラリを明示的に追加する。
-# build-essentialは、manylinuxホイールが無い一部依存パッケージのソースビルドに備えて含める。
+# requirements.txtの全依存（torch/opencv-python等を含む）はバイナリwheelで導入でき、
+# ソースビルドが発生しないため、build-essential（gcc/g++等で約280MB）は含めない（ADR-024）。
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \

@@ -11,10 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # ADR-018によりopencv-python/torch（libgl1/libglib2.0-0/libgomp1を要求）を含まなくなったため、
-# それらのapt依存は削除した。build-essentialは、manylinuxホイールが無い一部依存パッケージの
-# ソースビルドに備えて残す。
+# それらのapt依存は削除した。requirements.txtの全依存はmanylinux/aarch64のバイナリwheelで
+# 導入でき、ソースビルドが発生しないため、build-essential（gcc/g++等で約280MB）も含めない（ADR-024）。
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

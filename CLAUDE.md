@@ -94,7 +94,7 @@ docker compose --profile e2e run --rm e2e            # Playwright（frontend/Doc
 ## Git / CI運用
 
 - mainブランチへの直接pushは禁止（Branch Protection）。
-- PR作成時・main merge時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）のCIを自動実行する運用を予定している。ただし2026-07-05時点でCIワークフローは未構築のため、それまではローカルでのテスト・静的解析結果をPR本文に記載する。CI構築後は100%成功しないとマージ不可とする。
+- PR作成時・main merge時に`.github/workflows/ci.yml`がフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）・docling/pdf2htmlex（pytest/ruff）を自動実行する（DEVELOPMENT.md ステップ26）。Branch Protectionへの「CI必須」反映は別途行うため、それまではローカルでのテスト・静的解析結果もPR本文に記載する。反映後は100%成功しないとマージ不可とする。
 - レビュー承認必須（Require approvals）は、ソロ開発期間中は無効化している（PR作成者本人は自分のPRを承認できないGitHub仕様のため）。共同開発者が加わった時点で再度有効化を検討する。
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
 - **ブランチの切り方**: プライマリの作業ディレクトリで `main` を**チェックアウトしない**。`docs-space`（後述、ADR-010）が `main` を保持しており、Gitは同一ブランチを複数のワークツリーで同時にチェックアウトできないため、`git checkout main` は `fatal: 'main' is already used by worktree at ...` で失敗する。最新の`main`から直接ブランチを切ること。

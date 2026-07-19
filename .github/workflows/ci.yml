@@ -1,0 +1,61 @@
+# PR作成時・mainマージ時のCI（フロント/バック/静的解析、DEVELOPMENT.md ステップ26）。
+# ローカル開発（CLAUDE.md参照）と同じdocker-compose.ymlのサービス定義をそのまま使い、
+# ローカルとCIでビルド・実行結果が乖離しないようにする。
+#
+# backend/frontendは`--no-deps`で単体起動する。backendのテストはDocling/pdf2htmlexクライアントを
+# httpxのモックトランスポートで検証しており（backend/tests配下）、実際にdocling/pdf2htmlex
+# コンテナが起動している必要はない。
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image
+        run: docker compose build backend
+      - name: pytest
+        run: docker compose run --rm --no-deps backend pytest
+      - name: ruff
+        run: docker compose run --rm --no-deps backend ruff check .
+
+  docling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build docling image
+        run: docker compose build docling
+      - name: pytest
+        run: docker compose run --rm docling pytest
+      - name: ruff
+        run: docker compose run --rm docling ruff check .
+
+  pdf2htmlex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pdf2htmlex image
+        run: docker compose build pdf2htmlex
+      - name: pytest
+        run: docker compose run --rm pdf2htmlex pytest
+      - name: ruff
+        run: docker compose run --rm pdf2htmlex ruff check .
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build frontend image
+        run: docker compose build frontend
+      - name: Vitest
+        run: docker compose run --rm --no-deps frontend npm run test
+      - name: ESLint
+        run: docker compose run --rm --no-deps frontend npm run lint
+      - name: vite build（tsc型チェック含む）
+        run: docker compose run --rm --no-deps frontend npm run build

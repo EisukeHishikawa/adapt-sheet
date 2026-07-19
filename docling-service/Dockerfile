@@ -1,4 +1,4 @@
-# Docling変換専用の内部サービス用イメージ（docker-compose.yml参照、ADR-018）。
+# Docling変換専用の内部サービス用イメージ（docker-compose.yml参照、ADR-013）。
 # torch/opencv-python等の大容量ML依存を含むため、backend（入口エンドポイント）とは
 # 別イメージ・別コンテナに分離し、backend側の起動を高速化する。
 # Python 3.9系はCLAUDE.mdに記載のとおりDoclingの動作確認済みバージョンのため、backendと揃える。

@@ -79,9 +79,9 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 ## 5. CI/CDの構築（フェーズ4 ステップ26）
 
-- PR作成時・mainマージ時にフロント（Vitest）・バック（pytest）・静的解析（ESLint/Ruff）を自動実行するワークフローを構築する。
-- 「CIが100%成功しなければマージ不可」をBranch Protection Ruleに設定する（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。
-- テスト成功後、AWS（S3 / Lambda）への自動デプロイを構築する。
+- **CI（構築済み）**: `.github/workflows/ci.yml` が、PR作成時・mainマージ時にフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）・docling/pdf2htmlex（pytest/ruff）をジョブ分割で自動実行する。ローカル開発と同じ`docker-compose.yml`のサービス定義を使い、ローカル/CIの実行結果を乖離させない。
+- 「CIが100%成功しなければマージ不可」をBranch Protection Ruleに設定する（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。CIワークフローが実際にGitHub上で走った実績ができてから設定する（別途対応）。
+- **CD（未構築）**: OIDCによるAWS認証設定・`terraform apply`・テスト成功後のAWS（S3 / Lambda）への自動デプロイは別途構築する。
 
 ---
 

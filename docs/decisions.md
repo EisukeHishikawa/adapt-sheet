@@ -215,6 +215,30 @@
 
 ---
 
+## ADR-018: フェーズ5着手前のSupabase MCP導入
+
+- **ステータス**: Accepted
+- **コンテキスト**: フェーズ5（Supabase Auth・PostgreSQL統合）に入る前に、Supabaseプロジェクトの作成・
+  マイグレーション適用・Auth設定を生成AIから直接操作できる手段を用意したい。ADR-004（Terraform一本化）
+  の対象にはAWSと並んでSupabaseプロバイダーも含む想定だが、Terraform化する前段としてプロジェクト自体の
+  作成・試行錯誤はMCP経由で対話的に行うほうが小回りが利く（[AWS CLI MCP](./aws-mcp-setup.md)導入時と同じ考え方）。
+- **決定**:
+  - 公式`@supabase/mcp-server-supabase`を`.mcp.json`へ追加する（`npx`実行、認証はPersonal Access Token
+    を環境変数`SUPABASE_ACCESS_TOKEN`経由で渡す。詳細手順は[`docs/supabase-mcp-setup.md`](./supabase-mcp-setup.md)）。
+  - `aws`/`playwright`エントリと異なりDockerイメージ化しない。公式配布形態がnpmパッケージであり、
+    無理にDocker化するより`npx`をそのまま使う方が保守コストが低いと判断した。
+  - `--project-ref`は付けない（プロジェクトが未作成のため、組織単位の操作が必要）。プロジェクト作成後、
+    対象を絞る形で`--project-ref`の追加を検討する。
+- **理由**: フェーズ5の最初の作業（Supabaseプロジェクトの新規作成）はMCPの組織単位の操作が前提となる
+  ため、プロジェクト作成前からMCPを使える状態にしておく必要がある。AWS CLI MCPと同様、生成AIが対話的に
+  外部サービスを操作する手段を、実装着手前に整備する。
+- **トレードオフ**: Personal Access TokenはAWSの`aws login`と異なり自動失効しない長期トークンのため、
+  漏洩時のリスクが相対的に大きい（[`docs/supabase-mcp-setup.md`](./supabase-mcp-setup.md)のセキュリティ
+  注意を参照）。プロジェクト作成後は`--project-ref`によるスコープ限定を別途行う。
+- **関連**: ADR-004（Terraform一本化）、ADR-007（認証・DBにSupabaseを採用）。フェーズ5着手前の前段整備。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

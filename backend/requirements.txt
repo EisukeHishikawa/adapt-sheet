@@ -15,5 +15,6 @@ anthropic==0.117.0  # Claude APIクライアント（ADR-015）
 openai==2.46.0  # OpenAI APIクライアント（ADR-015）
 requests==2.32.5
 boto3==1.35.99  # Lambda本番でParameter StoreからAPIキーを取得する（app/secrets_loader.py、ADR-017）。純Pythonでwheel導入のみ
+PyJWT==2.10.1  # Supabase発行JWTの検証（app/services/auth.py、DEVELOPMENT.md ステップ27）。純Pythonで導入できる
 pytest==8.4.2
 ruff==0.15.20

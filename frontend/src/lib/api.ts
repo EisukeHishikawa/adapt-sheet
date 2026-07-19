@@ -70,7 +70,12 @@ async function parseErrorBody(response: Response): Promise<RenderErrorInfo | und
 }
 
 // docs/spec.md 3.1が`multipart/form-data`を要求するため、pdfも同じ関数で扱えるようFormDataを使う。
-export async function renderSheet(fields: RenderRequestFields): Promise<RenderResponse> {
+// accessTokenはauthStoreのsession.access_token（DEVELOPMENT.md ステップ27）。未ログイン時は
+// undefinedのままAuthorizationヘッダーを付けず、ゲート対象engineはバックエンドが403を返す。
+export async function renderSheet(
+  fields: RenderRequestFields,
+  accessToken?: string,
+): Promise<RenderResponse> {
   const formData = new FormData()
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue
@@ -79,6 +84,7 @@ export async function renderSheet(fields: RenderRequestFields): Promise<RenderRe
 
   const response = await fetch('/api/render', {
     method: 'POST',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     body: formData,
   })
 

@@ -70,6 +70,32 @@ describe('renderSheet', () => {
     const formData = init?.body as FormData
     expect(formData.get('engine')).toBe('claude')
   })
+
+  // DEVELOPMENT.md ステップ27のTDD要件: authStoreのsession.access_tokenをAuthorizationヘッダーに
+  // 載せて送ることを検証する（ゲート対象engineの解禁判定はバックエンドが行う）。
+  it('accessTokenが渡された場合、AuthorizationヘッダーにBearerトークンとして付与する', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
+
+    await renderSheet({ prompt: '', engine: 'claude' }, 'token-abc')
+
+    const [, init] = fetchSpy.mock.calls[0]
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Authorization')).toBe('Bearer token-abc')
+  })
+
+  it('accessTokenが渡されない場合、Authorizationヘッダーを付けない', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(dummyRenderResponse), { status: 200 }))
+
+    await renderSheet({ prompt: '', engine: 'gemini_free' })
+
+    const [, init] = fetchSpy.mock.calls[0]
+    const headers = new Headers(init?.headers)
+    expect(headers.has('Authorization')).toBe(false)
+  })
 })
 
 // DEVELOPMENT.md ステップ14（ADR-012）のTDD要件: バックエンドの構造化エラーボディ

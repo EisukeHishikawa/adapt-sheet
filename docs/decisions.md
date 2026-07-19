@@ -215,6 +215,21 @@
 
 ---
 
+## ADR-018: Supabase AuthのJWT検証方式とゲート解除（DEVELOPMENT.md ステップ27）
+
+- **ステータス**: Accepted
+- **コンテキスト**: フェーズ5の最初のステップとして、標準プランの生成AI（Gemini標準/Claude/OpenAI、`GATED_ENGINES`）を「未ログイン時のみ403」に切り替える。バックエンド（入口エンドポイント）はSupabase SDKを持たないため、フロントが保持するSupabaseセッションのアクセストークン（JWT）を、バックエンド側で自前検証する方式を選ぶ必要がある。
+- **決定**:
+  - フロントは`@supabase/supabase-js`でemail/passwordのログイン・新規登録・ログアウトを扱う（`frontend/src/lib/supabaseClient.ts`・`frontend/src/store/authStore.ts`・`frontend/src/components/AuthPanel.tsx`）。`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`未設定時は`supabase`をnullにし、`AuthPanel`自体を非表示にする（Supabaseプロジェクト未作成のローカル開発を壊さないため）。
+  - `renderSheet`（`frontend/src/lib/api.ts`）はログイン中のみ`session.access_token`をAuthorizationヘッダー（`Bearer <token>`）として付与する（`sheetStore.fetchRender`が仲介）。
+  - バックエンドは`app/services/auth.py`の`get_current_user`が、AuthorizationヘッダーのJWTを**PyJWTでHS256・共有シークレット（`SUPABASE_JWT_SECRET`環境変数）検証**する。Supabase SDK・JWKSへのネットワーク呼び出しは行わず、`aud: "authenticated"`と有効期限も合わせて検証する。検証失敗（ヘッダー無し・シークレット未設定・署名不正・期限切れ・audience不一致）は例外を送出せず**常にNoneを返す（fail-closed）**。
+  - `app/main.py`の`/api/render`は、`current_user`（`get_current_user`のDepends）がNoneの場合のみ`GATED_ENGINES`を403にする（ADR-015時点の「常に403」から差し替え）。
+- **理由**: HS256共有シークレット方式は、SupabaseプロジェクトのJWT Secret（ダッシュボードで確認可能）を環境変数として渡すだけで完結し、バックエンドにSupabase SDKや外部ネットワーク呼び出し（JWKS取得等）を追加せずに済む。`SUPABASE_JWT_SECRET`未設定時に必ずNoneを返すfail-closed設計により、設定漏れのままゲートが意図せず解禁される事故を防ぐ。PyJWTは純Pythonで導入でき、ADR-016の「軽量イメージ」方針とも整合する。
+- **トレードオフ**: Supabaseが将来的に非対称鍵（JWKS/ES256）への移行を必須化した場合、`SUPABASE_JWT_SECRET`方式は使えなくなり検証方式の変更が必要になる（2026年時点ではHS256共有シークレットも提供されている）。フロントのログインUIはemail/passwordのみで、OAuth・マジックリンクは対象外（実際のSupabaseプロジェクト作成・本番運用はステップ28で行う）。
+- **関連**: ADR-007（認証・DBにSupabase採用）、ADR-011（機微情報の非ログ出力）、ADR-012（構造化エラー）、ADR-015（`GATED_ENGINES`の新設）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

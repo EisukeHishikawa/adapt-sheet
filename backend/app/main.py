@@ -15,6 +15,7 @@ from app.errors import (
 from app.logging_config import configure_logging
 from app.middleware import RequestContextMiddleware
 from app.secrets_loader import load_secrets_into_env
+from app.services.auth import SupabaseUser, get_current_user
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
@@ -82,11 +83,12 @@ async def render(
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
     html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
     pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
 ) -> RenderResponse:
-    # フェーズ5（Supabase Auth導入、DEVELOPMENT.md ステップ27）まで、標準プランの生成AI
-    # （Gemini標準/Claude/OpenAI）は自由アクセスのユーザーに提供しない（ADR-015）。
+    # 標準プランの生成AI（Gemini標準/Claude/OpenAI）はログイン済みユーザーのみに提供する
+    # （ADR-015のゲート判定を、DEVELOPMENT.md ステップ27でSupabase Authのログイン状態へ差し替え）。
     # PDF処理・AI呼び出しより前に判定し、無駄な処理を避ける。
-    if engine in GATED_ENGINES:
+    if engine in GATED_ENGINES and current_user is None:
         raise HTTPException(status_code=403)
 
     if engine in CONVERTER_ENGINES:

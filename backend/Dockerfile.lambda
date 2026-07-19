@@ -4,7 +4,8 @@
 # Lambda化対象はこのbackendのみ。
 #
 # ・APIキーはイメージに一切含めず、実行時にParameter Storeから取得する（app/secrets_loader.py）。
-# ・イメージはECR Public（public.ecr.aws）へpushする。ECR Privateの無料枠500MBを避けるため（ADR-017）。
+# ・イメージはECR Private（<account>.dkr.ecr.<region>.amazonaws.com）へpushする。Lambdaの
+#   コンテナイメージは同一リージョンのECR Privateからのみ取得できるため（ADR-017）。
 FROM python:3.9-slim
 
 # AWS Lambda Web Adapter: uvicorn(FastAPI)をLambdaのHTTPイベントで駆動するためのLambda拡張

@@ -1,0 +1,19 @@
+# infra/terraform.tfvars として複製し、環境に合わせて調整する（このexampleはコミット、実tfvarsは.gitignore）。
+# APIキー等の秘密情報はここには書かない（Parameter Storeへ別途投入する。ADR-017）。
+
+aws_region  = "ap-northeast-1"
+project     = "adapt-sheet"
+environment = "prod"
+
+# ECR Privateへpush済みのbackendイメージタグ（CIが更新する運用を想定）。
+image_tag = "latest"
+
+# Lambda（PDF処理に余裕を持たせる）。
+lambda_memory_size = 4096
+lambda_timeout     = 60
+
+# 本番は実AIを叩く。
+use_mock_ai = "false"
+
+# WAFのレート制限（5分あたり・IP単位）。
+waf_rate_limit = 2000

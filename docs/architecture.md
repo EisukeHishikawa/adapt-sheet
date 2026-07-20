@@ -110,7 +110,22 @@ flowchart LR
 
 ---
 
-## 5. 今後の追記予定
+## 5. データベース（PostgreSQL、ステップ28・ADR-019）
+
+`render_history`テーブル（`backend/app/models.py`）のみ。登録ユーザーが`POST /api/render`を成功させるたびに1行追加される。`user_id`はSupabase Auth（`auth.users.id`）のUUIDをそのまま文字列で持つが、本DBは`auth`スキーマを所有しないため外部キー制約は張らない。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `id` | UUID (PK) | 履歴の一意識別子 |
+| `user_id` | string | Supabase JWTの`sub`（`auth.users.id`） |
+| `engine` | string | 描画に使ったエンジン（`RenderEngine`のいずれか） |
+| `html` / `css` / `json_data` | text / text / json | `POST /api/render`のレスポンスと同一内容 |
+| `width_mm` / `height_mm` | float, nullable | 帳票サイズ |
+| `created_at` | timestamptz | 保存日時 |
+
+マイグレーションは`backend/migrations/`（Alembic）で管理する。
+
+## 6. 今後の追記予定
 
 - フェーズ4（インフラ構築）着手時に、Terraformモジュール構成図を追加する。
-- フェーズ5（認証・DB統合）着手時に、Supabaseのテーブル設計・ER図を追加する。
+- 保存済み履歴の閲覧UI・名前付きテンプレート機能を追加する際、テーブル設計を拡張する（ADR-019のトレードオフ参照）。

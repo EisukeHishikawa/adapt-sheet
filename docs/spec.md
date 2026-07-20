@@ -11,7 +11,7 @@
 ### 対象ユーザー
 
 - **未認証ユーザー**: アカウント登録なしで帳票の生成・プレビューを試せる（データ保存は不可）。
-- **登録ユーザー**: Supabase Authでログインし、生成履歴・テンプレートをSupabaseに保存できる（フェーズ5で追加）。
+- **登録ユーザー**: Supabase Authでログインし、`POST /api/render`成功時に生成履歴が自動的にSupabase（PostgreSQL）へ保存される（ステップ28）。保存済み履歴の閲覧UI・名前付きテンプレート機能は未実装（5章参照）。
 
 ---
 
@@ -137,7 +137,34 @@ pdf2htmlEX変換専用のサービス（ADR-015）が公開する内部エンド
 |---|---|
 | `422 Unprocessable Entity` | PDFの構造が破損している等でpdf2htmlEXによる変換に失敗（`backend`側の`RemotePdf2HtmlExExtractor`がこれを検知し、`PDF_CONVERSION_ERROR`として4.1の統一エラー形式に整形した上で`/api/render`のレスポンスに反映する） |
 
-### 3.4 型同期
+### 3.4 GET /api/history（登録ユーザー限定、DEVELOPMENT.md ステップ28）
+
+ログイン中のユーザーが`POST /api/render`で成功させた生成履歴を、新しい順に最大50件返す。`POST /api/render`成功時にサーバー側で自動保存されるため、専用の保存操作（保存ボタン等）はない（ADR-019）。
+
+**リクエスト**
+
+`Authorization: Bearer <Supabaseアクセストークン>`ヘッダーが必須。未ログイン（ヘッダー無し・無効なトークン）の場合は`403 FREE_ACCESS_FORBIDDEN`を返す（4章参照）。
+
+**レスポンス（200 OK）**
+
+```json
+[
+  {
+    "id": "9b605914-8927-4c45-bcba-0515801beb0c",
+    "engine": "gemini_free",
+    "html": "<!doctype html>...",
+    "css": "body { ... }",
+    "json": { "customer_name": "..." },
+    "width_mm": 210.0,
+    "height_mm": 297.0,
+    "created_at": "2026-07-20T09:04:58.666018+00:00"
+  }
+]
+```
+
+> 未ログイン時に`POST /api/render`が成功しても履歴は保存されない。DB保存自体が失敗した場合も`POST /api/render`のレスポンスには影響しない（ADR-019。描画の成否とDB保存の成否を切り離す）。
+
+### 3.5 型同期
 
 FastAPIが自動生成する `openapi.json` からフロントエンド用のTypeScript型定義を生成し、フロント・バック間でキー名の手書き一致を排除する（[CLAUDE.md](../CLAUDE.md) 参照）。
 
@@ -188,4 +215,4 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 ## 5. 今後の追記予定
 
 - フェーズ2・3の実装が進み次第、画面のワイヤーフレームやAPIのリクエスト/レスポンス実例を追記する。
-- フェーズ5の認証・DB統合時に、認証必須エンドポイント（履歴保存・取得等）の仕様をここに追加する。
+- 保存済み履歴（GET /api/history）を画面上で閲覧・復元するUIは未実装（ステップ28では自動保存のみ実装。残課題）。

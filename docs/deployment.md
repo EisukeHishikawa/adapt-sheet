@@ -28,8 +28,9 @@
 | `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-014） |
 | `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-011） |
 | `SSM_PARAMETER_PREFIX` | Parameter StoreからAPIキーを取得する際のパス接頭辞（例: `/adapt-sheet/prod`） | Lambda本番でのみ設定。設定時、コールドスタート時に`{prefix}/GEMINI_API_KEY`等を復号取得し`os.environ`へ展開する（ADR-017）。ローカル/pytestでは未設定のため何もしない |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（DB統合用） | ステップ28（Supabase/PostgreSQL統合）以降で使用。ローカルは `Supabase Local CLI` の値を使用 |
-| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`のゲート判定（`GATED_ENGINES`）に使用。未設定時は常に未ログイン扱い（fail-closed、ADR-018） |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（Auth管理API用） | 現時点のバックエンドコードは未使用（JWT検証は`SUPABASE_JWT_SECRET`、DB接続は`DATABASE_URL`が担う）。管理APIを使う機能を追加する際に利用する想定 |
+| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`・`/api/history`のゲート判定に使用。未設定時は常に未ログイン扱い（fail-closed、ADR-018） |
+| `DATABASE_URL` | 生成履歴を保存するPostgreSQLの接続文字列（`postgresql+psycopg://...`） | `app/db.py`が使用。ローカルはdocker-composeの`db`サービス（Postgres）を指す既定値、本番はSupabaseプロジェクトのPostgres接続文字列で上書きする（ADR-019）。未設定時は`/api/render`の履歴保存を静かにスキップし、`/api/history`は500になる |
 
 ### フロントエンド
 

@@ -1,11 +1,14 @@
 import asyncio
+import logging
 from typing import Callable, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.db import get_db_session, get_db_session_or_none
 from app.errors import (
     ai_generation_error_handler,
     http_exception_handler,
@@ -26,12 +29,15 @@ from app.services.ai_client import (
     validate_render_result,
 )
 from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
+from app.services.history import list_history, save_history
 from app.services.pdf2htmlex_client import (
     PDFHtmlExtractor as Pdf2HtmlExExtractor,
     get_pdf2htmlex_extractor,
 )
 from app.services.pdf_layout import PDFLayoutConverter, get_layout_converter
 from app.services.pdf_common import PDFConversionError
+
+logger = logging.getLogger("app.history")
 
 # アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-011）。
 configure_logging()
@@ -84,6 +90,7 @@ async def render(
     html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
     pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
+    db_session: Optional[Session] = Depends(get_db_session_or_none),
 ) -> RenderResponse:
     # 標準プランの生成AI（Gemini標準/Claude/OpenAI）はログイン済みユーザーのみに提供する
     # （ADR-015のゲート判定を、DEVELOPMENT.md ステップ27でSupabase Authのログイン状態へ差し替え）。
@@ -99,6 +106,16 @@ async def render(
         filename = pdf.filename or "uploaded.pdf"
         html = await _convert_with_engine(
             engine, layout_converter, html_extractor, pdf2htmlex_extractor, filename, content
+        )
+        _save_history(
+            db_session,
+            current_user,
+            engine=engine,
+            html=html,
+            css="",
+            json_data={},
+            width_mm=width_mm,
+            height_mm=height_mm,
         )
         return RenderResponse(html=html, css="", json_={})
 
@@ -118,7 +135,90 @@ async def render(
     result = await asyncio.to_thread(ai_client.generate, prompt_text, pdf_bytes)
     validate_render_result(result)
 
+    _save_history(
+        db_session,
+        current_user,
+        engine=engine,
+        html=result.html,
+        css=result.css,
+        json_data=result.data,
+        width_mm=width_mm,
+        height_mm=height_mm,
+    )
     return RenderResponse(html=result.html, css=result.css, json_=result.data)
+
+
+def _save_history(
+    db_session: Optional[Session],
+    current_user: Optional[SupabaseUser],
+    *,
+    engine: str,
+    html: str,
+    css: str,
+    json_data: dict,
+    width_mm: Optional[float],
+    height_mm: Optional[float],
+) -> None:
+    """描画成功時に生成履歴を自動保存する（DEVELOPMENT.md ステップ28）。
+
+    未ログイン・DB未設定（db_session is None）では何もしない。DB保存の失敗は描画結果の
+    レスポンスへ波及させない（描画自体は成功しているため、ユーザーへは成功として返す）。
+    """
+    if db_session is None or current_user is None:
+        return
+    try:
+        save_history(
+            db_session,
+            user_id=current_user.sub,
+            engine=engine,
+            html=html,
+            css=css,
+            json_data=json_data,
+            width_mm=width_mm,
+            height_mm=height_mm,
+        )
+    except Exception:
+        logger.warning("生成履歴の保存に失敗しました", exc_info=True)
+
+
+class HistoryItemResponse(BaseModel):
+    """GET /api/historyの1件分（docs/spec.md 3.x、DEVELOPMENT.md ステップ28）。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    engine: str
+    html: str
+    css: str
+    json_: dict = Field(default_factory=dict, alias="json")
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    created_at: str
+
+
+@app.get("/api/history", response_model=list[HistoryItemResponse], response_model_by_alias=True)
+def get_history(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+    db_session: Session = Depends(get_db_session),
+) -> list[HistoryItemResponse]:
+    # /api/renderのGATED_ENGINESと同じ判定（未ログインは403 FREE_ACCESS_FORBIDDEN。docs/spec.md 4章）。
+    if current_user is None:
+        raise HTTPException(status_code=403)
+
+    rows = list_history(db_session, user_id=current_user.sub)
+    return [
+        HistoryItemResponse(
+            id=str(row.id),
+            engine=row.engine,
+            html=row.html,
+            css=row.css,
+            json=row.json_data,
+            width_mm=row.width_mm,
+            height_mm=row.height_mm,
+            created_at=row.created_at.isoformat(),
+        )
+        for row in rows
+    ]
 
 
 async def _convert_with_engine(

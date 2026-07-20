@@ -16,5 +16,8 @@ openai==2.46.0  # OpenAI APIクライアント（ADR-015）
 requests==2.32.5
 boto3==1.35.99  # Lambda本番でParameter StoreからAPIキーを取得する（app/secrets_loader.py、ADR-017）。純Pythonでwheel導入のみ
 PyJWT==2.10.1  # Supabase発行JWTの検証（app/services/auth.py、DEVELOPMENT.md ステップ27）。純Pythonで導入できる
+SQLAlchemy==2.0.36  # 生成履歴の永続化（app/models.py・app/db.py、DEVELOPMENT.md ステップ28）
+psycopg[binary]==3.2.3  # PostgreSQL接続ドライバ。binary extraでlibpqを同梱しビルドツール不要（ADR-016）
+alembic==1.14.0  # DBマイグレーション管理（backend/migrations/、ADR-019）
 pytest==8.4.2
 ruff==0.15.20

@@ -230,6 +230,22 @@
 
 ---
 
+## ADR-019: 生成履歴の永続化方式（DEVELOPMENT.md ステップ28）
+
+- **ステータス**: Accepted
+- **コンテキスト**: ステップ28として、登録ユーザーの生成履歴をSupabase（PostgreSQL）へ保存する。決めるべきは、(1) ローカルDB環境の構築方法（Supabase Local CLI vs 素のPostgresコンテナ）、(2) 保存タイミング（自動保存 vs 保存ボタンによる明示保存）、(3) スキーマ・マイグレーション管理方法である。ユーザーへ確認の上、(1)は「docker-compose内にPostgresコンテナを追加」、(2)は「描画成功時に自動で履歴保存」を選択した。
+- **決定**:
+  - **ローカルDB**: `docker-compose.yml`に`db`サービス（`postgres:16-alpine`）を追加し、`backend`から`DATABASE_URL`（既定は`postgresql+psycopg://adapt_sheet:adapt_sheet@db:5432/adapt_sheet`）で接続する。Supabase Local CLIは導入しない（Auth/Storage等を含むフルスタックの起動コストを避け、DBの検証に必要な範囲へ絞るため）。本番はSupabaseプロジェクトのPostgres接続文字列で`DATABASE_URL`を上書きする想定。
+  - **スキーマ**: SQLAlchemy 2.0（`app/models.py`）で`render_history`テーブル（`id`/`user_id`/`engine`/`html`/`css`/`json_data`/`width_mm`/`height_mm`/`created_at`）を定義する。`user_id`はSupabaseのJWT `sub`をそのまま`String`で保持し、`auth.users`への外部キー制約は張らない（本DBが`auth`スキーマを所有しないため）。Postgres専用型（`JSONB`/`UUID`）ではなくSQLAlchemy汎用型（`JSON`/`Uuid`）を使い、pytestではSQLiteのin-memory DBへ同じメタデータを適用して実PostgreSQLなしに検証できるようにする。
+  - **マイグレーション**: Alembic（`backend/migrations/`）を導入する。`alembic.ini`に接続文字列は書かず、`migrations/env.py`が`DATABASE_URL`環境変数を読む（秘密情報をリポジトリに残さないため）。
+  - **保存タイミングとエンドポイント**: `POST /api/render`が成功した直後、ログイン中（`current_user`がNone以外）かつDB接続可能（`DATABASE_URL`設定済み）の場合のみ、`app/services/history.save_history`で1行保存する。DB保存の失敗は`try/except`で握りつぶし警告ログのみ残す（描画自体は成功しているため、DB保存の可否でユーザー向けレスポンスの成否を左右しない）。一覧取得は`GET /api/history`（ログイン必須、`current_user`がNoneなら403 `FREE_ACCESS_FORBIDDEN`）で新しい順に最大50件返す。
+  - **依存性注入**: `app/db.py`は`get_db_session`（DB必須、未設定ならRuntimeError）と`get_db_session_or_none`（未設定ならNoneを返す）の2種類を公開する。`/api/render`は後者を使いDB未設定でも描画自体を止めない。`/api/history`は前者を使う（DB無しでの一覧取得はそもそも成立しないため）。
+- **理由**: 素のPostgresコンテナは既存の`docker compose up`フローにそのまま統合でき、Supabase Local CLIのような多コンテナスタックの起動コスト・新規ツール導入を避けられる。自動保存は「保存を意識させない」体験を優先し、明示的な保存ボタンのUI設計判断を本ステップの対象外にできる。SQLAlchemy汎用型を使うことで、実PostgreSQLを起動しないpytestでもモデル・保存/取得ロジックを検証できる（CLAUDE.mdのTDD徹底）。
+- **トレードオフ**: 保存済み履歴を画面上で閲覧・復元するUI（クライアント側の`HistorySlider`とは別の「サーバー保存履歴」ビュー）は本ステップでは実装しない（残課題、docs/spec.md 5章）。名前付きテンプレート機能も対象外。Supabase Local CLIを使わないため、Auth（`auth.users`）との整合はローカルでは検証できず、`user_id`の外部キー制約なしという設計を本番でも維持する。
+- **関連**: ADR-007（認証・DBにSupabase採用）、ADR-009（Docker Compose化）、ADR-016（軽量イメージ、psycopg[binary]の選定理由と同じ方針）、ADR-018（JWT検証・`current_user`）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

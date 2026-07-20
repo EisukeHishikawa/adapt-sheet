@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Moon, Sparkles, Sun } from 'lucide-react'
+import { AuthPanel } from '@/components/AuthPanel'
 import { EditorPanel } from '@/components/EditorPanel'
 import { EngineSelect } from '@/components/EngineSelect'
 import { PreviewPanel } from '@/components/PreviewPanel'
@@ -10,6 +11,7 @@ import { HistorySlider } from '@/components/HistorySlider'
 import { MessageToast } from '@/components/MessageToast'
 import { Button } from '@/components/ui/button'
 import { useSheetStore } from '@/store/sheetStore'
+import { useAuthStore } from '@/store/authStore'
 import { useTheme } from '@/lib/useTheme'
 
 // 2カラム構成。左：サイズ操作・描画ボタン・PDF・プロンプト・プレビュー / 右：HTML/JSONのコード入力。
@@ -18,6 +20,12 @@ function App() {
   // 拡大表示中は左カラム上部（操作系・プロンプト）を隠し、プレビューだけを左カラムいっぱいに広げる。
   // 状態はここで一元管理し、PreviewPanelはトグルの発火のみ担う。
   const [previewExpanded, setPreviewExpanded] = useState(false)
+
+  // 起動時に一度だけSupabaseの既存セッション（永続化分）を取り込み、以後のログイン状態変化も
+  // 購読する（authStore.init、DEVELOPMENT.md ステップ27）。
+  useEffect(() => {
+    useAuthStore.getState().init()
+  }, [])
 
   return (
     // md未満（モバイル）はh-screen固定を外してページ全体を縦スクロールさせ、2カラムを縦積みにする。
@@ -65,7 +73,10 @@ function AppHeader() {
           <p className="mt-0.5 hidden text-[11px] text-muted-foreground sm:block">帳票作成AI支援プラットフォーム</p>
         </div>
       </div>
-      <ThemeToggle />
+      <div className="flex items-center gap-3">
+        <AuthPanel />
+        <ThemeToggle />
+      </div>
     </header>
   )
 }

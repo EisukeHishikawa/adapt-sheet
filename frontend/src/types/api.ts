@@ -85,7 +85,9 @@ export interface operations {
     render_api_render_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                authorization?: string | null;
+            };
             path?: never;
             cookie?: never;
         };

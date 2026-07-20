@@ -213,6 +213,48 @@ def test_render_returns_403_for_openai_engine():
     assert response.status_code == 403
 
 
+def _make_bearer_token(secret: str, **claims) -> str:
+    import time
+
+    import jwt
+
+    payload = {"sub": "user-123", "aud": "authenticated", "exp": int(time.time()) + 3600, **claims}
+    return f"Bearer {jwt.encode(payload, secret, algorithm='HS256')}"
+
+
+# DEVELOPMENT.md ステップ27: ログイン済み（有効なSupabase JWT）ならゲート対象engineを許可する。
+
+
+def test_render_allows_gated_engine_with_valid_token(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+
+    class _FakeAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    _override_ai_client(_FakeAIClient())
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "claude"},
+            headers={"Authorization": _make_bearer_token("test-secret")},
+        )
+        assert response.status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+
+
+def test_render_still_403_for_gated_engine_with_invalid_token(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+
+    response = client.post(
+        "/api/render",
+        data={"engine": "claude"},
+        headers={"Authorization": _make_bearer_token("wrong-secret")},
+    )
+    assert response.status_code == 403
+
+
 def test_render_gate_check_happens_before_pdf_processing():
     # ゲート対象engineは、PDF処理・AI呼び出しより前に判定し、無駄な処理をしない（ADR-015）。
     class _ExplodingConverter:

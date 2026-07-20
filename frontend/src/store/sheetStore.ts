@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { RenderApiError, renderSheet } from '@/lib/api'
+import { useAuthStore } from '@/store/authStore'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
 // グローバルストア（ADR-008）。
@@ -205,13 +206,20 @@ export const useSheetStore = create<SheetState>((set, get) => ({
       // htmlContentも送らない（ADR-015：生成AIへの入力はPDFファイルの直接添付のみで、
       // HTML・Docling抽出テキストは使わない）。
       const { promptContent, pdfFile, widthMm, heightMm, engine } = get()
-      const result = await renderSheet({
-        prompt: promptContent,
-        pdf: pdfFile ?? undefined,
-        width_mm: widthMm ?? undefined,
-        height_mm: heightMm ?? undefined,
-        engine,
-      })
+      // gemini/claude/openai（標準プラン）はログイン済みユーザーのみ利用可能（DEVELOPMENT.md
+      // ステップ27）。未ログイン時はaccess_tokenがundefinedのままrenderSheetへ渡り、
+      // ゲート対象engineはバックエンドが403を返す。
+      const accessToken = useAuthStore.getState().session?.access_token
+      const result = await renderSheet(
+        {
+          prompt: promptContent,
+          pdf: pdfFile ?? undefined,
+          width_mm: widthMm ?? undefined,
+          height_mm: heightMm ?? undefined,
+          engine,
+        },
+        accessToken,
+      )
 
       const newEntry: HistoryEntry = {
         html: result.html,

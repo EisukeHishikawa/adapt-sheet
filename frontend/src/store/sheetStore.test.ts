@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { useSheetStore } from './sheetStore'
+import { useAuthStore } from './authStore'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 
@@ -335,5 +336,43 @@ describe('sheetStore（モデル選択・ADR-015）', () => {
     await useSheetStore.getState().fetchRender()
 
     expect(capturedFormData?.get('engine')).toBe('pymupdf')
+  })
+})
+
+// DEVELOPMENT.md ステップ27のTDD要件: authStoreにログイン済みセッションがある場合、
+// fetchRenderがAuthorizationヘッダーへaccess_tokenを載せて送信することを検証する。
+describe('sheetStore（ログイン状態の反映・ステップ27）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+    useAuthStore.setState({ session: null })
+  })
+
+  it('authStoreにsessionがある場合、Authorizationヘッダーへaccess_tokenを付与する', async () => {
+    let capturedAuthorization: string | null = null
+    server.use(
+      http.post('/api/render', ({ request }) => {
+        capturedAuthorization = request.headers.get('Authorization')
+        return HttpResponse.json(dummyRenderResponse)
+      }),
+    )
+    useAuthStore.setState({ session: { access_token: 'token-xyz' } as never })
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(capturedAuthorization).toBe('Bearer token-xyz')
+  })
+
+  it('authStoreにsessionが無い場合、Authorizationヘッダーを付けない', async () => {
+    let capturedAuthorization: string | null = 'not-called'
+    server.use(
+      http.post('/api/render', ({ request }) => {
+        capturedAuthorization = request.headers.get('Authorization')
+        return HttpResponse.json(dummyRenderResponse)
+      }),
+    )
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(capturedAuthorization).toBeNull()
   })
 })

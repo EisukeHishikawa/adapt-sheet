@@ -172,8 +172,9 @@ enable_refresh_token_rotation = true
 # Allows refresh tokens to be reused after expiry, up to the specified interval in seconds.
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
-# Allow/disallow new user signups to your project.
-enable_signup = true
+# アカウント作成はscripts/create_user.shによる管理者操作のみに限定する（ADR-021）。UIから
+# 新規登録導線を消すだけではGoTrueの/signupを直接叩けてしまうため、サーバー側で塞ぐ。
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -217,7 +218,9 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
+# Supabase CLIはこの項目をGoTrueのEXTERNAL_EMAIL_ENABLEDへマップするため、falseにすると
+# 新規登録だけでなくメール＋パスワードでのログインまで無効になる。新規登録の禁止は上位の
+# [auth] enable_signup = false が担うので、ここはtrueのままにする（ADR-021）。
 enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
@@ -333,6 +336,19 @@ url = ""
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
+
+# GoogleアカウントによるOAuthログイン（ADR-021）。client_id/secretはGoogle Cloudで発行した
+# OAuthクライアントの値を、リポジトリ外（.env）から環境変数展開で読む。上のenable_signup = false
+# により、事前に作成済みのアカウントと同じメールアドレスでないとログインは成立しない
+# （未登録のGoogleアカウントで勝手にユーザーが増えることはない）。
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+# 認可コードフロー（PKCE）を使うため、IDトークン直接受け取り時のnonce検証スキップは不要。
+skip_nonce_check = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.

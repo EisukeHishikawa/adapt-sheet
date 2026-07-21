@@ -18,7 +18,14 @@ describe('useAuthStore（Supabase未設定環境）', () => {
     expect(useAuthStore.getState().session).toBeNull()
   })
 
-  it('initを呼んでも例外を投げない', () => {
-    expect(() => useAuthStore.getState().init()).not.toThrow()
+  it('initを呼んでも例外を投げず、解除関数を返す', () => {
+    expect(() => useAuthStore.getState().init()()).not.toThrow()
+  })
+
+  // 認証機能が無い環境では復元を待つものが無いため、最初から確定済みとして扱う（チラつき防止の抑止が
+  // かかったままAuthPanelが空になるのを防ぐ）。
+  it('isInitializingはfalseのまま', () => {
+    useAuthStore.getState().init()
+    expect(useAuthStore.getState().isInitializing).toBe(false)
   })
 })

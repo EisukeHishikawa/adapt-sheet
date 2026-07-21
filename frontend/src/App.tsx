@@ -22,9 +22,11 @@ function App() {
   const [previewExpanded, setPreviewExpanded] = useState(false)
 
   // 起動時に一度だけSupabaseの既存セッション（永続化分）を取り込み、以後のログイン状態変化も
-  // 購読する（authStore.init、DEVELOPMENT.md ステップ27）。
+  // 購読する（authStore.init、DEVELOPMENT.md ステップ27）。initが返す解除関数をクリーンアップで
+  // 呼び、StrictModeの二重実行でリスナーが二重登録されたままにならないようにする。
   useEffect(() => {
-    useAuthStore.getState().init()
+    const unsubscribe = useAuthStore.getState().init()
+    return unsubscribe
   }, [])
 
   return (

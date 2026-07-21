@@ -17,9 +17,13 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# alembic.iniには接続文字列を書かず、app/db.pyと同じDATABASE_URLをそのまま使う
-# （秘密情報をリポジトリに残さないため。CLAUDE.md セキュリティ）。
-database_url = os.getenv("DATABASE_URL", "").strip()
+# alembic.iniには接続文字列を書かない（秘密情報をリポジトリに残さないため。CLAUDE.md セキュリティ）。
+# 実行時のDATABASE_URLはRLSを迂回しないauthenticatorロールを使うが、テーブル作成・ポリシー定義には
+# 所有者権限が要るため、マイグレーションはMIGRATION_DATABASE_URL（postgresロール）を優先する
+# （ADR-021）。設定が無い環境では従来どおりDATABASE_URLへフォールバックする。
+database_url = (
+    os.getenv("MIGRATION_DATABASE_URL", "").strip() or os.getenv("DATABASE_URL", "").strip()
+)
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 

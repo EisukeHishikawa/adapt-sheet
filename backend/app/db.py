@@ -1,17 +1,26 @@
-"""SQLAlchemyのエンジン・セッション管理（DEVELOPMENT.md ステップ28、ADR-019）。
+"""SQLAlchemyのエンジン・セッション管理（DEVELOPMENT.md ステップ28、ADR-019/021）。
 
 エンジンはコネクションプールを持つため、他のget_*ファクトリ（app/services/*.py）と異なり
 リクエストごとに作り直さず、モジュールスコープで1つだけ生成してキャッシュする（Sessionのみ
 リクエストごとに新規発行する）。
+
+接続先はSupabaseのPostgresで、render_historyにはRLSが有効化されている（ADR-021）。アプリは
+RLSを迂回しない`authenticator`ロールで接続し、リクエストごとにログイン中ユーザーのJWT `sub`を
+トランザクションローカルなGUCへ設定してから`authenticated`ロールへ切り替える（PostgRESTと同じ
+方式）。これによりWHERE句の書き忘れやSQLインジェクションがあっても他人の行へ到達できない。
 """
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Iterator, Optional
 
-from sqlalchemy import Engine, create_engine
+from fastapi import Depends
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
+
+from app.services.auth import SupabaseUser, get_current_user
 
 _engine: Optional[Engine] = None
 _session_factory: Optional[sessionmaker] = None
@@ -28,7 +37,26 @@ def _get_session_factory() -> sessionmaker:
     return _session_factory
 
 
-def get_db_session() -> Iterator[Session]:
+def apply_rls_context(session: Session, user_id: str) -> None:
+    """RLSポリシーが参照するユーザーIDを、このトランザクションに限って設定する。
+
+    pytestはSQLite（RLS非対応）で走るため、PostgreSQL以外では何もしない。SET LOCALは
+    プレースホルダを取れないため、値を渡す側はset_config(..., is_local=true)を使う。
+    """
+    if session.bind is None or session.bind.dialect.name != "postgresql":
+        return
+    # auth.uid()はrequest.jwt.claimsのsubを読む（Supabaseの標準関数）。
+    session.execute(
+        text("SELECT set_config('request.jwt.claims', :claims, true)"),
+        {"claims": json.dumps({"sub": user_id})},
+    )
+    # 切り替え後はRLSの対象になる。ロール名は固定値のためリテラルで埋める。
+    session.execute(text("SET LOCAL ROLE authenticated"))
+
+
+def get_db_session(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+) -> Iterator[Session]:
     """FastAPIのDependsとして利用する。テスト側はdependency_overridesで差し替える。
 
     DATABASE_URL未設定時はRuntimeErrorを送出する（GET /api/historyのようにDBが必須の
@@ -37,12 +65,16 @@ def get_db_session() -> Iterator[Session]:
     """
     session = _get_session_factory()()
     try:
+        if current_user is not None:
+            apply_rls_context(session, current_user.sub)
         yield session
     finally:
         session.close()
 
 
-def get_db_session_or_none() -> Iterator[Optional[Session]]:
+def get_db_session_or_none(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+) -> Iterator[Optional[Session]]:
     """DATABASE_URL未設定（ローカル/pytestの既定）ではNoneを返し、呼び出し側にDB保存を
     スキップさせる（app/main.pyの/api/render、履歴の自動保存）。
     """
@@ -53,6 +85,8 @@ def get_db_session_or_none() -> Iterator[Optional[Session]]:
 
     session = _get_session_factory()()
     try:
+        if current_user is not None:
+            apply_rls_context(session, current_user.sub)
         yield session
     finally:
         session.close()

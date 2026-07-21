@@ -11,10 +11,8 @@ describe('useAuthStore（Supabase未設定環境）', () => {
     expect(useAuthStore.getState().isAuthAvailable).toBe(false)
   })
 
-  it('signInWithPasswordを呼んでも例外を投げずsessionはnullのまま', async () => {
-    await expect(
-      useAuthStore.getState().signInWithPassword('a@example.com', 'password123'),
-    ).resolves.toBeUndefined()
+  it('signInWithGoogleを呼んでも例外を投げずsessionはnullのまま', async () => {
+    await expect(useAuthStore.getState().signInWithGoogle()).resolves.toBeUndefined()
     expect(useAuthStore.getState().session).toBeNull()
   })
 

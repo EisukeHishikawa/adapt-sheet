@@ -219,9 +219,9 @@ web3 = 30
 
 [auth.email]
 # Supabase CLIはこの項目をGoTrueのEXTERNAL_EMAIL_ENABLEDへマップするため、falseにすると
-# 新規登録だけでなくメール＋パスワードでのログインまで無効になる。新規登録の禁止は上位の
-# [auth] enable_signup = false が担うので、ここはtrueのままにする（ADR-021）。
-enable_signup = true
+# メール＋パスワードでのログイン自体が無効になる（`email_provider_disabled`）。ログイン手段を
+# Googleアカウントのみに限定するため、これを意図的に利用する（ADR-022）。
+enable_signup = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true

@@ -11,7 +11,6 @@ vi.mock('@/store/authStore', () => ({
 
 const mockedUseAuthStore = vi.mocked(useAuthStore)
 
-const signInWithPassword = vi.fn()
 const signInWithGoogle = vi.fn()
 const signOut = vi.fn()
 const dismissError = vi.fn()
@@ -24,7 +23,6 @@ function setStoreState(overrides: Partial<ReturnType<typeof useAuthStore>>) {
     error: null,
     isSubmitting: false,
     init: vi.fn(),
-    signInWithPassword,
     signInWithGoogle,
     signOut,
     dismissError,
@@ -46,12 +44,12 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('未ログイン時はログインを開く操作ボタンを表示する', () => {
+  it('未ログイン時はGoogleログインボタンだけを表示する', () => {
     setStoreState({})
 
     render(<AuthPanel />)
 
-    expect(screen.getByRole('button', { name: 'ログイン' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeInTheDocument()
   })
 
   it('ログイン済みの場合、メールアドレスとログアウトボタンを表示する', () => {
@@ -73,26 +71,21 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(signOut).toHaveBeenCalledTimes(1)
   })
 
-  it('ログインを開き、メールアドレス・パスワードを入力して送信するとsignInWithPasswordが呼ばれる', async () => {
-    const user = userEvent.setup()
+  // ログイン手段はGoogleのみのため、メールアドレス・パスワードの入力欄自体を持たない（ADR-022）。
+  it('メールアドレス・パスワードの入力欄を表示しない', () => {
     setStoreState({})
 
     render(<AuthPanel />)
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
-    await user.type(screen.getByLabelText('メールアドレス'), 'user@example.com')
-    await user.type(screen.getByLabelText('パスワード'), 'password123')
-    await user.click(screen.getByRole('button', { name: 'ログイン', hidden: false }))
 
-    expect(signInWithPassword).toHaveBeenCalledWith('user@example.com', 'password123')
+    expect(screen.queryByLabelText('メールアドレス')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('パスワード')).not.toBeInTheDocument()
   })
 
   // アカウント作成は管理者のコマンド操作のみに限定したため、画面には新規登録の導線を出さない（ADR-021）。
-  it('新規登録ボタンを表示しない', async () => {
-    const user = userEvent.setup()
+  it('新規登録ボタンを表示しない', () => {
     setStoreState({})
 
     render(<AuthPanel />)
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
 
     expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument()
   })
@@ -102,7 +95,6 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     setStoreState({})
 
     render(<AuthPanel />)
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
     await user.click(screen.getByRole('button', { name: 'Googleでログイン' }))
 
     expect(signInWithGoogle).toHaveBeenCalledTimes(1)
@@ -114,17 +106,15 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
 
     render(<AuthPanel />)
 
-    expect(screen.queryByRole('button', { name: 'ログイン' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Googleでログイン' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
   })
 
-  it('errorが設定されている場合、エラーメッセージを表示する', async () => {
-    const user = userEvent.setup()
-    setStoreState({ error: 'Invalid login credentials' })
+  it('errorが設定されている場合、エラーメッセージを表示する', () => {
+    setStoreState({ error: 'Provider is not enabled' })
 
     render(<AuthPanel />)
-    await user.click(screen.getByRole('button', { name: 'ログイン' }))
 
-    expect(screen.getByText('Invalid login credentials')).toBeInTheDocument()
+    expect(screen.getByText('Provider is not enabled')).toBeInTheDocument()
   })
 })

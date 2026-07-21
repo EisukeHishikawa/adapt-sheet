@@ -69,6 +69,10 @@ docker compose restart backend
 docker compose restart frontend
 ```
 
+### ログイン機能をローカルで検証する（Supabase Local CLI、ADR-020）
+
+`docker compose up --build`だけではAuth関連の環境変数（`VITE_SUPABASE_URL`等）が未設定のため、ヘッダーのログインUI自体が表示されない（Supabaseプロジェクト未作成のローカル開発を壊さないための既定挙動）。実際に新規登録・ログインしてゲート対象エンジン（Gemini標準/Claude/OpenAI）や生成履歴（`GET /api/history`）を検証したい場合は、[`docs/supabase-local-cli-setup.md`](./docs/supabase-local-cli-setup.md)の手順でSupabase Local CLIのローカルスタックを起動し、`.env`にキーを設定する。
+
 ### テスト・静的解析
 
 起動中のコンテナに対して実行する。
@@ -138,3 +142,5 @@ docker compose exec frontend npm run generate-types
 | [docs/architecture.md](./docs/architecture.md) | アーキテクチャ図 |
 | [docs/decisions.md](./docs/decisions.md) | アーキテクチャ決定記録 (ADR) |
 | [docs/deployment.md](./docs/deployment.md) | デプロイ手順・運用の手引き |
+| [docs/supabase-mcp-setup.md](./docs/supabase-mcp-setup.md) | Supabase MCPのセットアップ・ログイン手順 |
+| [docs/supabase-local-cli-setup.md](./docs/supabase-local-cli-setup.md) | Supabase Local CLIによるログイン機能のローカル検証手順 |

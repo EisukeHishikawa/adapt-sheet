@@ -88,6 +88,11 @@ services:
       # 未設定時は常に未ログイン扱いになりゲート対象engineはfail-closedで403のまま
       # （SUPABASE_JWT_SECRET未設定のままゲートが解禁されることはない）。
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:-}
+      # JWT Signing Keys（ES256等の非対称鍵）方式のSupabaseプロジェクト向けJWKSエンドポイント
+      # （app/services/auth.py、ADR-020）。Supabase Local CLIは既定でこの方式のみを発行するため、
+      # ローカル検証には必須。Docker Desktop（Mac/Windows）ではホストで起動したSupabase CLIの
+      # コンテナへ`host.docker.internal`で到達する（docs/supabase-local-cli-setup.md）。
+      - SUPABASE_JWT_JWKS_URL=${SUPABASE_JWT_JWKS_URL:-}
       # 各エンジンの使用モデルはCLAUDE_MODEL/OPENAI_MODEL/GEMINI_STANDARD_MODELで上書き可能
       # （未設定時の既定値はbackend/app/services/ai_client.py参照）。
       - CLAUDE_MODEL=${CLAUDE_MODEL:-}

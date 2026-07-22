@@ -287,7 +287,7 @@
   - **アカウント作成のガード**: `scripts/create_user.sh`は、`SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID`/`..._SECRET`が未設定なら作成を拒否する。加えて、値が`env(...)`というリテラルのままの場合も拒否する（`supabase start`実行時のシェルに環境変数が無いと`config.toml`の`env(...)`が展開されず、一見有効なのにログインだけが失敗する状態になるため。実際にこの状態が発生した）。さらにGoTrueの`/auth/v1/settings`を参照し、サーバー側でgoogleプロバイダが有効であることも確認する。
   - **パスワードを設定しない**: 同スクリプトはAdmin APIで`email`と`email_confirm=true`のみを指定し、パスワードを設定しない（メールプロバイダが無効なため、設定しても使えない）。作成したメールアドレスと同じGoogleアカウントでログインすると、GoTrueが同一メールアドレスのidentityを自動的に紐付ける。未登録のGoogleアカウントは`[auth] enable_signup = false`により弾かれる。
 - **理由**: パスワードを持たなければ、パスワード起因の脆弱性（総当たり・使い回し・漏洩時の影響）が構造的に発生しない。認証強度（2要素認証等）の担保をGoogle側へ委譲でき、退職者のGoogleアカウント停止がそのままアクセス遮断につながる運用上の利点もある。アカウント作成時のガードは、ログイン不能なアカウントが作られる事故を、発生前に止める。
-- **トレードオフ**: Googleアカウントを持たない利用者は登録できない。ローカル開発でもGoogle Cloudで発行したOAuthクライアント（client_id/secret）が必須になり、未設定ではログインを検証できない（`docs/supabase-local-cli-setup.md`に取得手順を記載）。またGoTrueがOAuthログイン時に同一メールアドレスの既存ユーザーへidentityを自動連携する挙動に依存しており、この前提はSupabaseの仕様変更で崩れ得る。
+- **トレードオフ**: Googleアカウントを持たない利用者は登録できない。ローカル開発でもGoogle Cloudで発行したOAuthクライアント（client_id/secret）が必須になり、未設定ではログインを検証できない（`docs/supabase-local-cli-setup.md`に取得手順を記載）。またGoTrueがOAuthログイン時に同一メールアドレスの既存ユーザーへidentityを自動連携する挙動に依存している（実際のGoogle OAuthクライアントでログインし、`email` identityを持つ既存ユーザーへ`google` identityが追加されることを`auth.identities`で確認済み）。ただしこれはSupabaseの仕様変更で崩れ得るため、バージョン更新時は再確認する。
 - **関連**: ADR-018（JWT検証）、ADR-020（Supabase Local CLI）、ADR-021（新規登録廃止・Google OAuth追加・RLS。本ADRでログイン手段を限定）。
 
 ---

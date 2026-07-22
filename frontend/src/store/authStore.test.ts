@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockAuth = {
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),
-  signInWithPassword: vi.fn(),
   signInWithOAuth: vi.fn(),
   signOut: vi.fn(),
 }
@@ -33,30 +32,9 @@ describe('useAuthStore', () => {
     expect(useAuthStore.getState().isAuthAvailable).toBe(true)
   })
 
-  it('signInWithPasswordが成功したらsessionを更新する', async () => {
-    mockAuth.signInWithPassword.mockResolvedValue({ data: { session: fakeSession }, error: null })
-
-    await useAuthStore.getState().signInWithPassword('a@example.com', 'password123')
-
-    expect(mockAuth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'a@example.com',
-      password: 'password123',
-    })
-    expect(useAuthStore.getState().session).toEqual(fakeSession)
-    expect(useAuthStore.getState().error).toBeNull()
-    expect(useAuthStore.getState().isSubmitting).toBe(false)
-  })
-
-  it('signInWithPasswordが失敗したらerrorを設定し、sessionは更新しない', async () => {
-    mockAuth.signInWithPassword.mockResolvedValue({
-      data: { session: null },
-      error: { message: 'Invalid login credentials' },
-    })
-
-    await useAuthStore.getState().signInWithPassword('a@example.com', 'wrong-password')
-
-    expect(useAuthStore.getState().session).toBeNull()
-    expect(useAuthStore.getState().error).toBe('Invalid login credentials')
+  // ログイン手段はGoogleアカウントのみとしたため、パスワードログインの口を持たない（ADR-022）。
+  it('パスワードログイン用のアクションを公開しない', () => {
+    expect(useAuthStore.getState()).not.toHaveProperty('signInWithPassword')
   })
 
   // アカウント作成は管理者のコマンド操作のみに限定したため、ストアに新規登録の口を持たせない（ADR-021）。

@@ -73,12 +73,16 @@ docker compose restart frontend
 
 `docker compose up --build`だけではAuth関連の環境変数（`VITE_SUPABASE_URL`等）が未設定のため、ヘッダーのログインUI自体が表示されない（Supabaseプロジェクト未作成のローカル開発を壊さないための既定挙動）。実際にログインしてゲート対象エンジン（Gemini標準/Claude/OpenAI）や生成履歴（`GET /api/history`）を検証したい場合は、[`docs/supabase-local-cli-setup.md`](./docs/supabase-local-cli-setup.md)の手順でSupabase Local CLIのローカルスタックを起動し、`.env`にキーを設定する。生成履歴もこのSupabase Postgresへ保存され、行レベルセキュリティ（RLS）で他人の履歴には到達できない（ADR-021）。
 
-**アカウントの作成は次のコマンドのみ**で行う（画面からの新規登録は提供せず、Supabase側でも自己登録を拒否する。ADR-021）。ログイン方法はメール＋パスワードとGoogleアカウント（要OAuthクライアント設定）の2種類。
+**ログイン手段はGoogleアカウントのみ**で、メール＋パスワードでのログインは無効（ADR-022）。そのため、ローカル検証でもGoogle CloudのOAuthクライアント（client_id / secret）が必須になる。
+
+**アカウントの作成は次のコマンドのみ**で行う（画面からの新規登録は提供せず、Supabase側でも自己登録を拒否する。ADR-021）。ログインさせたいGoogleアカウントのメールアドレスを指定する。
 
 ```bash
-set -a; source .env; set +a          # SUPABASE_SERVICE_ROLE_KEY を読み込む
-scripts/create_user.sh user@example.com 'password123'
+set -a; source .env; set +a          # SERVICE_ROLE_KEY と Google の認証情報を読み込む
+scripts/create_user.sh user@example.com
 ```
+
+Google OAuthが未設定の場合、このコマンドはアカウントを作らずにエラーで終了する（ログインできないアカウントだけが増えるのを防ぐため）。
 
 ### テスト・静的解析
 

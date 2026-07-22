@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 // null）の環境では、認証系メソッドを呼んでもクラッシュさせず何もしない（AuthPanel自体を
 // isAuthAvailable===falseで非表示にするための土台）。
 // アカウント作成はscripts/create_user.shによる管理者操作のみとし、画面からの新規登録は提供しない
-// （ADR-021）。
+// （ADR-021）。ログイン手段はGoogleアカウントのみで、パスワードログインは持たない（ADR-022）。
 type AuthState = {
   session: Session | null
   isAuthAvailable: boolean
@@ -16,7 +16,6 @@ type AuthState = {
   error: string | null
   isSubmitting: boolean
   init: () => () => void
-  signInWithPassword: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
   dismissError: () => void
@@ -49,16 +48,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (event === 'SIGNED_OUT') set({ error: null })
     })
     return () => data.subscription.unsubscribe()
-  },
-  signInWithPassword: async (email, password) => {
-    if (!supabase) return
-    set({ isSubmitting: true, error: null })
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      set({ isSubmitting: false, error: error.message })
-      return
-    }
-    set({ isSubmitting: false, session: data.session })
   },
   signInWithGoogle: async () => {
     if (!supabase) return

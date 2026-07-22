@@ -149,5 +149,4 @@ docker compose exec frontend npm run generate-types
 | [docs/architecture.md](./docs/architecture.md) | アーキテクチャ図 |
 | [docs/decisions.md](./docs/decisions.md) | アーキテクチャ決定記録 (ADR) |
 | [docs/deployment.md](./docs/deployment.md) | デプロイ手順・運用の手引き |
-| [docs/supabase-mcp-setup.md](./docs/supabase-mcp-setup.md) | Supabase MCPのセットアップ・ログイン手順 |
 | [docs/supabase-local-cli-setup.md](./docs/supabase-local-cli-setup.md) | Supabase Local CLIによるログイン機能のローカル検証手順 |

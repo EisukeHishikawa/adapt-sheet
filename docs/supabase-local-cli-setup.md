@@ -1,8 +1,7 @@
 # Supabase Local CLIによるログイン機能のローカル検証手順
 
 Supabase Auth（ログイン）とPostgres（生成履歴・RLS）を、実際のクラウドプロジェクトを作成せずに
-ローカルだけで検証するための手順（ADR-020/021）。`docs/supabase-mcp-setup.md`のSupabase MCP
-（生成AIからのプロジェクト操作用）とは別物で、こちらは`supabase` CLIコマンドでPostgres・
+ローカルだけで検証するための手順（ADR-020/021）。`supabase` CLIコマンドで、Postgres・
 GoTrue（Auth）等のスタックをDockerコンテナとしてローカルに起動する。
 
 - **対象範囲**: ログイン（メール＋パスワード／Googleアカウント）・ゲート対象エンジン

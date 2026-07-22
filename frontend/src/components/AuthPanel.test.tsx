@@ -90,6 +90,24 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument()
   })
 
+  // 新規登録の導線が無い理由（管理者のみが登録できる）を利用者に明示する（ADR-021）。
+  it('未ログイン時にアカウント登録が管理者のみ可能である旨を表示する', () => {
+    setStoreState({})
+
+    render(<AuthPanel />)
+
+    expect(screen.getByText('アカウント登録はシステム管理者のみ可能です')).toBeInTheDocument()
+  })
+
+  // ログイン済みの利用者には登録方法の注記は不要なため表示しない。
+  it('ログイン済みの場合はアカウント登録の注記を表示しない', () => {
+    setStoreState({ session: { user: { email: 'user@example.com' } } as never })
+
+    render(<AuthPanel />)
+
+    expect(screen.queryByText('アカウント登録はシステム管理者のみ可能です')).not.toBeInTheDocument()
+  })
+
   it('Googleでログインボタンを押すとsignInWithGoogleが呼ばれる', async () => {
     const user = userEvent.setup()
     setStoreState({})

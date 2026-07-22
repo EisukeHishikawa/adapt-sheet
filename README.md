@@ -152,6 +152,24 @@ docker compose exec -T pdf2htmlex curl -sf -F "file=@/tmp/input.pdf" http://loca
   | python3 -c "import json,sys; sys.stdout.write(json.load(sys.stdin)['html'])" > "/path/to/pdf2htmlex-output.html"
 ```
 
+### エディタ（Zed）でリンター/フォーマッターを使う（ADR-024）
+
+ホストにPython・Node・ruff・ESLintを入れずに、エディタ上でも開発コンテナと同じリンター/フォーマッターを動かすための設定を`.zed/`に用意している。Zedでこのリポジトリを開くと、`scripts/zed-lsp.sh`経由でLSPサーバーがDocker内に起動する。
+
+| 対象 | 使うもの | 保存時の挙動 |
+|---|---|---|
+| Python | `backend`イメージのruff（`ruff server`） | 診断のみ（整形は`editor: format`で明示実行） |
+| TypeScript / React | `frontend-lsp`イメージのESLint（`eslint.config.js`をそのまま使用） | ESLintの自動修正（`source.fixAll.eslint`）を適用 |
+
+初回のみLSP用イメージのビルドが必要（未ビルドでも初回起動時に自動ビルドされるが、数分かかるため先に済ませておくとよい）。
+
+```bash
+docker compose --profile lsp build          # LSP用イメージをビルド
+./scripts/setup-zed.sh                       # .zed/settings.json のパスを自分のクローン先に合わせる
+```
+
+Prettierは導入していないため、TypeScript側の保存時整形はESLintの自動修正のみで、Zed同梱のPrettierは`.zed/settings.json`で無効化している。Python側は既存コードに`ruff format`が未適用（差分が大きい）ため、保存時の自動整形をオフにしている。`.zed/tasks.json`には`docker compose exec`で走るテスト・静的解析タスクを定義しており、Zedの`task: spawn`から実行できる。
+
 ### 型同期
 
 バックエンドの`openapi.json`からフロント用TypeScript型（`frontend/src/types/api.ts`）を再生成する場合は以下を実行する（スキーマ変更時に都度実行する運用。ADR-005）。

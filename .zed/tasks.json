@@ -1,0 +1,34 @@
+// Zedのタスク定義（ADR-024）。`task: spawn` から選ぶと、CLAUDE.mdに記載のテスト・静的解析を
+// 起動中のコンテナに対してそのまま実行する（コマンドの二重管理を避けるため内容を一致させている）。
+[
+  {
+    "label": "backend: pytest",
+    "command": "docker compose exec backend pytest",
+    "use_new_terminal": false
+  },
+  {
+    "label": "backend: ruff check",
+    "command": "docker compose exec backend ruff check .",
+    "use_new_terminal": false
+  },
+  {
+    "label": "frontend: vitest",
+    "command": "docker compose exec frontend npm run test",
+    "use_new_terminal": false
+  },
+  {
+    "label": "frontend: eslint",
+    "command": "docker compose exec frontend npm run lint",
+    "use_new_terminal": false
+  },
+  {
+    "label": "docling: pytest",
+    "command": "docker compose exec docling pytest",
+    "use_new_terminal": false
+  },
+  {
+    "label": "pdf2htmlex: pytest",
+    "command": "docker compose exec pdf2htmlex pytest",
+    "use_new_terminal": false
+  }
+]

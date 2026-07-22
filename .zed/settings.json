@@ -1,0 +1,80 @@
+// Zedのプロジェクト設定（ADR-024）。リンター/フォーマッターはホストへ入れず、
+// 開発用Dockerイメージ内のruff / ESLintをLSPとして起動する（scripts/zed-lsp.sh 経由）。
+//
+// binary.pathは絶対パスで指定する必要がある。クローン先が異なる環境では
+// `scripts/setup-zed.sh` を実行すると、このファイルのパスを自分のリポジトリルートへ書き換える。
+{
+  "lsp": {
+    // backendイメージのruff（backend/requirements.txt でバージョン固定）。
+    "ruff": {
+      "binary": {
+        "path": "/Users/mina/adapt-sheet/scripts/zed-lsp.sh",
+        "arguments": ["ruff"]
+      }
+    },
+    // frontend/Dockerfile.lsp の vscode-eslint-language-server。
+    // リント規則はfrontend/eslint.config.js（flat config）がそのまま使われる。
+    "eslint": {
+      "binary": {
+        "path": "/Users/mina/adapt-sheet/scripts/zed-lsp.sh",
+        "arguments": ["eslint"]
+      },
+      "settings": {
+        "useFlatConfig": true
+      }
+    }
+  },
+
+  "languages": {
+    "Python": {
+      // ホストにPython環境を用意しない方針のため、型チェッカー（pyright等）は起動せず
+      // `ruff check` 相当の診断だけをDocker内のruffから受け取る。
+      "language_servers": ["ruff", "!pyright", "!basedpyright", "!pylsp", "!ty", "!pyrefly"],
+      "formatter": {
+        "language_server": {
+          "name": "ruff"
+        }
+      },
+      // 既存コードは`ruff format`未適用（50ファイル中32ファイルが差分あり）のため、保存時の
+      // 自動整形は無効にしている。整形は明示実行（editor: format）で行う。リポジトリ全体へ
+      // `ruff format`を適用した時点で "on" へ切り替えてよい。
+      "format_on_save": "off"
+    },
+
+    // TypeScript/React側はPrettierを導入していない（package.json参照）ため、保存時は
+    // ESLintの自動修正のみを適用し、Zed同梱のPrettierによる整形は明示的に無効化する。
+    "TypeScript": {
+      "formatter": {
+        "code_actions": {
+          "source.fixAll.eslint": true
+        }
+      },
+      "format_on_save": "on",
+      "prettier": {
+        "allowed": false
+      }
+    },
+    "TSX": {
+      "formatter": {
+        "code_actions": {
+          "source.fixAll.eslint": true
+        }
+      },
+      "format_on_save": "on",
+      "prettier": {
+        "allowed": false
+      }
+    },
+    "JavaScript": {
+      "formatter": {
+        "code_actions": {
+          "source.fixAll.eslint": true
+        }
+      },
+      "format_on_save": "on",
+      "prettier": {
+        "allowed": false
+      }
+    }
+  }
+}

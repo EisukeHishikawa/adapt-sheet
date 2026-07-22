@@ -246,6 +246,21 @@
 
 ---
 
+## ADR-020: Supabase Local CLIの導入とJWT検証のJWKS/ES256対応（ADR-019の一部改訂）
+
+- **ステータス**: Accepted
+- **コンテキスト**: ステップ27で実装したSupabase Authのログイン・ゲート機能を、実際に登録したユーザーでローカル検証したいという要望が生まれた。ADR-019では「Auth/Storage等を含むフルスタックの起動コストを避ける」ためSupabase Local CLIを導入しない決定をしており、その結果「Authとの整合はローカルでは検証できない」ことを既知のトレードオフとして許容していた。今回その制約を解消するため、Supabase Local CLI（`supabase start`）を導入してAuthのみローカルで検証可能にする（生成履歴用の`db`サービスはADR-019の設計のまま維持し、置き換えない）。導入の過程で、ローカルCLIが発行するJWTが`app/services/auth.py`の前提（HS256共有シークレット）と異なることが判明した。
+- **決定**:
+  - **Supabase Local CLIの導入**: `supabase init`でリポジトリ直下に`supabase/config.toml`を追加し、`supabase start`でPostgres・GoTrue（Auth）・Studio等のローカルスタックを起動する（Docker Composeとは別の、Supabase CLI自身が管理するコンテナ群）。既存の`db`サービス（ADR-019）は生成履歴（`render_history`）保存専用のまま維持し、Supabase CLI側のPostgres（`auth.users`等）とは統合しない。両者は最初から`user_id`に外部キー制約を張らない設計（ADR-019）のため、DBが分かれていても支障はない。
+  - **JWT検証のJWKS/ES256対応**: Supabase Local CLIは既定でJWT Signing Keys機能（ES256非対称鍵、`/auth/v1/.well-known/jwks.json`で公開鍵を配布）でトークンを発行し、ADR-018で決めたHS256共有シークレット方式では検証できないことを確認した。`app/services/auth.py`の`get_current_user`を、トークンヘッダーの`alg`でHS256（共有シークレット、`SUPABASE_JWT_SECRET`）とES256/RS256（JWKS、新環境変数`SUPABASE_JWT_JWKS_URL`、`PyJWKClient`で取得）の両方に振り分ける実装へ変更した。どちらの環境変数も未設定の場合はfail-closed（未ログイン扱い）のまま変わらない。
+  - **接続経路**: フロント（ブラウザ）は`VITE_SUPABASE_URL=http://127.0.0.1:54321`へ直接アクセスする（ホスト上で完結するため追加設定不要）。バックエンドコンテナはJWKS取得のためネットワーク到達が必要で、Docker Desktop（Mac/Windows）の`host.docker.internal`経由でホスト側のSupabase CLIコンテナへ到達する（`SUPABASE_JWT_JWKS_URL=http://host.docker.internal:54321/auth/v1/.well-known/jwks.json`）。
+  - **`supabase/config.toml`の調整**: `project_id`をワークツリーディレクトリ名依存の自動生成値から固定値`adapt-sheet`へ変更（Git Worktreeごとに値が変わらないようにするため）。`site_url`/`additional_redirect_urls`をフロントの実ポート（5173）に合わせた。
+- **理由**: 生成履歴用DBとAuth用ローカルスタックを分離したまま維持することで、ADR-019の主要な決定（起動コストを抑えた素のPostgresコンテナ）は変更せずに済む。JWKS対応は、Supabase Local CLIだけでなく、今後実際にSupabaseプロジェクトを作成する際（同じくJWT Signing Keysが既定の可能性が高い）にも通る変更であり、ADR-018が想定していたリスクへの先行対応になる。`alg`による分岐でHS256側の既存の挙動・テストを変更せずに済む。
+- **トレードオフ**: 開発者ごとにホストで`supabase start`を実行する必要があり、Docker Composeの`docker compose up`一発では完結しなくなる（`README.md`のクイックスタートへの追記が必要）。`host.docker.internal`はDocker Desktop（Mac/Windows）前提のため、Linux環境では別途到達経路の検討が必要（未検証、残課題）。Supabase CLIが将来デフォルトの署名鍵方式を変更した場合、再度この対応が必要になる可能性がある。
+- **関連**: ADR-007（認証・DBにSupabase採用）、ADR-018（JWT検証・ゲート判定、HS256方式の当初決定とトレードオフ）、ADR-019（生成履歴DBの分離、Supabase Local CLI不使用の当初決定）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

@@ -77,6 +77,15 @@ docker compose exec frontend npm run generate-types  # backend/openapi.json → 
 docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス。ADR-009参照）
 ```
 
+### エディタ（Zed）向けLSP (ADR-024)
+
+エディタ上の診断・整形もDocker内のruff / ESLintで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント規則の一次ソースは`backend/requirements.txt`と`frontend/eslint.config.js`のままである。ホストにruff/ESLintを追加導入しないこと。
+
+```bash
+docker compose --profile lsp build   # LSP用イメージ（backend-lsp / frontend-lsp）のビルド
+./scripts/setup-zed.sh                # .zed/settings.json の絶対パスをクローン先へ合わせる
+```
+
 ## コード規約
 
 - **型安全**: FastAPIの `openapi.json` から自動生成したTypeScript型を使用する。フロント・バック間でキー名を手書きで一致させない。

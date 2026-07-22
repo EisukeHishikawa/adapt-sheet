@@ -307,6 +307,22 @@
 
 ---
 
+## ADR-024: エディタ（Zed）のリンター/フォーマッターをDockerコンテナ内で動かす
+
+- **ステータス**: Accepted
+- **コンテキスト**: 開発環境はDocker Composeのみを対象としており（ADR-009）、ホストにはPython・Nodeの実行環境を用意していない。一方でエディタ（Zed）は既定でホスト上の言語サーバー（pyright等）を起動しようとするため、そのままでは診断が出ないか、ホストへruff/ESLintを二重に導入してコンテナ側とバージョンがずれる。ホスト側ツールのバージョンはmiseで固定しているが（ADR-023）、リンターはコンテナ内の`requirements.txt`/`package.json`が一次ソースであり、mise管理へ移すのは筋が悪い。
+- **決定**:
+  - `docker-compose.yml`に`lsp`プロファイルの`backend-lsp`（`ruff server`）と`frontend-lsp`（`vscode-eslint-language-server`）を追加し、`scripts/zed-lsp.sh`が`docker compose run --rm --no-deps -T`で1プロセスずつ起動する。常駐させず、起動・終了はエディタに任せる。
+  - LSPはファイルを絶対パス（URI）でやり取りするため、両サービスはリポジトリを**ホストと同一の絶対パス**（`${PWD}`）へマウントする。コンテナ側でのパス読み替えを不要にし、診断の位置ズレや設定ファイルの探索失敗を防ぐ。
+  - ESLintのflat configはプラグインをESMのbare importで解決するため、`NODE_PATH`やイメージ内`/app/node_modules`では代替できない。ホスト側の空の`frontend/node_modules`に名前付きボリューム`frontend_lsp_node_modules`を被せ、初回起動時にイメージ内の依存をコピーする（`frontend/scripts/lsp-entrypoint.sh`）。
+  - `vscode-languageserver`はinitializeで受け取った`processId`をkill(0)で監視し、見つからなければ自らexitする。ホストのPIDはコンテナから見えず必ず失敗するため、`frontend/scripts/eslint-lsp-launcher.js`が`processId`のみをnullへ書き換えて中継する（終了はstdinのEOFで伝わる）。
+  - 保存時の挙動は現状の開発フローに合わせる。TypeScript/ReactはPrettier未導入のため、Zed同梱のPrettierを無効化してESLintの`source.fixAll.eslint`のみ適用する。Pythonは既存コードが`ruff format`未適用（50ファイル中32ファイルに差分）のため、フォーマッターの定義だけ行い保存時の自動整形は無効にする。
+- **理由**: リンターの一次ソースをコンテナ内の依存定義に一本化できるため、`docker compose exec ... ruff check` / `npm run lint`とエディタ上の診断が同じバージョン・同じ設定で一致する。同一絶対パスでのマウントは、LSPにパス変換の仕組みが無い以上もっとも副作用が少ない回避策である。
+- **トレードオフ**: LSPの起動ごとに`docker compose run`のオーバーヘッド（数秒）が乗る。`${PWD}`展開に依存するため、`scripts/zed-lsp.sh`を経由せずcwdの異なる場所からLSPサービスを起動するとマウント位置がずれる。`.zed/settings.json`の`binary.path`はZedが相対パスを解決しないため絶対パス固定であり、クローン先が異なる環境では`scripts/setup-zed.sh`の実行が必要。型チェック（vtsls/pyright）は対象外で、リンター/フォーマッターのみをDocker化している。
+- **関連**: ADR-009（Docker Compose前提のローカル開発）、ADR-023（ホスト側ツールのバージョン固定）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

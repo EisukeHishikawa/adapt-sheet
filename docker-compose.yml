@@ -145,7 +145,38 @@ services:
     profiles:
       - e2e
 
+  # ⑥⑦ エディタ（Zed）向けのLSPサービス（ADR-024）
+  # リンター/フォーマッターをホストへ二重導入せず、開発用イメージと同じruff/ESLintをエディタからも
+  # 使うための入口。エディタがLSPでやり取りするのはファイルの絶対パス（URI）であるため、ホストと
+  # 同じ絶対パス（${PWD}）へリポジトリをマウントし、コンテナ側でのパス読み替えを不要にする。
+  # 常駐不要（起動・終了はエディタが管理する）ため、e2eと同じくprofilesでopt-in化し、
+  # scripts/zed-lsp.sh から `docker compose run` で1プロセスずつ起動する。
+  backend-lsp:
+    build: ./backend
+    working_dir: ${PWD:-.}/backend
+    volumes:
+      - ${PWD:-.}:${PWD:-.}
+    command: ["ruff", "server"]
+    profiles:
+      - lsp
+
+  frontend-lsp:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.lsp
+    working_dir: ${PWD:-.}/frontend
+    volumes:
+      - ${PWD:-.}:${PWD:-.}
+      # ホスト側のfrontend/node_modulesは空（実体はfrontendコンテナ内のみ）のため、
+      # ESLintのプラグイン解決用にLinux向けの依存を名前付きボリュームとして被せる
+      # （中身の初期化はfrontend/scripts/lsp-entrypoint.sh）。
+      - frontend_lsp_node_modules:${PWD:-.}/frontend/node_modules
+    profiles:
+      - lsp
+
 # doclingサービスが初回PDF変換時にダウンロードするMLモデルの永続化用（上記docling.volumes参照）。
 volumes:
   docling_hf_cache:
   docling_rapidocr_models:
+  # frontend-lspがESLint実行に使う依存（上記frontend-lsp.volumes参照）。
+  frontend_lsp_node_modules:

@@ -81,11 +81,18 @@ docker compose up -d backend frontend
 
 ## 4. ローカルスタックの起動
 
-**必ず`.env`をシェルへ読み込んでから起動する。** `config.toml`の`env(...)`はこのシェルの環境変数から
-展開されるため、読み込まずに起動するとGoogleのclient_idがリテラル文字列`env(...)`のままGoTrueへ渡り、
-「有効に見えるのにログインだけ失敗する」状態になる（ADR-022）。
+起動時には次の2点を必ず守る。どちらも、破ってもエラーにならず「起動はするが設定が効いていない」
+状態になるため気づきにくい。
+
+1. **`supabase/config.toml`があるディレクトリで実行する。** Supabase CLIはカレントディレクトリから
+   設定を探し、見つからない場合は**CLIの既定値で起動する**（google無効・自己登録が有効・メール認証が有効）。
+   本リポジトリの設定が一切効かない状態になる。
+2. **`.env`をシェルへ読み込んでから起動する。** `config.toml`の`env(...)`はこのシェルの環境変数から
+   展開されるため、読み込まずに起動するとGoogleのclient_idがリテラル文字列`env(...)`のままGoTrueへ渡り、
+   「有効に見えるのにログインだけ失敗する」状態になる（ADR-022）。
 
 ```bash
+cd <supabase/config.toml があるリポジトリのルート>
 set -a; source .env; set +a
 supabase start
 ```
@@ -96,7 +103,18 @@ supabase start
 （`Local dev security notice`の通り、ローカル専用でネットワークに公開されるため本番情報を
 混ぜないこと）。表示された値を忘れた場合は`supabase status`で再表示できる。
 
-正しく展開されたかは次で確認できる（`env(`と表示されたら失敗）。
+起動後、**設定が実際に効いているかを必ず確認する**。期待値は
+`email: False / google: True / disable_signup: True` の3点セット。
+
+```bash
+curl -s http://127.0.0.1:54321/auth/v1/settings \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); e=d['external']; print('email:', e['email'], '/ google:', e['google'], '/ disable_signup:', d.get('disable_signup'))"
+```
+
+- `google: False` → `config.toml`が読まれていない（上記1に該当）。設定ファイルのあるディレクトリで起動し直す
+- `disable_signup: False` → 同上。**この状態では誰でも自己登録できてしまう**ため放置しない
+
+client_idが正しく展開されたかは次で確認する（`env(`と表示されたら上記2に該当）。
 
 ```bash
 docker inspect supabase_auth_adapt-sheet --format '{{range .Config.Env}}{{println .}}{{end}}' \

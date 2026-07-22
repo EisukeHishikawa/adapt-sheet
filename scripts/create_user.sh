@@ -55,20 +55,42 @@ done
 if ! curl -fsS "${supabase_url}/auth/v1/settings" -H "apikey: ${service_role_key}" \
   | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("external",{}).get("google") else 1)'; then
   echo "error: Supabase(GoTrue)側でGoogleプロバイダが有効になっていません。" >&2
-  echo "       supabase/config.toml の [auth.external.google] を確認し、\`supabase stop && supabase start\` をやり直してください。" >&2
+  echo "       よくある原因: supabase/config.toml が無いディレクトリで \`supabase start\` を実行し、" >&2
+  echo "       CLIの既定値（google無効・自己登録が有効）で起動している。" >&2
+  echo "       現在の起動設定は次で確認できる:" >&2
+  echo "         docker inspect supabase_auth_\$(basename \$(pwd)) --format '{{range .Config.Env}}{{println .}}{{end}}' | grep GOTRUE_EXTERNAL_GOOGLE" >&2
+  echo "       supabase/config.toml があるディレクトリで、.env を読み込んでから起動し直すこと:" >&2
+  echo "         set -a; source .env; set +a && supabase stop && supabase start" >&2
   exit 1
 fi
 
 # admin APIはメール確認を挟まずに確定済みユーザーを作れる（email_confirm=true）。パスワードは
 # 設定しない（メールプロバイダを無効化しているため、パスワードでのログインは成立しない）。
-response="$(curl -fsS -X POST "${supabase_url}/auth/v1/admin/users" \
+# --failを付けるとエラー本文が捨てられ原因が分からなくなるため、本文と状態コードを別々に受け取る。
+response="$(curl -sS -w '\n%{http_code}' -X POST "${supabase_url}/auth/v1/admin/users" \
   -H "apikey: ${service_role_key}" \
   -H "Authorization: Bearer ${service_role_key}" \
   -H "Content-Type: application/json" \
   -d "$(printf '{"email":%s,"email_confirm":true}' \
     "$(printf '%s' "${email}" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')")")"
+status="$(printf '%s' "${response}" | tail -n1)"
+body="$(printf '%s' "${response}" | sed '$d')"
 
-user_id="$(printf '%s' "${response}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+if [[ "${status}" != "200" && "${status}" != "201" ]]; then
+  error_code="$(printf '%s' "${body}" | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("error_code",""))
+except Exception: print("")' 2>/dev/null)"
+  if [[ "${error_code}" == "email_exists" ]]; then
+    echo "このメールアドレスのアカウントは既に存在します: ${email}"
+    echo "追加の作業は不要です。そのまま「Googleでログイン」からログインしてください。"
+    exit 0
+  fi
+  echo "error: アカウント作成に失敗しました（HTTP ${status}）" >&2
+  printf '       %s\n' "${body}" >&2
+  exit 1
+fi
+
+user_id="$(printf '%s' "${body}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
 
 echo "アカウントを作成しました"
 echo "  id:    ${user_id}"

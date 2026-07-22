@@ -12,7 +12,7 @@ vi.mock('@/store/authStore', () => ({
 const mockedUseAuthStore = vi.mocked(useAuthStore)
 
 const signInWithPassword = vi.fn()
-const signUpWithPassword = vi.fn()
+const signInWithGoogle = vi.fn()
 const signOut = vi.fn()
 const dismissError = vi.fn()
 
@@ -20,11 +20,12 @@ function setStoreState(overrides: Partial<ReturnType<typeof useAuthStore>>) {
   const state = {
     session: null,
     isAuthAvailable: true,
+    isInitializing: false,
     error: null,
     isSubmitting: false,
     init: vi.fn(),
     signInWithPassword,
-    signUpWithPassword,
+    signInWithGoogle,
     signOut,
     dismissError,
     ...overrides,
@@ -85,17 +86,36 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(signInWithPassword).toHaveBeenCalledWith('user@example.com', 'password123')
   })
 
-  it('新規登録ボタンを押すとsignUpWithPasswordが呼ばれる', async () => {
+  // アカウント作成は管理者のコマンド操作のみに限定したため、画面には新規登録の導線を出さない（ADR-021）。
+  it('新規登録ボタンを表示しない', async () => {
     const user = userEvent.setup()
     setStoreState({})
 
     render(<AuthPanel />)
     await user.click(screen.getByRole('button', { name: 'ログイン' }))
-    await user.type(screen.getByLabelText('メールアドレス'), 'user@example.com')
-    await user.type(screen.getByLabelText('パスワード'), 'password123')
-    await user.click(screen.getByRole('button', { name: '新規登録' }))
 
-    expect(signUpWithPassword).toHaveBeenCalledWith('user@example.com', 'password123')
+    expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument()
+  })
+
+  it('Googleでログインボタンを押すとsignInWithGoogleが呼ばれる', async () => {
+    const user = userEvent.setup()
+    setStoreState({})
+
+    render(<AuthPanel />)
+    await user.click(screen.getByRole('button', { name: 'ログイン' }))
+    await user.click(screen.getByRole('button', { name: 'Googleでログイン' }))
+
+    expect(signInWithGoogle).toHaveBeenCalledTimes(1)
+  })
+
+  // 復元前に未ログイン表示を描くと、直後にログイン済み表示へ入れ替わってチラつく。
+  it('セッション復元中はログインボタンを表示しない', () => {
+    setStoreState({ isInitializing: true })
+
+    render(<AuthPanel />)
+
+    expect(screen.queryByRole('button', { name: 'ログイン' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'ログアウト' })).not.toBeInTheDocument()
   })
 
   it('errorが設定されている場合、エラーメッセージを表示する', async () => {

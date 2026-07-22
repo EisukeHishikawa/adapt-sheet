@@ -261,6 +261,23 @@
 
 ---
 
+## ADR-021: ログイン専用化とセキュリティ強化（新規登録廃止・Google OAuth・RLS・XSS対策）
+
+- **ステータス**: Accepted
+- **コンテキスト**: ステップ27で実装したログイン機能は、画面から誰でも新規登録できる状態だった。本プラットフォームは不特定多数への公開を前提としないため、アカウント発行を管理者の操作に限定したいという要件が生まれた。あわせて、ログイン機能をベストプラクティスに沿って強化する（Google OAuth・セッション管理・チラつき防止・トークン保管のXSS対策・DB側のRLS）。調査の過程で、プレビュー用iframeに`sandbox`属性が無く、AI生成HTMLが親ページと同一オリジンで実行できる（＝保管中のアクセストークンを読み出せる）状態であることが判明した。
+- **決定**:
+  - **新規登録の廃止とアカウント発行手段**: `AuthPanel`から新規登録ボタンを、`authStore`から`signUpWithPassword`を削除する。UIを消すだけではGoTrueの`/auth/v1/signup`を直接叩けてしまうため、`supabase/config.toml`の`[auth] enable_signup = false`でサーバー側も塞ぐ。アカウント発行は`scripts/create_user.sh`（Admin APIの`POST /auth/v1/admin/users`をservice_roleキーで呼び、`email_confirm=true`で確定済みユーザーを作成）に一本化する。なお`[auth.email] enable_signup`はSupabase CLIがGoTrueの`EXTERNAL_EMAIL_ENABLED`へマップするため、falseにするとログイン自体が不能になる（`email_provider_disabled`）。ここはtrueのまま維持する。
+  - **Google OAuth**: `supabase/config.toml`に`[auth.external.google]`を追加し、client_id/secretは`env(...)`でリポジトリ外から与える。フロントは`signInWithOAuth({ provider: 'google' })`で認可コードフローを開始する。`enable_signup = false`との組み合わせにより、事前に同じメールアドレスのアカウントを作っておかない限りGoogleログインは成立しない（勝手にユーザーが増えない）。
+  - **セッション管理**: `createClient`に`flowType: 'pkce'`を指定する（SPAはクライアントシークレットを秘匿できず、implicitフローはアクセストークンをURLフラグメントへ露出させるため）。`authStore.init`は`onAuthStateChange`の購読解除関数を返し、`App`の`useEffect`クリーンアップで解除する（StrictModeの二重実行でリスナーが積み上がるのを防ぐ）。
+  - **チラつき（Flash）防止**: `authStore`に`isInitializing`を追加し、`getSession()`の解決（失敗時も含む）まで`true`にする。`AuthPanel`はその間、高さだけ確保した空要素を返す。復元前に「ログイン」ボタンを描いてから「ログイン済み」表示へ入れ替わる挙動と、それに伴うヘッダーのレイアウトシフトを同時に防ぐ。
+  - **トークン保管とXSS対策（多層）**: (1) プレビューiframeに`sandbox=""`を付ける。`srcdoc`はsandbox未指定だと親と同一オリジンで動作し、AI生成HTMLや復元した履歴に`<script>`が混ざるとトークンを読み出せるため、これを最優先で塞ぐ（帳票は静的なHTML/CSSのみで成立するのでスクリプト実行の需要はない）。(2) セッションの保管先を`localStorage`から`sessionStorage`へ変更し、タブを閉じた時点で破棄する。(3) ビルド成果物にCSPの`meta`タグを注入する（Vite開発サーバーはFast Refreshのインラインscriptとwebsocketを使うため、開発時には適用しない）。
+  - **RLS（行レベルセキュリティ）**: 生成履歴の保存先をSupabaseのPostgresへ統合し（ADR-019の「素のPostgresコンテナ」を改訂、`db`サービスは廃止）、`render_history`に`ENABLE`／`FORCE ROW LEVEL SECURITY`とSELECT/INSERT/DELETEのポリシー（`user_id = auth.uid()::text`）を定義する。アプリは`BYPASSRLS`属性を持たない`authenticator`ロールで接続し、リクエストごとに`set_config('request.jwt.claims', ..., true)`でJWTの`sub`を渡してから`SET LOCAL ROLE authenticated`する（PostgRESTと同じ方式）。マイグレーションは所有者権限が必要なため`MIGRATION_DATABASE_URL`（`postgres`ロール）を別途使う。
+- **理由**: 新規登録の禁止は、UI・GoTrue設定の二重で担保しないと実効性がない。RLSはアプリ側のWHERE句に依存しない最後の防波堤であり、クエリの書き漏れやSQLインジェクションがあっても他人の行へ到達できない。トークン保管については、SPAである以上どの保管先でもXSS下では窃取され得るため、保管先の変更（被害時間の短縮）だけでなく、実際に存在した実行経路（sandbox無しiframe）を塞ぐことを主対策とした。
+- **トレードオフ**: `sessionStorage`はタブを閉じるとログアウトするため、ブラウザ再起動後もログインを維持したい運用には向かない（真にXSS耐性を持たせるにはhttpOnly Cookie＋BFFが必要で、本ステップの範囲外）。`user_id`は`auth.users`への外部キーを張らず`TEXT`のまま維持した（UUIDへ移行すると、非UUIDのIDを使う既存テスト群の広範な書き換えが必要になるため。RLSの保護内容はポリシーの`::text`比較で同等）。CSPは`meta`タグのため`frame-ancestors`等を解釈できず、本番はCloudFrontの応答ヘッダーで別途付与する必要がある（未実装、残課題）。Google OAuthの動作確認にはGoogle Cloudで発行したOAuthクライアントが必要で、未設定のままでは`supabase start`が警告を出し、Googleログイン押下時にエラーになる。
+- **関連**: ADR-015（ゲート対象エンジン）、ADR-018（JWT検証・`current_user`）、ADR-019（生成履歴の永続化。本ADRでDBの置き場所を改訂）、ADR-020（Supabase Local CLI導入・JWKS対応）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

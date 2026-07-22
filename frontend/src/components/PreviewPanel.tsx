@@ -118,6 +118,10 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
           <iframe
             title="プレビュー"
             srcDoc={srcDoc}
+            // sandbox未指定のsrcDocは親と同一オリジンで動くため、AI生成HTMLや復元した履歴に
+            // <script>が混ざるとsessionStorageのアクセストークンを読み出せてしまう。空指定で
+            // 一意オリジン＋スクリプト実行禁止にする（帳票は静的なHTML/CSSのみで成立する。ADR-021）。
+            sandbox=""
             tabIndex={-1}
             className="pointer-events-none border-0 bg-white"
             style={{

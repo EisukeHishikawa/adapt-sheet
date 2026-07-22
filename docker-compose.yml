@@ -31,26 +31,8 @@ services:
     depends_on:
       - backend
 
-  # ② ローカルDB (PostgreSQL、DEVELOPMENT.md ステップ28)
-  # 生成履歴の保存先。本番のSupabase Postgresと同じスキーマ（backend/migrations）を当て、
-  # クラウド環境を汚さずにマイグレーション・保存ロジックを検証できるようにする（ADR-019）。
-  # backendコンテナからのみ接続される内部サービスのため、ホストへポートは公開しない。
-  db:
-    image: postgres:16-alpine
-    environment:
-      - POSTGRES_USER=adapt_sheet
-      - POSTGRES_PASSWORD=adapt_sheet
-      - POSTGRES_DB=adapt_sheet
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U adapt_sheet"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # ③ バックエンド (FastAPI、入口エンドポイント)
-  # ADR-014により、Docling本体（重量級ML依存）は④のdoclingコンテナへ分離した。
+  # ② バックエンド (FastAPI、入口エンドポイント)
+  # ADR-014により、Docling本体（重量級ML依存）は③のdoclingコンテナへ分離した。
   backend:
     build: ./backend
     ports:
@@ -98,19 +80,21 @@ services:
       - CLAUDE_MODEL=${CLAUDE_MODEL:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-}
       - GEMINI_STANDARD_MODEL=${GEMINI_STANDARD_MODEL:-}
-      # 生成履歴の保存先（app/db.py、DEVELOPMENT.md ステップ28）。既定は上記②のローカルdbサービス。
-      # 本番はSupabaseのPostgres接続文字列で上書きする（ADR-019）。未設定時はapp/db.pyが
+      # 生成履歴の保存先（app/db.py、ADR-021）。Supabase（ローカルはSupabase Local CLIが
+      # 起動するPostgres）へRLS有効のまま接続するため、RLSを迂回しないauthenticatorロールを使う
+      # （postgresロールはBYPASSRLS属性を持つため実行時には使わない）。未設定時はapp/db.pyが
       # DB接続を要求しない範囲（履歴保存のスキップ等）にとどめ、DB非依存のテストを壊さない。
-      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://adapt_sheet:adapt_sheet@db:5432/adapt_sheet}
+      - DATABASE_URL=${DATABASE_URL:-}
+      # マイグレーション（alembic）専用の接続。テーブル作成・ポリシー定義には所有者権限が必要な
+      # ため、実行時とは別にpostgresロールで接続する（ADR-021）。
+      - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-}
     depends_on:
-      db:
-        condition: service_healthy
       docling:
         condition: service_started
       pdf2htmlex:
         condition: service_started
 
-  # ④ Doclingによるテキスト抽出専用の内部サービス（ADR-014/015、DEVELOPMENT.md ステップ15）
+  # ③ Doclingによるテキスト抽出専用の内部サービス（ADR-014/015、DEVELOPMENT.md ステップ15）
   # torch/opencv-python等の重量級ML依存を含み、backendの起動速度に影響しないよう分離した。
   # backendコンテナからのみHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
   docling:
@@ -130,7 +114,7 @@ services:
       # 標準HTTPSダウンロードへフォールバックさせる。
       - HF_HUB_DISABLE_XET=1
 
-  # ⑤ pdf2htmlEXによるPDF→HTML変換専用の内部サービス（ADR-016）
+  # ④ pdf2htmlEXによるPDF→HTML変換専用の内部サービス（ADR-016）
   # pdf2htmlEXバイナリは特殊パッチ済みpoppler等の重量級ネイティブ依存を含み、backend
   # （python:3.9-slimベース）には導入できないため、doclingと同じく別コンテナに分離する。
   # backendコンテナからのみHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。
@@ -139,7 +123,7 @@ services:
     volumes:
       - ./pdf2htmlex-service:/app
 
-  # ⑥ E2Eテスト (Playwright)
+  # ⑤ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
   # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
   # として用意する（ADR-010）。frontend/backendのように常時起動する必要はないため、
@@ -165,5 +149,3 @@ services:
 volumes:
   docling_hf_cache:
   docling_rapidocr_models:
-  # ローカルdbサービスのデータ永続化用（上記db.volumes参照）。
-  postgres_data:

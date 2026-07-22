@@ -1,3 +1,4 @@
+import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/authStore'
 
@@ -36,7 +37,7 @@ export function AuthPanel() {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-1.5">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" disabled={isSubmitting} onClick={() => void signInWithGoogle()}>
           <GoogleMark className="size-3.5" />
@@ -44,7 +45,10 @@ export function AuthPanel() {
         </Button>
         {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
-      <p className="text-[11px] text-muted-foreground">アカウント登録はシステム管理者のみ可能です</p>
+      <p className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] leading-none text-muted-foreground">
+        <Lock aria-hidden="true" className="size-3" />
+        アカウント登録はシステム管理者のみ可能です
+      </p>
     </div>
   )
 }

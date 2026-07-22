@@ -32,7 +32,7 @@ function App() {
   return (
     // md未満（モバイル）はh-screen固定を外してページ全体を縦スクロールさせ、2カラムを縦積みにする。
     // md以上は1画面完結（h-screen＋各パネル内スクロール）を維持する。
-    <main className="flex min-h-screen w-full flex-col bg-background text-foreground md:h-screen md:w-screen">
+    <main className="relative flex min-h-screen w-full flex-col bg-background text-foreground md:h-screen md:w-screen">
       <AppHeader />
 
       <div className="flex flex-col gap-4 md:min-h-0 md:flex-1 md:flex-row md:gap-0">
@@ -65,21 +65,30 @@ function App() {
   )
 }
 
+// 縦幅を作業領域へ譲るため、ヘッダーは通常オーバーレイとして画面上端へ隠しておき、上端付近に
+// マウスを寄せた時だけスライドで現れる。空の領域が下のUI操作をブロックしないよう、コンテナは
+// pointer-events-noneにして、ホバー検知帯・ヘッダー本体だけをpointer-events-autoで有効化する。
 function AppHeader() {
   return (
-    <header className="flex items-center justify-between gap-3 border-b border-input px-4 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <BrandMark className="size-7 shrink-0" />
-        <div className="flex flex-col leading-none">
-          <h1 className="text-sm font-semibold tracking-tight">AdaptSheet AI</h1>
-          <p className="mt-0.5 hidden text-[11px] text-muted-foreground sm:block">帳票作成AI支援プラットフォーム</p>
+    <div className="group pointer-events-none absolute inset-x-0 top-0 z-30">
+      {/* ヘッダーが隠れていても反応させるための、常時最上端に居る透明なホバー検知帯。 */}
+      <div className="pointer-events-auto absolute inset-x-0 top-0 h-4" aria-hidden="true" />
+      {/* ヘッダーが隠れていることを示す控えめなハンドル（ホバーで消える）。 */}
+      <div className="pointer-events-none mx-auto mt-1 h-1 w-12 rounded-full bg-border/70 transition-opacity duration-300 group-hover:opacity-0" />
+      <header className="pointer-events-auto flex -translate-y-full items-center justify-between gap-3 border-b border-input bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur transition-transform duration-300 ease-out group-focus-within:translate-y-0 group-hover:translate-y-0">
+        <div className="flex items-center gap-2.5">
+          <BrandMark className="size-7 shrink-0" />
+          <div className="flex flex-col leading-none">
+            <h1 className="text-sm font-semibold tracking-tight">AdaptSheet AI</h1>
+            <p className="mt-0.5 hidden text-[11px] text-muted-foreground sm:block">帳票作成AI支援プラットフォーム</p>
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <AuthPanel />
-        <ThemeToggle />
-      </div>
-    </header>
+        <div className="flex items-center gap-3">
+          <AuthPanel />
+          <ThemeToggle />
+        </div>
+      </header>
+    </div>
   )
 }
 

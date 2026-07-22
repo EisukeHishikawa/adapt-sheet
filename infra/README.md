@@ -23,6 +23,8 @@ infra/
 
 ## 使い方（apply はステップ25の対象外・承認後に実施）
 
+> Terraformのバージョンはリポジトリ直下の [`../mise.toml`](../mise.toml) で固定する（ADR-023）。以下のコマンドを実行する前に、リポジトリのルートで `mise install` を済ませ、`terraform version` が `mise.toml` の値と一致することを確認する。providerのバージョンは `.terraform.lock.hcl`（コミット対象）で固定されており、更新する場合は `terraform providers lock -platform=darwin_arm64 -platform=linux_amd64` で開発機とCIの両プラットフォーム分のチェックサムを記録する。
+
 1. **state土台の作成（初回のみ）**
 
    ```bash

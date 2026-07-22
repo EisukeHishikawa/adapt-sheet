@@ -23,13 +23,19 @@ dist/
 
 # Terraform（フェーズ4 ステップ25）。state・ローカルキャッシュ・実tfvars（秘密や環境依存値を含む）は
 # コミットしない。モジュール定義とexampleのみを管理対象にする。
+# .terraform.lock.hcl（providerのバージョン・チェックサム）は、環境ごとにproviderが
+# 揺れないようコミット対象にする（ADR-023）。
 **/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
 !*.tfvars.example
-.terraform.lock.hcl
 crash.log
+
+# mise（ADR-023）。共有するmise.tomlはコミットし、個人ごとの上書きのみ除外する。
+mise.local.toml
+.mise.local.toml
+.mise/
 
 # Editor / local notes
 # .claude/CLAUDE.md（個人メモ）・settings.local.json・scheduled_tasks.lock等は非公開のまま維持しつつ、

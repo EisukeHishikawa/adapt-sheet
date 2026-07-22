@@ -292,6 +292,21 @@
 
 ---
 
+## ADR-023: ホスト側開発ツールのバージョン管理をmiseへ一本化
+
+- **ステータス**: Accepted
+- **コンテキスト**: アプリ本体はDocker Composeで動く（ADR-009）ため、コンテナ内のPython/Nodeは`Dockerfile`のベースイメージでバージョンが固定されていた。一方でTerraform・AWS CLI・Supabase CLI・GitHub CLIといった**ホスト側で直接実行するツール**にはバージョンの取り決めが無く、`brew install`で入れた各自の最新版に依存していた。特にTerraformは、実行するバイナリのバージョンがstateファイルへ記録され、新しいバージョンでapplyするとそれ以前のバージョンでは操作できなくなるため、意図しないバージョンでの実行を防ぎたい。`infra/versions.tf`の`required_version = ">= 1.6.0"`は下限しか縛らず、この用途には不十分だった。
+- **決定**:
+  - リポジトリ直下の`mise.toml`で、ホスト側ツールのバージョンをパッチまで固定する（terraform / node / python / awscli / supabase / gh）。導入は`brew install mise`＋シェルへの`mise activate`、利用は`mise install`。
+  - node/pythonは`docker-compose.yml`が使うベースイメージ（`node:20-alpine` = 20.20.2、`python:3.9-slim` = 3.9.25）と同じパッチバージョンに合わせる。ホストで補助コマンド（型生成・スクリプト）を動かしたときにコンテナと挙動が食い違わないようにするため。
+  - `infra/versions.tf`・`infra/bootstrap/main.tf`の`required_version`を`~> 1.15`へ引き上げる。バージョン固定の一次ソースは`mise.toml`とし、こちらはmiseを経由せず実行された場合のガードとして機能させる。
+  - `.terraform.lock.hcl`をコミット対象に含める（従来は`.gitignore`で除外していた）。`terraform providers lock -platform=darwin_arm64 -platform=linux_amd64`で開発機（Apple Silicon）とCI（Linux）の両方のチェックサムを記録する。
+- **理由**: バージョンの取り決めをREADMEの文章ではなくリポジトリ内の設定ファイルに置くことで、ディレクトリに入るだけで全員が同じバイナリを使う状態になる（asdf互換の`.tool-versions`より、コメントや`min_version`を書けるTOML形式を選んだ）。Terraform本体の固定だけではproviderのバージョンが揺れるため、lockファイルのコミットまで含めて初めて「同じ入力なら同じplan」が成立する。
+- **トレードオフ**: mise未導入の環境では従来どおりPATH上のバイナリが使われるため、強制力はない（CIでの強制は未対応、残課題）。パッチ固定はバージョン更新を自動で受け取れないため、更新は`mise.toml`の編集＋PRという明示的な操作になる（意図した挙動）。node/pythonのバージョンを`Dockerfile`と`mise.toml`の2箇所で持つことになり、ベースイメージ更新時は両方を揃える必要がある。
+- **関連**: ADR-005（IaC一本化）、ADR-009（Docker Compose前提のローカル開発）、ADR-017（Lambda本番イメージ・SSM）、ADR-020（Supabase Local CLI）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

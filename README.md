@@ -11,6 +11,7 @@
 - **型同期**: openapi-typescript（FastAPIの`openapi.json`からフロント用TypeScript型を生成。ADR-005参照）
 - **テスト**: Vitest + React Testing Library + MSW / pytest / Playwright
 - **インフラ**: Terraform / AWS (Lambda, CloudFront, S3, API Gateway, WAF) / GitHub Actions
+- **ツールバージョン管理**: mise（ホスト側で直接実行するツールを`mise.toml`で固定。ADR-023参照）
 - **認証・DB**: Supabase（Auth + PostgreSQL）
 
 ## クイックスタート
@@ -22,8 +23,26 @@
 ### 前提ツール
 
 - **Docker Desktop**（または互換のOCIランタイム）: アプリの起動に必須
-- **Homebrew**: `gh` 等のパッケージ管理に使用（[brew.sh](https://brew.sh)）
-- **GitHub CLI (`gh`)**: リポジトリ作成・PR作成・Branch Protection設定に使用。`brew install gh` 後 `gh auth login` で認証
+- **Homebrew**: `mise` の導入に使用（[brew.sh](https://brew.sh)）
+- **[mise](https://mise.jdx.dev)**: ホスト側で直接実行する開発ツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョン管理。バージョンはリポジトリ直下の [`mise.toml`](./mise.toml) で固定する（[docs/decisions.md](./docs/decisions.md) ADR-023参照）
+
+```bash
+brew install mise
+echo 'eval "$(mise activate zsh)"' >> ~/.zshrc && exec zsh  # シェルへの組み込み（初回のみ）
+
+mise install   # mise.toml のバージョンを一括インストール
+mise ls        # 適用中のバージョンを確認
+```
+
+`mise install` が入れるツールは次のとおり。`node`/`python` は Docker イメージ（`node:20-alpine` / `python:3.9-slim`）と同じパッチバージョンに揃えてある。アプリ本体の実行はあくまで Docker Compose 側で行う（ADR-009）。
+
+| ツール | 用途 |
+|---|---|
+| terraform | `infra/` のAWSインフラ定義（stateを壊さないためパッチまで固定） |
+| node / python | ホストで補助コマンドを動かす場合の実行環境（コンテナと同バージョン） |
+| awscli | デプロイ・SSM Parameter Storeへのキー投入（ADR-017） |
+| supabase | ローカルのAuth/Postgres検証スタック（ADR-020） |
+| gh | リポジトリ操作・PR作成・Branch Protection設定。初回は `gh auth login` で認証 |
 
 ### 起動方法
 

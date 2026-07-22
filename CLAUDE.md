@@ -18,6 +18,13 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 > フェーズ2以降、実装が進み次第このセクションを実コマンドで更新する。
 
+ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは、リポジトリ直下の [`mise.toml`](./mise.toml) で固定する（ADR-023）。`terraform`等をホストで実行する前に`mise install`を済ませること。バージョンを変更する場合は`mise.toml`を編集し、`node`/`python`は各`Dockerfile`のベースイメージと同じパッチバージョンに揃える。
+
+```bash
+mise install    # mise.tomlのバージョンを一括インストール
+mise ls         # 適用中のバージョンを確認
+```
+
 起動手順（`docker compose up --build`、ポート固定、既存起動時の再作成方法等）は [`README.md`](./README.md) の「クイックスタート」に一本化している。ClaudeCodeがアプリを起動・再起動する際は必ずそちらの手順に従うこと。以下は起動中のコンテナに対して実行するテスト・静的解析コマンド。
 
 ### バックエンド (Python / FastAPI、入口エンドポイント)

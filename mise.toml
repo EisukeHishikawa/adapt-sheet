@@ -1,0 +1,19 @@
+# ホスト側で直接実行する開発ツールのバージョン固定（ADR-023）。
+# アプリ本体はDocker Compose上で動く（ADR-009）ため、ここでのnode/pythonは
+# 補助コマンド（型生成・スクリプト実行）用。差異が出ないようコンテナの
+# ベースイメージ（node:20-alpine / python:3.9-slim）と同じパッチバージョンに合わせる。
+min_version = "2025.1.0"
+
+[tools]
+# インフラ定義の実行環境。stateを壊さないよう範囲指定ではなくパッチまで固定する。
+terraform = "1.15.8"
+
+node = "20.20.2"
+python = "3.9.25"
+
+# デプロイ・SSMへのAPIキー投入（ADR-017）
+awscli = "2.36.2"
+# ローカルのAuth/Postgres検証スタック（ADR-020）
+supabase = "2.109.1"
+# PR作成・Branch Protection設定
+gh = "2.96.0"

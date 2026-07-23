@@ -1,6 +1,6 @@
 # infra — Terraform によるAWSインフラ定義（フェーズ4 ステップ25）
 
-`adapt-sheet` のAWSインフラ（ECR Private / Lambda / API Gateway / WAF / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。背景は [`../docs/decisions.md`](../docs/decisions.md) の ADR-005（IaC一本化）・ADR-017（Lambda本番イメージ）、手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
+`adapt-sheet` のAWSインフラ（ECR Private / Lambda / API Gateway / WAF / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。背景は [`../docs/decisions.md`](../docs/decisions.md) の ADR-005（IaC一本化）・ADR-017（backendのLambda本番イメージ）・ADR-026（docling/pdf2htmlexのLambda化）、手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
 
 > 本ステップは**コード定義まで**。`terraform apply`（実AWSリソースの作成）はまだ行わない。
 
@@ -10,10 +10,10 @@
 infra/
 ├── bootstrap/        # state用S3バケット＋ロック用DynamoDB（chicken-egg回避で最初にローカルstateでapply）
 ├── modules/
-│   ├── ecr/          # backendコンテナイメージのECR Private（Lambdaは同一リージョンのPrivateからのみ取得可）
+│   ├── ecr/          # backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可）
 │   ├── ssm/          # APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
-│   ├── lambda/       # 入口エンドポイント。実行ロールはSSM読み取り＋SSM経由KMS復号の最小権限
-│   ├── api_gateway/  # REST API（REGIONAL）→ Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）
+│   ├── lambda/       # Lambda関数の共通モジュール。backend（SSM読み取り＋SSM経由KMS復号の最小権限）と、docling/pdf2htmlex（AWS_IAM認証Function URL、backendのみ呼び出し許可。ADR-026）で共用
+│   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）
 │   ├── waf/          # AWSマネージドルール＋IPレート制限。API Gatewayステージへ関連付け
 │   └── frontend/     # 非公開S3 ＋ CloudFront（OAC）。SPAフォールバック付き
 ├── versions.tf / providers.tf / backend.tf

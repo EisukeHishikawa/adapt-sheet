@@ -1,0 +1,52 @@
+# 本番用（AWS Lambda コンテナイメージ）Dockerfile（ADR-026）。
+# 開発用の pdf2htmlex-service/Dockerfile（docker-compose、uvicorn --reload、bind mount）とは別物。
+# pdf2htmlex-serviceはbackendから内部的にのみ呼ばれる変換専用サービスのため、API Gatewayではなく
+# IAM認証必須のLambda Function URL経由でbackend Lambdaからのみ到達可能にする（ADR-026）。
+#
+# ・APIキー等の秘密情報は扱わないため、backend/Dockerfile.lambdaと異なりParameter Store連携は無い。
+# ・イメージはECR Private（<account>.dkr.ecr.<region>.amazonaws.com）へpushする。Lambdaの
+#   コンテナイメージは同一リージョンのECR Privateからのみ取得できるため（ADR-017）。
+# ・ベースイメージは開発用Dockerfileと同じpdf2htmlex/pdf2htmlex（Ubuntu 20.04/focal、x86_64のみ）。
+#   Lambdaのコンテナイメージはx86_64/arm64のいずれかに単一アーキテクチャで統一する必要があるため、
+#   Lambda関数のアーキテクチャもx86_64に固定する（infra/modules/lambda）。
+FROM pdf2htmlex/pdf2htmlex:0.18.8.rc1-master-20200630-Ubuntu-focal-x86_64
+
+# AWS Lambda Web Adapter: uvicorn(FastAPI)をLambdaのHTTPイベントで駆動するためのLambda拡張
+# バイナリ。公式のマルチアーキ対応イメージからCOPYするだけで、既存のFastAPIコードを改変せず
+# サーバーレス上で動かせる（ADR-017）。バージョンはbackend/Dockerfile.lambdaと揃える。
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+WORKDIR /app
+
+# ベースイメージのENTRYPOINTがpdf2htmlEX本体（/usr/local/bin/pdf2htmlEX）に固定されているため、
+# FastAPI（uvicorn）を起動できるよう解除する（開発用Dockerfileと同じ）。
+ENTRYPOINT []
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Lambda Web Adapterへアプリの待受ポートを知らせる（下のuvicorn --portと一致させる。
+    # docker-compose.ymlの内部専用ポート8200とも揃える）。
+    AWS_LWA_PORT=8200
+
+# ベースイメージ（Ubuntu 20.04）はPython 3.8のみ既定インストール対象のため、開発用Dockerfileと
+# 同様にPython 3.9系をuniverseリポジトリから追加する（3.9向けpipはget-pip.py経由で導入）。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.9 \
+    python3.9-distutils \
+    curl \
+    ca-certificates \
+    && curl -sS https://bootstrap.pypa.io/pip/3.9/get-pip.py -o /tmp/get-pip.py \
+    && python3.9 /tmp/get-pip.py \
+    && rm /tmp/get-pip.py \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+RUN python3.9 -m pip install --no-cache-dir --upgrade pip \
+    && python3.9 -m pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# 本番は焼き込んだコードで起動するため --reload は付けない。--host 0.0.0.0でLambda Web Adapter
+# から到達可能にし、AWS_LWA_PORTと同じ8200で待ち受ける。
+CMD ["python3.9", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8200"]

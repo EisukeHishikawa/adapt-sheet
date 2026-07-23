@@ -12,6 +12,16 @@ image_tag = "latest"
 lambda_memory_size = 4096
 lambda_timeout     = 60
 
+# docling-service / pdf2htmlex-service（ADR-026）。ECR Privateへpush済みのイメージタグ（CIが更新する運用を想定）。
+docling_image_tag    = "latest"
+pdf2htmlex_image_tag = "latest"
+
+docling_lambda_memory_size = 6144
+docling_lambda_timeout     = 120
+
+pdf2htmlex_lambda_memory_size = 2048
+pdf2htmlex_lambda_timeout     = 60
+
 # 本番は実AIを叩く。
 use_mock_ai = "false"
 

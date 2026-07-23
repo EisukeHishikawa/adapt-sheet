@@ -17,8 +17,8 @@ flowchart LR
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
         LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-014)\nengineごとの分岐・ゲート判定 (ADR-015)"]
-        LambdaDocling["Lambda (DoclingのPDF→HTML変換)\n(ADR-015)"]
-        LambdaPdf2HtmlEx["Lambda (pdf2htmlEXのPDF→HTML変換)\n(ADR-015)"]
+        LambdaDocling["Lambda (DoclingのPDF→HTML変換)\nFunction URL・AWS_IAM認証 (ADR-015/026)"]
+        LambdaPdf2HtmlEx["Lambda (pdf2htmlEXのPDF→HTML変換)\nFunction URL・AWS_IAM認証 (ADR-015/026)"]
         WAF["AWS WAF"]
     end
 
@@ -31,8 +31,8 @@ flowchart LR
 
     Browser -->|静的アセット取得| CF --> S3
     Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
-    LambdaEntry -->|変換エンジン選択時 (HTTP)| LambdaDocling
-    LambdaEntry -->|変換エンジン選択時 (HTTP)| LambdaPdf2HtmlEx
+    LambdaEntry -->|変換エンジン選択時・SigV4署名 (HTTP, ADR-026)| LambdaDocling
+    LambdaEntry -->|変換エンジン選択時・SigV4署名 (HTTP, ADR-026)| LambdaPdf2HtmlEx
     LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-015)| Gemini
     LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-015)| Claude
     LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-015)| OpenAI

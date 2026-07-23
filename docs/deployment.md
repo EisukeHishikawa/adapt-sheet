@@ -56,9 +56,9 @@
 3. イメージは**ECR Private（`<account>.dkr.ecr.<region>.amazonaws.com`）**へpushする（Lambdaのコンテナイメージは同一リージョンのECR Privateからのみ取得できるため。無料枠500MBの逼迫はライフサイクルポリシーで抑える。ADR-017）。
 4. コンテナ内で`pytest`を実行し、環境依存なくテストがパスすることを確認。
 
-> 当面のLambda化対象は軽量な`backend`のみ。`docling-service`/`pdf2htmlex-service`のLambda化は後続で対応する（ADR-017）。
-
 理由の詳細は [`decisions.md`](./decisions.md) のADR-017を参照。
+
+`docling-service`/`pdf2htmlex-service`も同様に本番用`Dockerfile.lambda`を持つ（Web Adapterバイナリの導入以外は開発用Dockerfileと同じ）。ただしこの2サービスはbackendからのみ呼ばれる内部専用サービスのため、API Gatewayではなく**AWS_IAM認証必須のLambda Function URL**として公開し、backend Lambdaの実行ロールのみに呼び出しを許可する。backendは`app/services/remote_extractor.py`でリクエストをAWS SigV4署名してから呼び出す（環境変数`DOCLING_SERVICE_AUTH`/`PDF2HTMLEX_SERVICE_AUTH=aws_sigv4`で有効化。詳細は[`decisions.md`](./decisions.md)のADR-026）。
 
 ---
 
@@ -68,10 +68,10 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 - モジュール構成（`infra/modules/`）
   - `frontend`: CloudFront + S3（非公開バケット＋OAC、SPAフォールバック）
-  - `lambda`: 入口エンドポイント（メモリ4GB既定）。実行ロールはSSM読み取り＋SSM経由KMS復号の最小権限
-  - `api_gateway`: REST API（REGIONAL）→ Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）
+  - `lambda`: Lambda関数の共通モジュール。`backend`（入口エンドポイント、メモリ4GB既定、SSM読み取り＋SSM経由KMS復号の最小権限）と、`docling`/`pdf2htmlex`（内部専用、AWS_IAM認証Function URL、backendのみ呼び出し許可。ADR-026）の3関数で共用する
+  - `api_gateway`: REST API（REGIONAL）→ backend Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）。docling/pdf2htmlexはAPI Gatewayを経由しない
   - `waf`: AWSマネージドルール＋IPレート制限。API Gatewayステージへ関連付け
-  - `ecr`: backendコンテナイメージのECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制）
+  - `ecr`: backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制）
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
 - state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
 - AWS認証はOIDC等の安全な方式でGitHub Actionsから利用する（長期の静的アクセスキーは発行しない）。OIDCプロバイダ/デプロイロールはステップ26で定義する。

@@ -1,0 +1,43 @@
+# 本番用（AWS Lambda コンテナイメージ）Dockerfile（ADR-026）。
+# 開発用の docling-service/Dockerfile（docker-compose、uvicorn --reload、bind mount）とは別物。
+# docling-serviceはbackendから内部的にのみ呼ばれる変換専用サービスのため、API Gatewayではなく
+# IAM認証必須のLambda Function URL経由でbackend Lambdaからのみ到達可能にする（ADR-026）。
+#
+# ・APIキー等の秘密情報は扱わないため、backend/Dockerfile.lambdaと異なりParameter Store連携は無い。
+# ・イメージはECR Private（<account>.dkr.ecr.<region>.amazonaws.com）へpushする。Lambdaの
+#   コンテナイメージは同一リージョンのECR Privateからのみ取得できるため（ADR-017）。
+FROM python:3.9-slim
+
+# AWS Lambda Web Adapter: uvicorn(FastAPI)をLambdaのHTTPイベントで駆動するためのLambda拡張
+# バイナリ。公式のマルチアーキ対応イメージからCOPYするだけで、既存のFastAPIコードを改変せず
+# サーバーレス上で動かせる（ADR-017）。バージョンはbackend/Dockerfile.lambdaと揃える。
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Lambda Web Adapterへアプリの待受ポートを知らせる（下のuvicorn --portと一致させる。
+    # docker-compose.ymlの内部専用ポート8100とも揃える）。
+    AWS_LWA_PORT=8100
+
+# opencv-python(cv2)がlibGL.so.1 / libglib2.0を、torchがlibgomp1(OpenMP)を実行時に要求するため、
+# slimイメージには含まれないこれらの共有ライブラリを明示的に追加する（開発用Dockerfileと同様）。
+# requirements.txtの全依存はバイナリwheelで導入できソースビルドが発生しないため、
+# build-essentialは含めない（ADR-016）。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# 本番は焼き込んだコードで起動するため --reload は付けない。--host 0.0.0.0でLambda Web Adapter
+# から到達可能にし、AWS_LWA_PORTと同じ8100で待ち受ける。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8100"]

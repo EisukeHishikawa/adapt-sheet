@@ -341,6 +341,22 @@
 
 ---
 
+## ADR-026: docling-service/pdf2htmlex-serviceのLambda化（IAM認証Function URL・backendからのSigV4署名）
+
+- **ステータス**: Accepted
+- **コンテキスト**: ADR-017でLambda化した`backend`（入口エンドポイント）に対し、`docling-service`/`pdf2htmlex-service`は重量級ネイティブ依存（torch/opencv-python、パッチ済みpoppler/libfontforge）ゆえに専用コンテナへ分離したままLambda化を見送っていた（ADR-013/015）。両サービスはbackendからのみHTTPで呼ばれる内部専用サービスで、ユーザーから直接到達される必要はない。この2サービスを本番のAWS Lambda上でどう公開し、backendからどう安全に呼び出すかを決める。
+- **決定**:
+  - **公開方式にAPI Gatewayではなく、AWS_IAM認証必須のLambda Function URLを使う**。`infra/modules/lambda`に`create_function_url`（Function URL作成の可否）・`function_url_invoker_role_arns`（resource-based policyで許可する呼び出し元ロール）を追加し、`docling`/`pdf2htmlex`の2 Lambdaはこれを有効化してbackend Lambdaの実行ロールのみを許可する。API Gateway一本化よりインフラ構成要素が少なく、Function URLの`AWS_IAM`認証はIAM側で完結するため、両サービスをインターネットへ一切公開しない。
+  - **backendはFunction URLへのリクエストをAWS SigV4で自前署名する**。`app/services/remote_extractor.py`に署名ロジックを追加し、環境変数`DOCLING_SERVICE_AUTH`/`PDF2HTMLEX_SERVICE_AUTH`が`"aws_sigv4"`のときだけ、httpxで組み立てたリクエスト（host・content-typeのみ）をbotocoreの`SigV4Auth`（サービス名`"lambda"`）で署名し、`Authorization`/`X-Amz-Date`等のヘッダーだけをリクエストへ追加する。未設定のローカル/pytest（docker-compose内部DNS宛のプレーンHTTP）では一切署名しない。boto3/botocoreはこの分岐でのみ遅延importし、署名しない開発環境の必須依存にしない（`secrets_loader.py`と同じ方針）。backend Lambdaの実行ロールには`lambda:InvokeFunctionUrl`をdocling/pdf2htmlexの関数ARNへ限定して付与する（`invoke_function_url_arns`、identity-based）。resource-based（呼び出し先側の許可）とidentity-based（呼び出し元側の許可）の両方が揃って初めてFunction URL呼び出しが成立する。
+  - **`infra/modules/lambda`をdocling/pdf2htmlexでも再利用できるよう一般化する**。`ssm_prefix`/`ssm_parameter_arns`/`use_mock_ai`はAPIキーを扱わないこの2サービスでは空のまま渡せるようデフォルト値を追加し、該当する環境変数・IAMポリシー自体を条件付きで省略する（`count`）。backend用の設定（SSM読み取り必須）は従来どおり変更なし。
+  - **メモリはサービスごとに独立した変数で設定する**（`docling_lambda_memory_size`既定6144MB・`pdf2htmlex_lambda_memory_size`既定2048MB）。torchを含むdoclingは最も重く、初回のMLモデルダウンロードを見込みタイムアウトも120秒とbackendより長く取る。pdf2htmlexはネイティブバイナリのsubprocess呼び出しが中心で相対的に軽いため既定を抑える。
+  - **`docling-service`/`pdf2htmlex-service`双方に本番用`Dockerfile.lambda`を追加する**。開発用Dockerfileと同じベースイメージ・依存導入手順に、`backend/Dockerfile.lambda`と同じAWS Lambda Web Adapterバイナリの導入だけを加える（`--reload`を外し、`AWS_LWA_PORT`をそれぞれの内部ポート8100/8200に合わせる）。pdf2htmlEXのベースイメージ（`pdf2htmlex/pdf2htmlex`）はx86_64限定のため、Lambdaのアーキテクチャも規定のx86_64のまま変更しない。
+- **理由**: 両サービスはbackend以外から呼ばれない内部実装であり、API Gatewayを増やすより「Function URL＋AWS_IAM」のほうがインフラ・IAMポリシーとも小さく、意図（backendだけが呼べる）をIAMで直接表現できる。SigV4署名をbackend側の薄い分岐に閉じ込めることで、docling-service/pdf2htmlex-service自体のアプリケーションコード（FastAPI）は無改変のまま流用できる。
+- **トレードオフ**: Function URLのAWS_IAM認証はAPI Gatewayのようなリクエストバリデーション・WAF関連付けを持たないため、悪意あるペイロードへの防御はアプリケーション層（FastAPIのバリデーション）に委ねる（もともとbackend経由でしか届かない設計のため許容）。SigV4署名はbotocoreの認証情報解決チェーンに依存するため、backend LambdaにIAM認証情報（実行ロール由来の一時クレデンシャル）が渡っていないとリクエストが失敗する（Lambda実行環境では自動的に付与されるため通常は問題にならない）。docling/pdf2htmlexそれぞれに専用Lambda・ECRリポジトリが増える分、`terraform apply`後のリソース数・運用対象が増える。
+- **関連**: ADR-013（docling-service分離）、ADR-015（pdf2htmlex-service復活・変換エンジン化）、ADR-016（イメージ軽量化）、ADR-017（backendのLambda化・Web Adapter・ECR Private）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

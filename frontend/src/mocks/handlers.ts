@@ -16,4 +16,6 @@ export const handlers = [
   http.post('/api/render', () => {
     return HttpResponse.json(dummyRenderResponse)
   }),
+  // 編集中スナップショットの保存。ストアが結果を待たない送信のため、既定では成功だけ返す。
+  http.post('/api/history/edit', () => new HttpResponse(null, { status: 201 })),
 ]

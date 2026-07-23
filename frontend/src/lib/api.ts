@@ -4,6 +4,10 @@ import type { components } from '@/types/api'
 // /api/renderのレスポンスはこの型を経由してのみ扱う。
 export type RenderResponse = components['schemas']['RenderResponse']
 
+// 編集中スナップショットの保存リクエスト（POST /api/history/edit）。ログイン済みユーザーのみ
+// 呼び出せる（未ログインはバックエンドが403）。
+export type HistoryEditRequest = components['schemas']['HistoryEditRequest']
+
 // docs/spec.md 3.1の契約に沿ったリクエスト項目。
 // cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提。ADR-014）。
 // jsonも持たない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
@@ -97,5 +101,25 @@ export async function renderSheet(
   } catch {
     // 200応答でも本文が空/不正な場合に、SyntaxErrorをそのまま伝播させず意味の伝わる文言にする。
     throw new Error('/api/render のレスポンスがJSONとして解釈できませんでした')
+  }
+}
+
+// 編集中スナップショットをサーバーの履歴へ保存する。描画と違い画面の主目的ではないため、
+// 呼び出し側は結果を待たず、失敗も画面へ出さない（編集操作を妨げない）。
+export async function saveEditHistory(
+  fields: HistoryEditRequest,
+  accessToken: string,
+): Promise<void> {
+  const response = await fetch('/api/history/edit', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(fields),
+  })
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
   }
 }

@@ -24,6 +24,7 @@ def save_history(
     json_data: dict,
     width_mm: Optional[float],
     height_mm: Optional[float],
+    kind: str = "render",
 ) -> RenderHistory:
     entry = RenderHistory(
         user_id=user_id,
@@ -33,6 +34,7 @@ def save_history(
         json_data=json_data,
         width_mm=width_mm,
         height_mm=height_mm,
+        kind=kind,
     )
     session.add(entry)
     session.commit()

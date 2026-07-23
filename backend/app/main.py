@@ -193,7 +193,36 @@ class HistoryItemResponse(BaseModel):
     json_: dict = Field(default_factory=dict, alias="json")
     width_mm: Optional[float] = None
     height_mm: Optional[float] = None
+    # "render"（描画結果）か "edit"（編集中スナップショット）か。
+    kind: str = "render"
     created_at: str
+
+
+class HistoryEditRequest(BaseModel):
+    """POST /api/history/editのリクエスト。描画を経ない編集中スナップショットの保存に使う。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    engine: str = "gemini_free"
+    html: str = ""
+    css: str = ""
+    json_: dict = Field(default_factory=dict, alias="json")
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+
+
+def _to_history_response(row) -> HistoryItemResponse:
+    return HistoryItemResponse(
+        id=str(row.id),
+        engine=row.engine,
+        html=row.html,
+        css=row.css,
+        json=row.json_data,
+        width_mm=row.width_mm,
+        height_mm=row.height_mm,
+        kind=row.kind,
+        created_at=row.created_at.isoformat(),
+    )
 
 
 @app.get("/api/history", response_model=list[HistoryItemResponse], response_model_by_alias=True)
@@ -206,19 +235,35 @@ def get_history(
         raise HTTPException(status_code=403)
 
     rows = list_history(db_session, user_id=current_user.sub)
-    return [
-        HistoryItemResponse(
-            id=str(row.id),
-            engine=row.engine,
-            html=row.html,
-            css=row.css,
-            json=row.json_data,
-            width_mm=row.width_mm,
-            height_mm=row.height_mm,
-            created_at=row.created_at.isoformat(),
-        )
-        for row in rows
-    ]
+    return [_to_history_response(row) for row in rows]
+
+
+@app.post(
+    "/api/history/edit",
+    response_model=HistoryItemResponse,
+    response_model_by_alias=True,
+    status_code=201,
+)
+def create_edit_history(
+    payload: HistoryEditRequest,
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+    db_session: Session = Depends(get_db_session),
+) -> HistoryItemResponse:
+    if current_user is None:
+        raise HTTPException(status_code=403)
+
+    row = save_history(
+        db_session,
+        user_id=current_user.sub,
+        engine=payload.engine,
+        html=payload.html,
+        css=payload.css,
+        json_data=payload.json_,
+        width_mm=payload.width_mm,
+        height_mm=payload.height_mm,
+        kind="edit",
+    )
+    return _to_history_response(row)
 
 
 async def _convert_with_engine(

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { FileText, Maximize2, Minimize2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { FileText, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react'
 import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
 import { composePreviewDocument, renderTemplate } from '@/lib/template'
 
@@ -80,7 +80,6 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
 
   const zoomIn = () => setZoomLevel((prev) => Math.min(ZOOM_MAX, Number((prev + ZOOM_STEP).toFixed(2))))
   const zoomOut = () => setZoomLevel((prev) => Math.max(ZOOM_MIN, Number((prev - ZOOM_STEP).toFixed(2))))
-  const resetZoom = () => setZoomLevel(1)
 
   // 真っ白な用紙は「準備中/壊れている」と誤解されやすいため、空のときは用途を示す案内を重ねる。
   const isEmpty = htmlContent.trim() === '' && cssContent.trim() === ''
@@ -172,16 +171,6 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
           >
             <ZoomIn className="size-3.5" />
           </button>
-          {zoomLevel !== 1 && (
-            <button
-              type="button"
-              aria-label="ズームを既定に戻す"
-              onClick={resetZoom}
-              className="inline-flex size-7 items-center justify-center rounded transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <RotateCcw className="size-3.5" />
-            </button>
-          )}
         </div>
       )}
     </div>

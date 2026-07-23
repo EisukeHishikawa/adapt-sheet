@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { PreviewPanel } from './PreviewPanel'
 import { useSheetStore } from '@/store/sheetStore'
 
-// 拡大表示（expanded）中のズーム機能（ズームイン/ズームアウト/リセット）の検証。
+// 拡大表示（expanded）中のズーム機能（ズームイン/ズームアウト）の検証。
 // jsdomはResizeObserver/clientWidth等の実測ができないため、実際のpx倍率(iframeのtransform)は
 // 検証対象にせず、UIの表示切り替え・ズーム率表示・状態のリセットに絞って検証する。
 describe('PreviewPanel（拡大表示中のズーム操作）', () => {
@@ -30,8 +30,6 @@ describe('PreviewPanel（拡大表示中のズーム操作）', () => {
     expect(screen.getByText('100%')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ズームアウト' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'ズームイン' })).toBeEnabled()
-    // 既定(100%)のときはリセットボタンを出さない。
-    expect(screen.queryByRole('button', { name: 'ズームを既定に戻す' })).not.toBeInTheDocument()
   })
 
   it('ズームインを押すたびに倍率が上がり、ズームアウトを押すと下がる', async () => {
@@ -48,14 +46,14 @@ describe('PreviewPanel（拡大表示中のズーム操作）', () => {
     expect(screen.getByText('125%')).toBeInTheDocument()
   })
 
-  it('ズーム後はリセットボタンが表示され、押すと100%に戻ってズームアウトが再び無効化される', async () => {
+  it('ズームしてもリセットボタンは表示されず、ズームアウトで100%に戻せる', async () => {
     const user = userEvent.setup()
     render(<PreviewPanel expanded onToggleExpand={() => {}} />)
 
     await user.click(screen.getByRole('button', { name: 'ズームイン' }))
-    expect(screen.getByRole('button', { name: 'ズームを既定に戻す' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'ズームを既定に戻す' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'ズームを既定に戻す' }))
+    await user.click(screen.getByRole('button', { name: 'ズームアウト' }))
     expect(screen.getByText('100%')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ズームアウト' })).toBeDisabled()
   })

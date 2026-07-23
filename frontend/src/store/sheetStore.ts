@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { RenderApiError, renderSheet } from '@/lib/api'
+import { RenderApiError, renderSheet, saveEditHistory, updateEditHistory } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
@@ -49,12 +49,21 @@ export type HistoryEntry = {
   heightMm: number | null
 }
 
-// seqは描画ごとの通し番号。古い履歴が消えても振り直さず単調増加させる（ユーザー要望）。
-// draftは番号を持たない編集中スナップショットのため、seqを持たないHistoryEntryのまま扱う。
-export type HistoryItem = HistoryEntry & { seq: number }
+// renderは描画結果、editは描画を経ずに保存した編集中スナップショット。両者を同じ履歴列へ
+// 時系列で混在させ、HistorySlider側で見た目を分ける。
+export type HistoryKind = 'render' | 'edit'
 
-// docs/spec.md 2.2「履歴スライド機能」の上限。超過分はseqが最小＝最古のものから削除する。
-const MAX_HISTORY_LENGTH = 10
+// seqは履歴ごとの通し番号。古い履歴が消えても振り直さず単調増加させる（ユーザー要望）。
+// serverIdはログイン時にサーバーへ保存した行のID。同じ編集中スナップショットを上書きするために持つ。
+export type HistoryItem = HistoryEntry & { seq: number; kind: HistoryKind; serverId?: string }
+
+// docs/spec.md 2.2「履歴スライド機能」の上限。描画結果と編集中スナップショットで枠を共有し、
+// 超過分はseqが最小＝最古のものから削除する。
+export const MAX_HISTORY_LENGTH = 10
+
+// 編集を止めてからスナップショットを積むまでの待ち時間。1打鍵ごとに積むと履歴が即座に
+// 埋まるため、入力が落ち着いた区切りだけを1件として残す。
+export const EDIT_SNAPSHOT_DELAY_MS = 1500
 
 type EditorState = Pick<SheetState, 'htmlContent' | 'cssContent' | 'jsonContent' | 'widthMm' | 'heightMm'>
 
@@ -128,9 +137,9 @@ type SheetState = {
   engine: RenderEngineId
   history: HistoryItem[]
   historySeq: number
-  // 未描画・未保存の編集内容の退避スロット。履歴を選ぶとエディタが上書きされてしまうため、
-  // 復元の直前にここへ退避し、HistorySliderの「編集中」カードから戻せるようにする。
-  draft: HistoryEntry | null
+  // 現在編集中のスナップショットのseq。編集を続けても履歴を増やさず、この1件を上書きする
+  // （ADR-025）。描画直後や描画履歴を復元した直後は、次の編集で新しい1件を作るためnullにする。
+  activeEditSeq: number | null
   isLoading: boolean
   error: string | null
   successMessage: string | null
@@ -143,10 +152,81 @@ type SheetState = {
   setEngine: (engine: RenderEngineId) => void
   applySizePreset: (size: SizePresetName, orientation: Orientation) => void
   restoreFromHistory: (index: number) => void
-  restoreDraft: () => void
+  // 保留中の待ち時間を待たず、その時点の編集内容を履歴へ確定する。
+  commitEditSnapshot: () => void
   dismissError: () => void
   dismissSuccessMessage: () => void
   fetchRender: () => Promise<void>
+}
+
+// 入力のたびにタイマーを張り直すことで、連続打鍵を1件のスナップショットへまとめる。
+// ストア外の可変状態にするのは、タイマーIDが購読者へ配る状態ではないため。
+let editSnapshotTimer: ReturnType<typeof setTimeout> | null = null
+
+function cancelScheduledEditSnapshot(): void {
+  if (editSnapshotTimer !== null) {
+    clearTimeout(editSnapshotTimer)
+    editSnapshotTimer = null
+  }
+}
+
+function scheduleEditSnapshot(get: () => SheetState): void {
+  cancelScheduledEditSnapshot()
+  editSnapshotTimer = setTimeout(() => {
+    editSnapshotTimer = null
+    get().commitEditSnapshot()
+  }, EDIT_SNAPSHOT_DELAY_MS)
+}
+
+// 保存要求を直列化する。保存の往復より先に次の編集が確定すると、まだIDを受け取っていない
+// スナップショットを二重に新規作成してしまうため。
+let editSaveChain: Promise<void> = Promise.resolve()
+
+function toJsonData(rawJson: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = rawJson === '' ? {} : JSON.parse(rawJson)
+    // 編集途中のJSONは配列や不正な値になり得るが、その場合もHTML側は残したいので空で送る。
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    return {}
+  }
+  return {}
+}
+
+// ログイン済みの場合のみ、編集中スナップショットをサーバーの履歴へも残す（kind="edit"として
+// 保存される）。編集操作を妨げないよう、結果は待たず失敗も画面へ出さない。
+function syncEditSnapshotToServer(seq: number, entry: HistoryEntry, engine: RenderEngineId): void {
+  const accessToken = useAuthStore.getState().session?.access_token
+  if (!accessToken) return
+
+  const payload = {
+    engine,
+    html: entry.html,
+    css: entry.css,
+    json: toJsonData(entry.json),
+    width_mm: entry.widthMm,
+    height_mm: entry.heightMm,
+  }
+
+  editSaveChain = editSaveChain
+    .then(async () => {
+      // 直前の保存でIDが確定していることがあるため、送信の直前にストアから引き直す。
+      const serverId = useSheetStore.getState().history.find((item) => item.seq === seq)?.serverId
+      if (serverId) {
+        await updateEditHistory(serverId, payload, accessToken)
+        return
+      }
+
+      const saved = await saveEditHistory(payload, accessToken)
+      useSheetStore.setState((state) => ({
+        history: state.history.map((item) =>
+          item.seq === seq ? { ...item, serverId: saved.id } : item,
+        ),
+      }))
+    })
+    .catch(() => undefined)
 }
 
 export const useSheetStore = create<SheetState>((set, get) => ({
@@ -160,43 +240,75 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   engine: 'gemini_free',
   history: [],
   historySeq: 0,
-  draft: null,
+  activeEditSeq: null,
   isLoading: false,
   error: null,
   successMessage: null,
-  setHtmlContent: (html) => set({ htmlContent: html }),
-  setJsonContent: (json) => set({ jsonContent: json }),
+  setHtmlContent: (html) => {
+    set({ htmlContent: html })
+    scheduleEditSnapshot(get)
+  },
+  setJsonContent: (json) => {
+    set({ jsonContent: json })
+    scheduleEditSnapshot(get)
+  },
   setPromptContent: (prompt) => set({ promptContent: prompt }),
   setPdfFile: (file) => set({ pdfFile: file, pdfFileName: file?.name ?? null }),
   setWidthMm: (widthMm) => set({ widthMm }),
   setHeightMm: (heightMm) => set({ heightMm }),
   setEngine: (engine) => set({ engine }),
   applySizePreset: (size, orientation) => set(dimensionsFor(size, orientation)),
-  // 復元は破壊的にしない。エディタの内容がまだ履歴にもドラフトにも無い「意味のある入力」なら、
-  // 上書きで失わないようdraftへ退避してから復元する。
+  // 復元は破壊的にしない。待ち時間の途中で履歴を選んでも編集内容を失わないよう、上書きの前に
+  // 保留中のスナップショットを確定させる。
   restoreFromHistory: (index) => {
-    const state = get()
-    const entry = state.history[index]
+    // 確定より先に対象を取り出す。commitEditSnapshotが先頭へ1件積むと位置がずれるため。
+    const entry = get().history[index]
     if (!entry) return
 
-    const current = snapshotEntry(state)
-    const isMeaningful = current.html !== '' || current.json !== '' || current.css !== ''
-    const alreadyPreserved =
-      state.history.some((item) => entriesEqual(item, current)) || entriesEqual(state.draft, current)
-
+    get().commitEditSnapshot()
     set({
       ...toEditorState(entry),
-      draft: isMeaningful && !alreadyPreserved ? current : state.draft,
+      // 編集中を選んだ場合はその1件の続きとして編集する。描画結果を選んだ場合は次の編集で
+      // 新しい編集中スナップショットを作る。
+      activeEditSeq: entry.kind === 'edit' ? entry.seq : null,
     })
   },
-  restoreDraft: () => {
-    const draft = get().draft
-    if (!draft) return
-    set(toEditorState(draft))
+  commitEditSnapshot: () => {
+    cancelScheduledEditSnapshot()
+
+    const state = get()
+    const current = snapshotEntry(state)
+    // 空の入力と、履歴に同じ内容が既にあるもの（描画直後・履歴復元直後）は積まない。
+    if (current.html === '' && current.css === '' && current.json === '') return
+    if (state.history.some((item) => entriesEqual(item, current))) return
+
+    // 編集中スナップショットを編集し続けている間は、履歴を増やさず同じ1件を上書きする。
+    const activeIndex = state.history.findIndex((item) => item.seq === state.activeEditSeq)
+    if (activeIndex >= 0) {
+      const updated = { ...state.history[activeIndex], ...current }
+      const history = [...state.history]
+      history[activeIndex] = updated
+      set({ history })
+      syncEditSnapshotToServer(updated.seq, current, state.engine)
+      return
+    }
+
+    const nextSeq = state.historySeq + 1
+    set({
+      historySeq: nextSeq,
+      activeEditSeq: nextSeq,
+      history: [{ ...current, seq: nextSeq, kind: 'edit' as const }, ...state.history].slice(
+        0,
+        MAX_HISTORY_LENGTH,
+      ),
+    })
+    syncEditSnapshotToServer(nextSeq, current, state.engine)
   },
   dismissError: () => set({ error: null }),
   dismissSuccessMessage: () => set({ successMessage: null }),
   fetchRender: async () => {
+    // 描画結果でエディタを上書きする前に、待ち時間の途中だった編集内容を履歴へ残す。
+    get().commitEditSnapshot()
     // ここで前回のメッセージを消さないと、再試行の通信中も前回のエラー文言が残り誤解を与える。
     set({ isLoading: true, error: null, successMessage: null })
 
@@ -237,9 +349,12 @@ export const useSheetStore = create<SheetState>((set, get) => ({
           isLoading: false,
           successMessage: '描画が完了しました',
           historySeq: nextSeq,
-          history: [{ ...newEntry, seq: nextSeq }, ...state.history].slice(0, MAX_HISTORY_LENGTH),
-          // 描画成功時点の内容が新しい基準になるため、退避していた「編集中」は破棄する。
-          draft: null,
+          // 描画結果が新しい基準になるため、次の編集は新しい編集中スナップショットとして積む。
+          activeEditSeq: null,
+          history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(
+            0,
+            MAX_HISTORY_LENGTH,
+          ),
         }
       })
     } catch (err) {

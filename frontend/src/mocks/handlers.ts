@@ -16,4 +16,11 @@ export const handlers = [
   http.post('/api/render', () => {
     return HttpResponse.json(dummyRenderResponse)
   }),
+  // 編集中スナップショットの保存・上書き。保存時のidは以降の上書き先として使われる。
+  http.post('/api/history/edit', () =>
+    HttpResponse.json({ id: 'edit-1', kind: 'edit' }, { status: 201 }),
+  ),
+  http.put('/api/history/edit/:id', ({ params }) =>
+    HttpResponse.json({ id: params.id, kind: 'edit' }),
+  ),
 ]

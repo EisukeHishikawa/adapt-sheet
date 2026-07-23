@@ -7,7 +7,7 @@ import type { HistoryItem } from '@/store/sheetStore'
 // ステップ8: docs/spec.md 2.2「履歴スライド機能」のUI。
 // 「履歴が横に並んで表示される」「クリックで過去の描画内容をプレビューに復元できる」を検証する。
 // seqは描画ごとの通し番号（表示ラベルの基準）。大きいほど新しい描画。
-function makeEntry(label: string, seq: number): HistoryItem {
+function makeEntry(label: string, seq: number, kind: HistoryItem['kind'] = 'render'): HistoryItem {
   return {
     html: `<p>${label}</p>`,
     css: `/* ${label} */`,
@@ -17,12 +17,13 @@ function makeEntry(label: string, seq: number): HistoryItem {
     widthMm: 210,
     heightMm: 297,
     seq,
+    kind,
   }
 }
 
 describe('HistorySlider（履歴スライド機能）', () => {
   beforeEach(() => {
-    useSheetStore.setState({ history: [], historySeq: 0, htmlContent: '', cssContent: '', jsonContent: '', draft: null })
+    useSheetStore.setState({ history: [], historySeq: 0, htmlContent: '', cssContent: '', jsonContent: '' })
   })
 
   it('履歴が空のときは何も表示しない（プレースホルダのみ）', () => {
@@ -65,6 +66,7 @@ describe('HistorySlider（履歴スライド機能）', () => {
       widthMm: 210,
       heightMm: 297,
       seq: 1,
+      kind: 'render',
     }
     useSheetStore.setState({ history: [entry] })
     render(<HistorySlider />)
@@ -74,21 +76,34 @@ describe('HistorySlider（履歴スライド機能）', () => {
     expect(iframe.srcdoc).not.toContain('{{label}}')
   })
 
-  // ステップ21: 履歴クリックで消えた未保存入力へ戻るための「編集中」カード。
-  it('draftがあるときは「編集中」カードを先頭に表示し、クリックでその内容へ戻せる', async () => {
+  // 編集中スナップショットは描画結果と同じ履歴列に並ぶが、描画を経ていないことが分かる
+  // 表示（「編集中」バッジと点線枠）で区別する。
+  it('kind=editの履歴は「編集中」と分かる表示になり、描画結果と同じ列に並ぶ', () => {
     useSheetStore.setState({
-      history: [makeEntry('rendered', 1)],
-      draft: { html: '<p>wip</p>', css: '', json: '{"wip":true}', widthMm: 210, heightMm: 297 },
+      history: [makeEntry('wip', 2, 'edit'), makeEntry('rendered', 1)],
+    })
+    render(<HistorySlider />)
+
+    const editCard = screen.getByRole('button', { name: '編集中 2' })
+    expect(editCard).toBeInTheDocument()
+    expect(editCard).toHaveTextContent('編集中')
+    expect(editCard.className).toContain('border-dashed')
+
+    const renderedCard = screen.getByRole('button', { name: '履歴 1' })
+    expect(renderedCard).not.toHaveTextContent('編集中')
+    expect(renderedCard.className).not.toContain('border-dashed')
+  })
+
+  it('編集中の履歴もクリックでその内容へ戻せる', async () => {
+    useSheetStore.setState({
+      history: [makeEntry('wip', 2, 'edit'), makeEntry('rendered', 1)],
     })
     const user = userEvent.setup()
     render(<HistorySlider />)
 
-    const draftCard = screen.getByRole('button', { name: '編集中の内容に戻す' })
-    expect(draftCard).toBeInTheDocument()
-
-    await user.click(draftCard)
+    await user.click(screen.getByRole('button', { name: '編集中 2' }))
 
     expect(useSheetStore.getState().htmlContent).toBe('<p>wip</p>')
-    expect(useSheetStore.getState().jsonContent).toBe('{"wip":true}')
+    expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify({ label: 'wip' }))
   })
 })

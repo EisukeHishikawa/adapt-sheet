@@ -58,6 +58,18 @@ def test_save_history_persists_all_fields(session):
     assert entry.created_at is not None
 
 
+def test_save_history_defaults_to_render_kind(session):
+    entry = _save(session)
+
+    assert entry.kind == "render"
+
+
+def test_save_history_records_edit_kind(session):
+    entry = _save(session, kind="edit")
+
+    assert entry.kind == "edit"
+
+
 def test_list_history_returns_only_matching_user_newest_first():
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -219,8 +231,148 @@ def test_get_history_returns_saved_entries_for_logged_in_user(monkeypatch):
         assert body[0]["engine"] == "gemini_free"
         assert body[0]["html"] == "<p>hi</p>"
         assert body[0]["width_mm"] == 210.0
+        # 描画由来の履歴はkind="render"（編集中スナップショットと区別する）。
+        assert body[0]["kind"] == "render"
         assert "id" in body[0]
         assert "created_at" in body[0]
+    finally:
+        _clear_db_override()
+
+
+# 編集中スナップショットの保存（POST /api/history/edit）。描画を経ずにエディタの内容を
+# kind="edit"として保存し、フロントの「編集中」カードと同じ粒度でサーバー側にも残す。
+def test_post_history_edit_saves_snapshot_with_edit_kind(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.post(
+            "/api/history/edit",
+            json={
+                "engine": "gemini_free",
+                "html": "<p>{{x}}</p>",
+                "css": "body{}",
+                "json": {"x": "1"},
+                "width_mm": 210.0,
+                "height_mm": 297.0,
+            },
+            headers={"Authorization": _make_bearer_token()},
+        )
+        assert response.status_code == 201
+        assert response.json()["kind"] == "edit"
+
+        rows = list_history(db_session, user_id="user-123")
+        assert len(rows) == 1
+        assert rows[0].kind == "edit"
+        assert rows[0].html == "<p>{{x}}</p>"
+        assert rows[0].json_data == {"x": "1"}
+    finally:
+        _clear_db_override()
+
+
+def test_put_history_edit_updates_existing_snapshot(monkeypatch):
+    # 編集中スナップショットを編集し続けても行は増やさず、同じ行を上書きする。
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    existing = save_history(
+        db_session,
+        user_id="user-123",
+        engine="gemini_free",
+        html="<p>before</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+        kind="edit",
+    )
+    _override_db(db_session)
+    try:
+        response = client.put(
+            f"/api/history/edit/{existing.id}",
+            json={"engine": "gemini_free", "html": "<p>after</p>", "css": "", "json": {"x": "1"}},
+            headers={"Authorization": _make_bearer_token()},
+        )
+        assert response.status_code == 200
+        assert response.json()["html"] == "<p>after</p>"
+
+        rows = list_history(db_session, user_id="user-123")
+        assert len(rows) == 1
+        assert rows[0].html == "<p>after</p>"
+        assert rows[0].kind == "edit"
+    finally:
+        _clear_db_override()
+
+
+def test_put_history_edit_returns_404_for_other_users_row(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    existing = save_history(
+        db_session,
+        user_id="other-user",
+        engine="gemini_free",
+        html="<p>other</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+        kind="edit",
+    )
+    _override_db(db_session)
+    try:
+        response = client.put(
+            f"/api/history/edit/{existing.id}",
+            json={"html": "<p>hacked</p>"},
+            headers={"Authorization": _make_bearer_token(sub="user-123")},
+        )
+        assert response.status_code == 404
+        assert list_history(db_session, user_id="other-user")[0].html == "<p>other</p>"
+    finally:
+        _clear_db_override()
+
+
+def test_put_history_edit_returns_403_when_not_logged_in():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.put(
+            "/api/history/edit/00000000-0000-0000-0000-000000000000",
+            json={"html": "<p>x</p>"},
+        )
+        assert response.status_code == 403
+    finally:
+        _clear_db_override()
+
+
+def test_post_history_edit_returns_403_when_not_logged_in():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.post("/api/history/edit", json={"html": "<p>x</p>"})
+        assert response.status_code == 403
+        assert list_history(db_session, user_id="user-123") == []
+    finally:
+        _clear_db_override()
+
+
+def test_get_history_includes_edit_snapshots(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    save_history(
+        db_session,
+        user_id="user-123",
+        engine="gemini_free",
+        html="<p>editing</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+        kind="edit",
+    )
+    _override_db(db_session)
+    try:
+        response = client.get("/api/history", headers={"Authorization": _make_bearer_token()})
+        assert response.status_code == 200
+        assert [item["kind"] for item in response.json()] == ["edit"]
     finally:
         _clear_db_override()
 

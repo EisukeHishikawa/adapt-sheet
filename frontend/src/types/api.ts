@@ -38,6 +38,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/history/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Edit History */
+        post: operations["create_edit_history_api_history_edit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/edit/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Edit History Entry */
+        put: operations["update_edit_history_entry_api_history_edit__entry_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -67,6 +101,35 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * HistoryEditRequest
+         * @description POST /api/history/editのリクエスト。描画を経ない編集中スナップショットの保存に使う。
+         */
+        HistoryEditRequest: {
+            /**
+             * Engine
+             * @default gemini_free
+             */
+            engine: string;
+            /**
+             * Html
+             * @default
+             */
+            html: string;
+            /**
+             * Css
+             * @default
+             */
+            css: string;
+            /** Json */
+            json?: {
+                [key: string]: unknown;
+            };
+            /** Width Mm */
+            width_mm?: number | null;
+            /** Height Mm */
+            height_mm?: number | null;
+        };
+        /**
          * HistoryItemResponse
          * @description GET /api/historyの1件分（docs/spec.md 3.x、DEVELOPMENT.md ステップ28）。
          */
@@ -87,6 +150,11 @@ export interface components {
             width_mm?: number | null;
             /** Height Mm */
             height_mm?: number | null;
+            /**
+             * Kind
+             * @default render
+             */
+            kind: string;
             /** Created At */
             created_at: string;
         };
@@ -176,6 +244,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryItemResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_edit_history_api_history_edit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryItemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_edit_history_entry_api_history_edit__entry_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryItemResponse"];
                 };
             };
             /** @description Validation Error */

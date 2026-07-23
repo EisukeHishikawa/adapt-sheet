@@ -4,6 +4,11 @@ import type { components } from '@/types/api'
 // /api/renderのレスポンスはこの型を経由してのみ扱う。
 export type RenderResponse = components['schemas']['RenderResponse']
 
+// 編集中スナップショットの保存リクエスト（POST /api/history/edit）。ログイン済みユーザーのみ
+// 呼び出せる（未ログインはバックエンドが403）。
+export type HistoryEditRequest = components['schemas']['HistoryEditRequest']
+export type HistoryItemResponse = components['schemas']['HistoryItemResponse']
+
 // docs/spec.md 3.1の契約に沿ったリクエスト項目。
 // cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提。ADR-014）。
 // jsonも持たない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
@@ -98,4 +103,50 @@ export async function renderSheet(
     // 200応答でも本文が空/不正な場合に、SyntaxErrorをそのまま伝播させず意味の伝わる文言にする。
     throw new Error('/api/render のレスポンスがJSONとして解釈できませんでした')
   }
+}
+
+// 編集中スナップショットをサーバーの履歴へ保存する。描画と違い画面の主目的ではないため、
+// 呼び出し側は結果を待たず、失敗も画面へ出さない（編集操作を妨げない）。
+// 返り値のidは、以降の更新（updateEditHistory）で同じ行を指すために使う。
+export async function saveEditHistory(
+  fields: HistoryEditRequest,
+  accessToken: string,
+): Promise<HistoryItemResponse> {
+  return requestEditHistory('/api/history/edit', 'POST', fields, accessToken)
+}
+
+// 既存の編集中スナップショットを上書きする。編集を続けても履歴を増やさないため（ADR-025）。
+export async function updateEditHistory(
+  entryId: string,
+  fields: HistoryEditRequest,
+  accessToken: string,
+): Promise<HistoryItemResponse> {
+  return requestEditHistory(
+    `/api/history/edit/${encodeURIComponent(entryId)}`,
+    'PUT',
+    fields,
+    accessToken,
+  )
+}
+
+async function requestEditHistory(
+  path: string,
+  method: 'POST' | 'PUT',
+  fields: HistoryEditRequest,
+  accessToken: string,
+): Promise<HistoryItemResponse> {
+  const response = await fetch(path, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(fields),
+  })
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
+
+  return (await response.json()) as HistoryItemResponse
 }

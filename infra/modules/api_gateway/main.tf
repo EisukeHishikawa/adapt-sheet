@@ -1,5 +1,12 @@
+data "aws_region" "current" {}
+
 resource "aws_api_gateway_rest_api" "this" {
   name = var.name
+
+  # 未指定だとREST APIがリクエストボディをUTF-8テキストとして扱い、PDFのmultipart/form-dataが
+  # 破壊される。"*/*"を指定するとバイナリとみなしてbase64化＋isBase64Encoded=trueで渡すため、
+  # Lambda Web Adapterが元のバイト列へ復元できる。
+  binary_media_types = ["*/*"]
 
   endpoint_configuration {
     types = ["REGIONAL"]

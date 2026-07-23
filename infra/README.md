@@ -2,7 +2,7 @@
 
 `adapt-sheet` のAWSインフラ（ECR Private / Lambda / API Gateway / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。背景は [`../docs/decisions.md`](../docs/decisions.md) の ADR-005（IaC一本化）・ADR-017（backendのLambda本番イメージ）・ADR-026（docling/pdf2htmlexのLambda化）・ADR-027（WAFを使わずAPI Gatewayスロットリングで代替）、手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
 
-> 本ステップは**コード定義まで**。`terraform apply`（実AWSリソースの作成）はまだ行わない。
+> 本番デプロイの配線（SPAとAPIの同一オリジン化・バイナリ透過・秘密情報の受け渡し・doclingのモデル同梱）はADR-029で整理済み。`terraform apply`の実施はユーザー承認後に行う。
 
 ## 構成
 
@@ -20,7 +20,7 @@ infra/
 └── terraform.tfvars.example
 ```
 
-## 使い方（apply はステップ25の対象外・承認後に実施）
+## 使い方（apply は承認後に実施）
 
 > Terraformのバージョンはリポジトリ直下の [`../mise.toml`](../mise.toml) で固定する（ADR-023）。以下のコマンドを実行する前に、リポジトリのルートで `mise install` を済ませ、`terraform version` が `mise.toml` の値と一致することを確認する。providerのバージョンは `.terraform.lock.hcl`（コミット対象）で固定されており、更新する場合は `terraform providers lock -platform=darwin_arm64 -platform=linux_amd64` で開発機とCIの両プラットフォーム分のチェックサムを記録する。
 
@@ -52,14 +52,43 @@ infra/
    terraform plan   # 承認後に apply
    ```
 
-4. **APIキーの投入（Terraform管理外）**
+4. **秘密情報の投入（Terraform管理外）**
 
-   `ssm` モジュールはSecureStringの**枠だけ**をダミー値で作る。実値は次のように投入する（コミットしない）。
+   `ssm` モジュールはSecureStringの**枠だけ**をダミー値（`PLACEHOLDER_SET_OUT_OF_BAND`）で作る。実値は次のように投入する（コミットしない）。ダミーのままの項目は`app/secrets_loader.py`が「未投入」とみなして展開しないため、`DATABASE_URL`を投入するまで履歴保存は静かにスキップされる（ADR-029）。
 
    ```bash
-   aws ssm put-parameter --name "/adapt-sheet/prod/GEMINI_API_KEY" \
-     --type SecureString --value "<実キー>" --overwrite
+   for name in GEMINI_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY SUPABASE_JWT_SECRET DATABASE_URL; do
+     aws ssm put-parameter --name "/adapt-sheet/prod/${name}" \
+       --type SecureString --value "<実値>" --overwrite
+   done
    ```
+
+5. **コンテナイメージのビルドとpush**
+
+   Lambdaは`x86_64`固定（pdf2htmlEXのベースイメージがx86_64限定のため。ADR-026/028）。**開発機がApple Siliconの場合、`--platform linux/amd64`を付けないとarm64イメージができ、`terraform apply`または関数更新時に失敗する**。
+
+   ```bash
+   ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+   REGISTRY="${ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com"
+   aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin "${REGISTRY}"
+
+   # backend / docling / pdf2htmlex の3つを同じ手順でビルド・pushする。
+   docker build --platform linux/amd64 -f backend/Dockerfile.lambda -t "${REGISTRY}/adapt-sheet-prod-backend:latest" backend
+   docker push "${REGISTRY}/adapt-sheet-prod-backend:latest"
+   ```
+
+   同一タグへpushしただけではLambdaは新しいイメージを引き直さないため、`aws lambda update-function-code --function-name adapt-sheet-prod-backend --image-uri ...` を実行する（またはタグを世代ごとに変えて`image_tag`変数を更新し`terraform apply`する）。
+
+6. **フロントエンドの配置**
+
+   ```bash
+   docker compose exec frontend npm run build     # VITE_SUPABASE_* はビルド時に埋め込まれる
+   aws s3 sync frontend/dist "s3://$(terraform -chdir=infra output -raw frontend_bucket_name)/" --delete
+   aws cloudfront create-invalidation \
+     --distribution-id "$(terraform -chdir=infra output -raw cloudfront_distribution_id)" --paths '/*'
+   ```
+
+   アプリの入口は`terraform output app_url`（CloudFrontのドメイン）。SPAと`/api/*`の両方を同じオリジンから配信するため、フロントに個別のAPIベースURLは設定しない（ADR-029）。
 
 ## 前提・注意
 

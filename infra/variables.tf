@@ -29,9 +29,9 @@ variable "lambda_memory_size" {
 }
 
 variable "lambda_timeout" {
-  description = "Lambdaのタイムアウト（秒）。生成AI呼び出しの待ちを見込む"
+  description = "backend Lambdaのタイムアウト（秒）。API Gateway REST APIの統合タイムアウト上限が29秒で、それを超えた分のレスポンスは破棄されるため揃える"
   type        = number
-  default     = 60
+  default     = 29
 }
 
 variable "docling_image_tag" {
@@ -47,9 +47,15 @@ variable "docling_lambda_memory_size" {
 }
 
 variable "docling_lambda_timeout" {
-  description = "docling-service Lambdaのタイムアウト（秒）。初回はMLモデルのダウンロードが発生しうるため長めに取る（ADR-026）"
+  description = "docling-service Lambdaのタイムアウト（秒）。backendは29秒で打ち切られるが、その時点で処理を止めても得るものがないため余裕を残す（ADR-026）"
   type        = number
-  default     = 120
+  default     = 60
+}
+
+variable "docling_lambda_ephemeral_storage_size" {
+  description = "docling-service Lambdaの/tmpサイズ（MB）。torch/HuggingFaceの実行時キャッシュ置き場（ADR-026）"
+  type        = number
+  default     = 2048
 }
 
 variable "pdf2htmlex_image_tag" {
@@ -71,9 +77,23 @@ variable "pdf2htmlex_lambda_timeout" {
 }
 
 variable "secret_parameter_names" {
-  description = "Parameter Store（SecureString）で管理するAPIキーの環境変数名（ADR-017）"
+  description = "Parameter Store（SecureString）で管理する秘密情報の環境変数名（ADR-017）。backendのapp/secrets_loader.pyが読む名前と一致させる"
   type        = list(string)
-  default     = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+  default = [
+    "GEMINI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    # JWT検証鍵とDB接続文字列。Lambdaの環境変数（コンソールで平文表示される）ではなく
+    # SecureStringから実行時に展開する。未投入だと本番が常に未ログイン扱いになる（ADR-018/019）。
+    "SUPABASE_JWT_SECRET",
+    "DATABASE_URL",
+  ]
+}
+
+variable "supabase_jwt_jwks_url" {
+  description = "SupabaseのJWKSエンドポイント（ES256のJWT Signing Keysを使う場合のみ設定。HS256ならParameter StoreのSUPABASE_JWT_SECRETを使うため空でよい）"
+  type        = string
+  default     = ""
 }
 
 variable "use_mock_ai" {

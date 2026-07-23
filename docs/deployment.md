@@ -27,17 +27,19 @@
 | `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す（ADR-006） |
 | `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う（ADR-014） |
 | `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-011） |
-| `SSM_PARAMETER_PREFIX` | Parameter StoreからAPIキーを取得する際のパス接頭辞（例: `/adapt-sheet/prod`） | Lambda本番でのみ設定。設定時、コールドスタート時に`{prefix}/GEMINI_API_KEY`等を復号取得し`os.environ`へ展開する（ADR-017）。ローカル/pytestでは未設定のため何もしない |
+| `SSM_PARAMETER_PREFIX` | Parameter Storeから秘密情報を取得する際のパス接頭辞（例: `/adapt-sheet/prod`） | Lambda本番でのみ設定。設定時、コールドスタート時に`{prefix}/GEMINI_API_KEY`等を復号取得し`os.environ`へ展開する（ADR-017/028）。取得対象は`app/secrets_loader.py`の`_SECRET_ENV_NAMES`（APIキー3種＋`SUPABASE_JWT_SECRET`＋`DATABASE_URL`）。実値未投入のダミー（`PLACEHOLDER_SET_OUT_OF_BAND`）は展開しない。ローカル/pytestでは未設定のため何もしない |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（Auth管理API用） | 現時点のバックエンドコードは未使用（JWT検証は`SUPABASE_JWT_SECRET`、DB接続は`DATABASE_URL`が担う）。管理APIを使う機能を追加する際に利用する想定 |
-| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`・`/api/history`のゲート判定に使用。未設定時は常に未ログイン扱い（fail-closed、ADR-018） |
-| `DATABASE_URL` | 生成履歴を保存するPostgreSQLの接続文字列（`postgresql+psycopg://...`） | `app/db.py`が使用。ローカルはdocker-composeの`db`サービス（Postgres）を指す既定値、本番はSupabaseプロジェクトのPostgres接続文字列で上書きする（ADR-019）。未設定時は`/api/render`の履歴保存を静かにスキップし、`/api/history`は500になる |
+| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`・`/api/history`のゲート判定に使用。未設定時は常に未ログイン扱い（fail-closed、ADR-018）。本番はParameter Store経由で渡す（ADR-029） |
+| `SUPABASE_JWT_JWKS_URL` | SupabaseがES256（JWT Signing Keys）を使う場合の公開鍵配布URL | 公開情報のためParameter Storeではなく、Terraform変数`supabase_jwt_jwks_url`経由でLambda環境変数として渡す（ADR-020/028）。HS256方式なら未設定でよい |
+| `DATABASE_URL` | 生成履歴を保存するPostgreSQLの接続文字列（`postgresql+psycopg://...`） | `app/db.py`が使用。ローカルはdocker-composeの`db`サービス（Postgres）を指す既定値、本番はSupabaseプロジェクトのPostgres接続文字列をParameter Storeへ投入する（ADR-019/028）。未設定時は`/api/render`の履歴保存を静かにスキップし、`/api/history`は500になる |
 
 ### フロントエンド
 
 | 変数名 | 説明 |
 |---|---|
-| `VITE_API_BASE_URL` | バックエンドAPIのベースURL（ローカル/ステージング/本番で切替） |
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDK設定（`lib/supabaseClient.ts`）。未設定時はログインUI（`AuthPanel`）自体を非表示にする（ADR-018） |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDK設定（`lib/supabaseClient.ts`）。未設定時はログインUI（`AuthPanel`）自体を非表示にする（ADR-018）。ビルド時に埋め込まれるため、値を変えたら再ビルド・再アップロードが必要 |
+
+APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront）から配信し、`src/lib/api.ts`は相対パス`/api/...`のまま本番でも動く（ADR-029）。
 
 ### ClaudeCode / MCP
 

@@ -21,7 +21,20 @@ logger = logging.getLogger("app.secrets")
 # Parameter Store から取得して os.environ へ展開する環境変数名。いずれも実行時にのみ必要な
 # 秘密情報であり、イメージには一切含めない。既に env に存在するものは取得対象から外す
 # （ローカルの .env 等で明示設定した値を尊重し、SSM呼び出しも省く）。
-_SECRET_ENV_NAMES = ("GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+# JWT検証鍵とDB接続文字列もAPIキーと同格の秘密情報のため、Lambdaの環境変数（コンソールで平文表示
+# される）ではなくここから展開する。
+_SECRET_ENV_NAMES = (
+    "GEMINI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "SUPABASE_JWT_SECRET",
+    "DATABASE_URL",
+)
+
+# infra/modules/ssm が実値投入前の枠として入れるダミー値。これをそのまま env へ展開すると、
+# 特にDATABASE_URLでcreate_engineが失敗し「未設定なら静かにスキップ」の設計が壊れるため、
+# 未投入とみなして無視する。値はinfra/modules/ssm/main.tfと一致させる。
+PLACEHOLDER_VALUE = "PLACEHOLDER_SET_OUT_OF_BAND"
 
 
 def load_secrets_into_env(ssm_client_factory: Optional[Callable[[], object]] = None) -> None:
@@ -56,6 +69,9 @@ def load_secrets_into_env(ssm_client_factory: Optional[Callable[[], object]] = N
     }
     for name in names:
         value = resolved.get(name)
+        if value == PLACEHOLDER_VALUE:
+            logger.warning("Parameter Storeへ実値が未投入です", extra={"secret_name": name})
+            continue
         if value:
             os.environ[name] = value
             # 値そのものは機微情報のためログへ出さない（ADR-011）。取得できた事実のみ残す。

@@ -41,6 +41,9 @@ module "lambda_docling" {
   image_uri   = "${module.ecr_docling.repository_url}:${var.docling_image_tag}"
   memory_size = var.docling_lambda_memory_size
   timeout     = var.docling_lambda_timeout
+  # モデルはイメージへ焼き込むが、torch/HuggingFaceの実行時キャッシュ書き込み先が/tmpのため
+  # 既定512MBでは足りない（Dockerfile.lambdaのHF_HOME等を参照）。
+  ephemeral_storage_size = var.docling_lambda_ephemeral_storage_size
 
   create_function_url            = true
   function_url_invoker_role_arns = [module.lambda.role_arn]
@@ -78,13 +81,19 @@ module "lambda" {
   use_mock_ai        = var.use_mock_ai
 
   invoke_function_url_arns = [module.lambda_docling.function_arn, module.lambda_pdf2htmlex.function_arn]
-  extra_env = {
-    # remote_extractor.pyがこのURL宛にPOSTし、*_AUTH=aws_sigv4でSigV4署名を有効化する（ADR-026）。
-    DOCLING_SERVICE_URL     = module.lambda_docling.function_url
-    DOCLING_SERVICE_AUTH    = "aws_sigv4"
-    PDF2HTMLEX_SERVICE_URL  = module.lambda_pdf2htmlex.function_url
-    PDF2HTMLEX_SERVICE_AUTH = "aws_sigv4"
-  }
+  extra_env = merge(
+    {
+      # remote_extractor.pyがこのURL宛にPOSTし、*_AUTH=aws_sigv4でSigV4署名を有効化する（ADR-026）。
+      DOCLING_SERVICE_URL     = module.lambda_docling.function_url
+      DOCLING_SERVICE_AUTH    = "aws_sigv4"
+      PDF2HTMLEX_SERVICE_URL  = module.lambda_pdf2htmlex.function_url
+      PDF2HTMLEX_SERVICE_AUTH = "aws_sigv4"
+    },
+    # SupabaseがJWT Signing Keys（ES256）を使う場合の公開鍵配布URL。公開情報のため
+    # SecureStringではなく環境変数で渡す。HS256共有シークレット方式なら未設定のままでよく、
+    # その場合はSUPABASE_JWT_SECRET（Parameter Store）側が使われる（ADR-018/020）。
+    var.supabase_jwt_jwks_url != "" ? { SUPABASE_JWT_JWKS_URL = var.supabase_jwt_jwks_url } : {},
+  )
 }
 
 # 公開エンドポイント。REST API（REGIONAL）でLambdaへプロキシし、ステージ全体のスロットリングで
@@ -98,8 +107,11 @@ module "api" {
   throttle_burst_limit = var.api_throttle_burst_limit
 }
 
-# フロントエンド配信（S3非公開＋CloudFront OAC）。
+# フロントエンド配信（S3非公開＋CloudFront OAC）。/api/* は同じCloudFrontからAPI Gatewayへ
+# 転送し、SPAとAPIを同一オリジンに揃える（フロントは相対パスで/api/...を叩くため）。
 module "frontend" {
-  source = "./modules/frontend"
-  name   = local.name_prefix
+  source                 = "./modules/frontend"
+  name                   = local.name_prefix
+  api_origin_domain_name = module.api.origin_domain_name
+  api_origin_path        = module.api.origin_path
 }

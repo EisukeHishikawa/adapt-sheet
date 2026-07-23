@@ -183,7 +183,7 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 | `403 Forbidden` | `FREE_ACCESS_FORBIDDEN` | 標準プランの生成AI利用不可 | `engine`が`gemini`/`claude`/`openai`（標準プラン）で、フェーズ5のアカウント登録機能導入前（ADR-015） |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
 | `422 Unprocessable Entity` | `PDF_CONVERSION_ERROR` | PDF解析エラー | PDFの構造が破損している、パスワード保護されている等でDocling/pdf2htmlEX/PyMuPDFによる変換に失敗 |
-| `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | 未認証エリアのIP単位、または認証エリアのユーザー単位のレート制限に抵触 |
+| `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | API Gatewayステージ全体（全利用者合算、認証有無に関わらず）のスロットリングに抵触（ADR-027） |
 | `502 Bad Gateway` | `AI_GENERATION_ERROR` | AI生成エラー | Gemini/Claude/OpenAI API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
 | `500 Internal Server Error` | `INTERNAL_ERROR` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
 

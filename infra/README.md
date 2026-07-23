@@ -1,6 +1,6 @@
 # infra — Terraform によるAWSインフラ定義（フェーズ4 ステップ25）
 
-`adapt-sheet` のAWSインフラ（ECR Private / Lambda / API Gateway / WAF / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。背景は [`../docs/decisions.md`](../docs/decisions.md) の ADR-005（IaC一本化）・ADR-017（backendのLambda本番イメージ）・ADR-026（docling/pdf2htmlexのLambda化）、手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
+`adapt-sheet` のAWSインフラ（ECR Private / Lambda / API Gateway / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。背景は [`../docs/decisions.md`](../docs/decisions.md) の ADR-005（IaC一本化）・ADR-017（backendのLambda本番イメージ）・ADR-026（docling/pdf2htmlexのLambda化）・ADR-027（WAFを使わずAPI Gatewayスロットリングで代替）、手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
 
 > 本ステップは**コード定義まで**。`terraform apply`（実AWSリソースの作成）はまだ行わない。
 
@@ -13,8 +13,7 @@ infra/
 │   ├── ecr/          # backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可）
 │   ├── ssm/          # APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
 │   ├── lambda/       # Lambda関数の共通モジュール。backend（SSM読み取り＋SSM経由KMS復号の最小権限）と、docling/pdf2htmlex（AWS_IAM認証Function URL、backendのみ呼び出し許可。ADR-026）で共用
-│   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）
-│   ├── waf/          # AWSマネージドルール＋IPレート制限。API Gatewayステージへ関連付け
+│   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ。ステージ全体のスロットリングで過度なAPIコールを防ぐ（WAFは使わない。ADR-027）
 │   └── frontend/     # 非公開S3 ＋ CloudFront（OAC）。SPAフォールバック付き
 ├── versions.tf / providers.tf / backend.tf
 ├── variables.tf / main.tf / outputs.tf
@@ -67,3 +66,4 @@ infra/
 - **ECR Private**: Lambdaのコンテナイメージは同一アカウント・同一リージョンのECR Privateからのみ取得できる（ECR Public不可）。ステップ24でECR Publicとしていた方針を本ステップでECR Privateへ訂正した（ADR-017）。無料枠500MBの逼迫はライフサイクル（最新数世代のみ保持）で抑える。
 - **AWS認証**: GitHub ActionsからのデプロイはOIDCで行う（長期アクセスキーは発行しない）。OIDCプロバイダ/デプロイロールはステップ26のCI/CD構築時に定義する。
 - **秘密情報**: APIキーはstateにもイメージにも残さない。`aws_ssm_parameter` は `ignore_changes = [value]` で実値を追跡しない。
+- **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（`aws_api_gateway_method_settings`）で代替する（ADR-027）。IPアドレスごとの個別制限ではなく全メソッド合算のカウントのため、1クライアントの連打が他の利用者にも影響しうる点に留意する。

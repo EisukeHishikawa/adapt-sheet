@@ -87,20 +87,15 @@ module "lambda" {
   }
 }
 
-# 公開エンドポイント。WAFを前段に付けられるようREST API（REGIONAL）でLambdaへプロキシする。
+# 公開エンドポイント。REST API（REGIONAL）でLambdaへプロキシし、ステージ全体のスロットリングで
+# 過度なAPIコールを防ぐ（WAFを使わない代替。ADR-027）。
 module "api" {
   source               = "./modules/api_gateway"
   name                 = "${local.name_prefix}-api"
   lambda_invoke_arn    = module.lambda.invoke_arn
   lambda_function_name = module.lambda.function_name
-}
-
-# APIの前段のWAF（AWSマネージドルール＋レート制限）。REST APIのステージへ関連付ける。
-module "waf" {
-  source       = "./modules/waf"
-  name         = local.name_prefix
-  resource_arn = module.api.stage_arn
-  rate_limit   = var.waf_rate_limit
+  throttle_rate_limit  = var.api_throttle_rate_limit
+  throttle_burst_limit = var.api_throttle_burst_limit
 }
 
 # フロントエンド配信（S3非公開＋CloudFront OAC）。

@@ -18,7 +18,7 @@ from functools import lru_cache
 from typing import NamedTuple, Optional
 
 import jwt
-from fastapi import Header
+from fastapi import Header, Request
 from jwt import PyJWKClient
 
 logger = logging.getLogger("app.auth")
@@ -39,13 +39,25 @@ def _get_jwks_client(jwks_url: str) -> PyJWKClient:
     return PyJWKClient(jwks_url)
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> Optional[SupabaseUser]:
+def get_current_user(
+    request: Request, authorization: Optional[str] = Header(None)
+) -> Optional[SupabaseUser]:
     """AuthorizationヘッダーのSupabase JWTを検証し、成功時のみユーザー情報を返す。
 
     検証に必要な設定（SUPABASE_JWT_SECRET/SUPABASE_JWT_JWKS_URL）が未設定の場合は常にNoneを
     返す。ゲート対象engineは設定未完了のまま解禁されないようにするため、fail-closedをデフォルト
     挙動とする。
+
+    検証できたユーザーは`request.state`へ載せ、アクセスログ（app/middleware.py）が監査証跡として
+    user_idを記録できるようにする（ADR-030）。
     """
+    user = _authenticate(authorization)
+    if user is not None:
+        request.state.user_id = user.sub
+    return user
+
+
+def _authenticate(authorization: Optional[str]) -> Optional[SupabaseUser]:
     if not authorization:
         return None
 

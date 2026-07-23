@@ -125,3 +125,27 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "log_retention_in_days" {
+  description = "ログの保持期間（日）。Lambda・API GatewayのCloudWatch LogsとCloudFrontのS3ログに共通で適用する（ADR-030）"
+  type        = number
+  default     = 30
+}
+
+variable "enable_xray" {
+  description = "X-Rayのトレースを有効にするか。backend→docling/pdf2htmlexの呼び出しを1本のトレースで追える（ADR-030）"
+  type        = bool
+  default     = true
+}
+
+variable "enable_cloudfront_access_logging" {
+  description = "CloudFrontの標準アクセスログをS3へ出力するか（ADR-030）"
+  type        = bool
+  default     = true
+}
+
+variable "alarm_email" {
+  description = "CloudWatchアラームの通知先メールアドレス。空文字ならSNSトピックのみ作成し購読は作らない（ADR-030）"
+  type        = string
+  default     = ""
+}

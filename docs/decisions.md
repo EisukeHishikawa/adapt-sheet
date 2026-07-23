@@ -404,3 +404,41 @@
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。
+
+---
+
+## ADR-030: ログ・可観測性の設計（AWS側の記録/発報経路とSupabase側の役割分担）
+
+- **ステータス**: Accepted
+- **コンテキスト**: ADR-011でアプリケーション内部の構造化ログ（JSON1行＋相関ID）は整備したが、それを載せる**インフラ側の記録・発報経路**が未設計のまま本番構成（ADR-026〜029）が完成していた。通しで点検したところ、次の欠落が見つかった。
+  - **API Gatewayのアクセスログが存在しない**。ADR-027で唯一のレート制限としたステージ単位スロットリングは、超過時に429をLambdaへ到達させずに返すため、**どれだけ絞られたかを観測する手段が一切無い**。実行ログ・CloudWatchメトリクスも未有効で、4XX/5XXの発生状況が追えない。
+  - **CloudFrontのアクセスログが存在しない**。公開の入口（ADR-029で`/api/*`もここを通る）にもかかわらず、どのIPがどのパスを叩いたかの記録が残らない。
+  - **アラームが1つも無い**。ログを取っても人間が見に行かない限り障害に気づけない。特にADR-012により想定外例外は500レスポンスへ変換されて**正常終了**するため、`AWS/Lambda`の`Errors`メトリクスにすら現れない。
+  - **サービスをまたぐ相関ができない**。ADR-013のトレードオフに記載したまま残っていた「`docling-service`へ`request_id`を伝播していない」問題に加え、内部2サービスはJSON構造化ログ自体を持たず、backendと形式が揃っていなかった。分散トレース（X-Ray）も無効。
+  - **`logging_config.py`の許可リスト漏れで、実際に出力されないログフィールドがあった**。`app/services/auth.py`はJWT検証失敗時に`extra={"reason": ...}`を付けているが、`reason`が`_CONTEXT_FIELDS`に無いため**本番で失敗理由が消えていた**。
+  - **監査証跡が無い**。アプリのログに`user_id`が一切載っておらず、「誰が何をしたか」はSupabase側のログにしか手掛かりが無い。
+- **決定**:
+  - **記録（AWS）**
+    - API Gatewayのステージに**アクセスログ**（専用ロググループ、JSON1行、`sourceIp`/`status`/`responseLatency`/`integration.*`/`xrayTraceId`等）を設定する。ロググループはTerraform管理下に置き保持期間を明示する。アカウント単位で必要なCloudWatch Logs書き込みロール（`aws_api_gateway_account`）も同時にコード化する。
+    - `aws_api_gateway_method_settings`で`metrics_enabled = true`（アラームの前提）と`logging_level = ERROR`を有効にする。**`data_trace_enabled`は常に`false`**とする。リクエスト/レスポンス本文をログへ書き出すため、PDF・帳票の業務データが漏れる。
+    - CloudFrontの**標準アクセスログ**を専用S3バケット（非公開・SSE-S3・ライフサイクルで自動失効）へ出力する。Cookieは認証に使っていない（ADR-021はAuthorizationヘッダー方式）ため記録しない。
+    - 保持期間は`log_retention_in_days`（既定30日）に一本化し、Lambda・API Gateway・CloudFrontへ同じ値を適用する。
+  - **発報（AWS）**
+    - `infra/modules/monitoring`を新設し、SNSトピック（通知先は`alarm_email`。空なら購読を作らずトピックのみ）と以下のアラームを定義する。いずれも`treat_missing_data = "notBreaching"`とし、無風時にINSUFFICIENT_DATAへ落ちないようにする。
+      - Lambda 3関数それぞれの`Errors`・`Throttles`
+      - API Gatewayの`5XXError`、および`4XXError`（スロットリング429の常態化を検知する閾値）
+      - backendのロググループに対する**メトリクスフィルタ`{ $.level = "ERROR" }`**とそのアラーム。ADR-012により500へ丸められた想定外例外は、ここでしか観測できない。
+  - **相関**
+    - backendは内部サービス呼び出し（`/convert`・`/health`）へ**`X-Request-ID`ヘッダーで相関IDを伝播**する。SigV4の署名対象はhost/content-typeのみ（ADR-026）のため、ヘッダー追加は署名に影響しない。
+    - `docling-service`/`pdf2htmlex-service`に、backendと同形式のJSON構造化ログとアクセスログミドルウェアを持たせる（各サービスは独立イメージで共有パッケージを持たないため、意図的に別実装。フィールド名のみ揃える）。受信した相関IDは、ログインジェクション対策として長さ64文字・印字可能文字に制限したうえで採用し、無ければ自前で採番する。
+    - Lambda 3関数とAPI Gatewayで**X-Rayのトレースを有効化**する（`enable_xray`、既定`true`）。backend→docling/pdf2htmlexの呼び出しが1本のトレースにつながる。
+  - **監査証跡**
+    - `logging_config.py`の`_CONTEXT_FIELDS`へ`user_id`・`reason`・`engine`・`service`・`upstream_status`を追加する。
+    - `get_current_user`は**検証に成功した場合のみ**`request.state.user_id`へ`sub`を載せ、アクセスログミドルウェアがこれを読んで記録する。検証失敗時のsubは載せない（なりすましを監査ログへ記録することになるため）。認証依存はFastAPIによりスレッドプールで実行されうるため、contextvarではなく同一の`scope`辞書を共有する`state`経由で受け渡す。
+  - **Supabase側の役割分担**
+    - Supabaseのログ（Auth・Postgres・PostgREST）は**プラットフォーム管理で、保持期間がプラン依存**（無料プランは短い）であり、Terraformの管理対象外である。これをアプリの一次的な監査ログとして当てにしない。
+    - **一次ソースはCloudWatch側のアプリケーションログ**とし、上記の`user_id`によって「誰が・いつ・どのエンジンで描画したか」がAWS側だけで完結して追えるようにする。Supabase側のログは、ログイン試行・RLS拒否・DB障害といった**Supabase内部でしか起きない事象の調査時に参照する二次ソース**と位置づける。
+    - 生成履歴テーブル（ADR-019/021、RLS適用済み）は業務データの記録であって監査ログではない。利用者本人が削除できるため、監査目的では信頼しない。
+- **理由**: 「記録が残る」「異常時に人へ届く」「複数サービスを1つのIDで追える」の3点が揃って初めてログ設計として機能する。記録先を全てCloudWatch（＋CloudFrontログのS3）へ寄せ、Supabaseを二次ソースと明示することで、調査時に見る場所が分散しない。発報経路をSNSトピック1つへ集約したのは、購読手段（メール/将来のChatbot等）を通知条件の定義から切り離しておくため。
+- **トレードオフ**: アクセスログ・アラーム・X-Rayはいずれも従量課金であり、無料枠を超えれば費用が発生する（トラフィック規模が小さい現状では軽微だが、無料ではない）。`aws_api_gateway_account`は**アカウント単位のシングルトン**のため、同一アカウントで別のTerraform構成が同じ設定を持つと競合しうる。CloudFrontの標準ログはS3への配信に数分の遅延があり、リアルタイム調査には向かない（即時性が要る場合はリアルタイムログ/Kinesisが必要だが、コストが跳ね上がるため採用しない）。`4XXError`のアラームは正常な403（未ログインのゲート判定、ADR-015/018）でも加算されるため、閾値は「多発」を捉える値にしており、単発の異常は検知できない。内部2サービスのログ実装はbackendと重複コードになる。
+- **関連**: ADR-011（構造化ログ・相関ID）、ADR-012（構造化エラー）、ADR-013（内部サービス分離と相関IDの積み残し）、ADR-017（Lambda本番イメージ）、ADR-019/021（履歴DB・RLS）、ADR-026（Function URL・SigV4）、ADR-027（スロットリング）、ADR-029（CloudFront単一オリジン）。

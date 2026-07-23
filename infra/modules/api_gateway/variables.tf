@@ -30,3 +30,26 @@ variable "throttle_burst_limit" {
   type        = number
   default     = 100
 }
+
+variable "log_retention_in_days" {
+  description = "アクセスログ（CloudWatch Logs）の保持期間（日）（ADR-030）"
+  type        = number
+  default     = 30
+}
+
+variable "execution_logging_level" {
+  description = "API Gateway実行ログの出力レベル（OFF/ERROR/INFO）。INFOは冗長なためERROR既定（ADR-030）"
+  type        = string
+  default     = "ERROR"
+
+  validation {
+    condition     = contains(["OFF", "ERROR", "INFO"], var.execution_logging_level)
+    error_message = "execution_logging_levelはOFF/ERROR/INFOのいずれかを指定してください。"
+  }
+}
+
+variable "enable_xray" {
+  description = "ステージでX-Rayのトレースを有効にするか（ADR-030）"
+  type        = bool
+  default     = true
+}

@@ -13,6 +13,11 @@ output "invoke_arn" {
   value       = aws_lambda_function.this.invoke_arn
 }
 
+output "log_group_name" {
+  description = "この関数のCloudWatch Logsロググループ名（メトリクスフィルタの対象に使う）"
+  value       = aws_cloudwatch_log_group.this.name
+}
+
 output "role_arn" {
   description = "Lambda実行ロールのARN"
   value       = aws_iam_role.this.arn

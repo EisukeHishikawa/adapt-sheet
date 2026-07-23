@@ -213,7 +213,38 @@ flowchart LR
 
 マイグレーションは`backend/migrations/`（Alembic）で管理する。
 
-## 8. 今後の追記予定
+## 8. ログ・可観測性の構成図（ADR-011 / ADR-030）
+
+記録先はCloudWatch（＋CloudFrontログのS3）へ寄せ、Supabase側のログは二次ソースと位置づける。運用手順は [`observability.md`](./observability.md) を参照。
+
+```mermaid
+flowchart TD
+    User["ユーザー"] --> CF["CloudFront"]
+    CF -->|"標準アクセスログ"| S3Logs["S3 (cf-logs)<br/>ライフサイクルで自動失効"]
+    CF --> APIGW["API Gateway"]
+    APIGW -->|"アクセスログ (JSON)<br/>429はここにしか残らない"| CWApi["CloudWatch Logs<br/>/aws/apigateway/.../access"]
+    APIGW --> Backend["backend Lambda"]
+
+    Backend -->|"X-Request-ID を伝播"| Docling["docling Lambda"]
+    Backend -->|"X-Request-ID を伝播"| P2H["pdf2htmlex Lambda"]
+
+    Backend -->|"JSON1行ログ<br/>request_id / user_id"| CWApp["CloudWatch Logs<br/>/aws/lambda/*"]
+    Docling --> CWApp
+    P2H --> CWApp
+
+    CWApp -->|"メトリクスフィルタ<br/>level = ERROR"| Alarm["CloudWatch アラーム"]
+    APIGW -->|"4XX / 5XX メトリクス"| Alarm
+    Backend -->|"Errors / Throttles"| Alarm
+    Alarm --> SNS["SNS トピック"] --> Mail["メール通知"]
+
+    Supabase["Supabase (Auth / Postgres)"] -.->|"保持期間はプラン依存<br/>調査時の二次ソース"| Dashboard["Supabase ダッシュボード"]
+```
+
+相関のたどり方: 画面のエラーに出る`request_id`（＝レスポンスの`X-Request-ID`）でbackend・docling・pdf2htmlexの3ロググループを横断検索できる。API Gatewayのアクセスログとの突き合わせは`xrayTraceId`で行う。
+
+---
+
+## 9. 今後の追記予定
 
 - フェーズ4（インフラ構築）着手時に、Terraformモジュール構成図を追加する。
 - 保存済み履歴の閲覧UI・名前付きテンプレート機能を追加する際、テーブル設計を拡張する（ADR-019のトレードオフ参照）。

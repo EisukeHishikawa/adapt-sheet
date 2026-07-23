@@ -9,7 +9,9 @@
 
 import json
 import logging
+import time
 
+import jwt
 from fastapi.testclient import TestClient
 
 from app.logging_config import JsonLogFormatter
@@ -88,3 +90,59 @@ def test_json_formatter_outputs_ai_payload_fields():
     assert payload["ai_model"] == "gemini-2.5-flash"
     assert payload["ai_prompt"] == "プロンプト全文"
     assert payload["ai_response"] == '{"html": "..."}'
+
+
+def test_json_formatter_outputs_audit_and_diagnostic_fields():
+    # user_id（監査証跡）とreason（失敗理由）は許可リスト漏れで欠落していた（ADR-030）。
+    record = logging.LogRecord(
+        name="app.auth",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="Supabase JWT検証に失敗しました",
+        args=(),
+        exc_info=None,
+    )
+    record.user_id = "user-abc"
+    record.reason = "Signature verification failed"
+    record.engine = "gemini_free"
+    record.service = "docling-service"
+    record.upstream_status = 422
+
+    payload = json.loads(JsonLogFormatter().format(record))
+
+    assert payload["user_id"] == "user-abc"
+    assert payload["reason"] == "Signature verification failed"
+    assert payload["engine"] == "gemini_free"
+    assert payload["service"] == "docling-service"
+    assert payload["upstream_status"] == 422
+
+
+def test_access_log_records_user_id_for_authenticated_request(monkeypatch, caplog):
+    # 監査証跡として「誰の操作か」をアクセスログへ残す（ADR-030）。Supabase側のAuthログは
+    # 保持期間がプラン依存のため、アプリ側のログだけで追える状態にしておく。
+    # 認証依存はFastAPIによりスレッドプールで実行されうるため、contextvarではなくscopeの
+    # stateを経由してミドルウェアへ届く。実トークンを使い、その経路ごと検証する。
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret-for-access-log")
+    payload = {"sub": "user-xyz", "aud": "authenticated", "exp": int(time.time()) + 3600}
+    token = jwt.encode(payload, "test-secret-for-access-log", algorithm="HS256")
+
+    with caplog.at_level(logging.INFO, logger="app.access"):
+        client.post("/api/render", data={}, headers={"Authorization": f"Bearer {token}"})
+
+    access_logs = [
+        r for r in caplog.records if r.name == "app.access" and r.getMessage() == "request completed"
+    ]
+    assert len(access_logs) == 1
+    assert access_logs[0].user_id == "user-xyz"
+
+
+def test_access_log_omits_user_id_for_anonymous_request(caplog):
+    with caplog.at_level(logging.INFO, logger="app.access"):
+        client.post("/api/render", data={})
+
+    access_logs = [
+        r for r in caplog.records if r.name == "app.access" and r.getMessage() == "request completed"
+    ]
+    assert len(access_logs) == 1
+    assert not hasattr(access_logs[0], "user_id")

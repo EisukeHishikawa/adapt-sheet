@@ -13,7 +13,7 @@
 3. マージをトリガーにGitHub ActionsのCDが起動し、Terraformでインフラを適用、S3・Lambdaへ自動デプロイ。
 4. デプロイ後、ステージングエンドポイントに対する疎通テストを実行。
 
-詳細なCI/CD概要図は [`architecture.md`](./architecture.md#4-cicd概要図) を参照。
+詳細なCI/CD概要図は [`architecture.md`](./architecture.md#6-cicd概要図) を参照。
 
 ---
 
@@ -91,7 +91,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 ## 6. 運用時の注意点
 
 - **APIキーのローテーション**: Parameter Store（SecureString）の値を更新後、Lambdaの実行環境を入れ替える（新デプロイ or 再デプロイ）ことで、次のコールドスタート時に新しいキーが読み込まれる（ADR-017。キャッシュはコールドスタート単位）。
-- **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（全メソッド合算、認証有無を区別しない）で過度なAPIコールを防ぐ（ADR-027、[architecture.md](./architecture.md#3-セキュリティ概要図) 参照）。
+- **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（全メソッド合算、認証有無を区別しない）で過度なAPIコールを防ぐ（ADR-027、[architecture.md](./architecture.md#5-セキュリティ概要図) 参照）。
 - **ロールバック**: Terraform管理下のため、問題発生時は直前のTerraform state / GitHub Actionsのデプロイ履歴から切り戻す。
 
 ---

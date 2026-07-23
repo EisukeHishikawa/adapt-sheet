@@ -20,12 +20,15 @@ __all__ = [
 
 
 class RemotePdf2HtmlExExtractor(RemoteHtmlExtractor):
-    """pdf2htmlex-serviceへHTTPで変換を委譲する本番実装（ADR-015）。"""
+    """pdf2htmlex-serviceへHTTPで変換を委譲する本番実装（ADR-015/026）。"""
 
     _service_label = "pdf2htmlex-service"
     _env_var = "PDF2HTMLEX_SERVICE_URL"
     # 未設定時の既定をcompose上のサービス名に合わせ、環境変数を明示しない単体実行でも動くようにする。
     _default_url = "http://pdf2htmlex:8200"
+    # Lambda本番はIAM認証必須のFunction URLとして公開するため、terraformがこの環境変数に
+    # "aws_sigv4"を設定してSigV4署名を有効化する（ADR-026）。
+    _auth_env_var = "PDF2HTMLEX_SERVICE_AUTH"
 
 
 def get_pdf2htmlex_extractor() -> PDFHtmlExtractor:

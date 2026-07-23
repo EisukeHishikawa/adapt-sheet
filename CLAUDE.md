@@ -107,7 +107,7 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 ## 環境依存の注意点
 
 - **Docling**: OS依存のバイナリ/MLモデルを含むため、導入時は単体検証スクリプトで早期に動作確認する。
-- **AWS Lambda**: コールドスタート対策としてAWS Lambda Web Adapterを利用する（本番用は`backend/Dockerfile.lambda`。当面のLambda化対象は軽量な入口エンドポイント`backend`のみ）。APIキーはイメージに焼き込まず、コールドスタート時にParameter Storeから取得して`os.environ`へ展開する（`app/secrets_loader.py`。ハンドラ内で毎回SSMを叩かない。ADR-017）。
+- **AWS Lambda**: コールドスタート対策としてAWS Lambda Web Adapterを利用する（本番用は`backend`/`docling-service`/`pdf2htmlex-service`それぞれの`Dockerfile.lambda`）。APIキーはイメージに焼き込まず、コールドスタート時にParameter Storeから取得して`os.environ`へ展開する（`app/secrets_loader.py`。ハンドラ内で毎回SSMを叩かない。ADR-017）。`docling-service`/`pdf2htmlex-service`はbackendからのみ呼ばれる内部専用サービスのため、API Gatewayを介さずAWS_IAM認証必須のLambda Function URLとして公開し、backendはAWS SigV4署名（`app/services/remote_extractor.py`）で呼び出す（ADR-026）。
 - **ローカルDB**: Supabase統合時は `Supabase Local CLI` / Docker を使い、クラウド環境を汚さずにマイグレーション・テストを行う。
 
 ## Git / CI運用

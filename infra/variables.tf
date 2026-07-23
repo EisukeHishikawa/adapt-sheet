@@ -34,6 +34,42 @@ variable "lambda_timeout" {
   default     = 60
 }
 
+variable "docling_image_tag" {
+  description = "Lambdaへデプロイするdocling-serviceコンテナイメージのタグ（ECR Privateへpush済みのもの）"
+  type        = string
+  default     = "latest"
+}
+
+variable "docling_lambda_memory_size" {
+  description = "docling-service Lambdaのメモリ割り当て（MB）。torch等のML推論に余裕を持たせる（ADR-026）"
+  type        = number
+  default     = 6144
+}
+
+variable "docling_lambda_timeout" {
+  description = "docling-service Lambdaのタイムアウト（秒）。初回はMLモデルのダウンロードが発生しうるため長めに取る（ADR-026）"
+  type        = number
+  default     = 120
+}
+
+variable "pdf2htmlex_image_tag" {
+  description = "Lambdaへデプロイするpdf2htmlex-serviceコンテナイメージのタグ（ECR Privateへpush済みのもの）"
+  type        = string
+  default     = "latest"
+}
+
+variable "pdf2htmlex_lambda_memory_size" {
+  description = "pdf2htmlex-service Lambdaのメモリ割り当て（MB）（ADR-026）"
+  type        = number
+  default     = 2048
+}
+
+variable "pdf2htmlex_lambda_timeout" {
+  description = "pdf2htmlex-service Lambdaのタイムアウト（秒）（ADR-026）"
+  type        = number
+  default     = 60
+}
+
 variable "secret_parameter_names" {
   description = "Parameter Store（SecureString）で管理するAPIキーの環境変数名（ADR-017）"
   type        = list(string)

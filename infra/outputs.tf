@@ -8,6 +8,26 @@ output "lambda_function_name" {
   value       = module.lambda.function_name
 }
 
+output "ecr_docling_repository_url" {
+  description = "docling-serviceイメージをpushするECR PrivateリポジトリURL"
+  value       = module.ecr_docling.repository_url
+}
+
+output "ecr_pdf2htmlex_repository_url" {
+  description = "pdf2htmlex-serviceイメージをpushするECR PrivateリポジトリURL"
+  value       = module.ecr_pdf2htmlex.repository_url
+}
+
+output "docling_function_url" {
+  description = "docling-service LambdaのFunction URL（AWS_IAM認証必須、backendのみ呼び出し可。ADR-026）"
+  value       = module.lambda_docling.function_url
+}
+
+output "pdf2htmlex_function_url" {
+  description = "pdf2htmlex-service LambdaのFunction URL（AWS_IAM認証必須、backendのみ呼び出し可。ADR-026）"
+  value       = module.lambda_pdf2htmlex.function_url
+}
+
 output "api_invoke_url" {
   description = "API Gatewayのステージ呼び出しURL（疎通テスト・フロントのVITE_API_BASE_URL用）"
   value       = module.api.invoke_url

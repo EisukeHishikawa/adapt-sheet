@@ -20,12 +20,15 @@ __all__ = [
 
 
 class RemoteDoclingHtmlExtractor(RemoteHtmlExtractor):
-    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-013/016）。"""
+    """docling-serviceへHTTPでテキスト抽出を委譲する本番実装（ADR-013/016/026）。"""
 
     _service_label = "docling-service"
     _env_var = "DOCLING_SERVICE_URL"
     # 未設定時の既定をcompose上のサービス名に合わせ、環境変数を明示しない単体実行でも動くようにする。
     _default_url = "http://docling:8100"
+    # Lambda本番はIAM認証必須のFunction URLとして公開するため、terraformがこの環境変数に
+    # "aws_sigv4"を設定してSigV4署名を有効化する（ADR-026）。
+    _auth_env_var = "DOCLING_SERVICE_AUTH"
 
 
 def get_html_extractor() -> PDFHtmlExtractor:

@@ -26,7 +26,47 @@ module "ssm" {
   secret_names = var.secret_parameter_names
 }
 
-# 入口エンドポイント（backend）のLambda。実行ロールにSSM読み取り＋KMS復号のみを最小権限で付与する。
+# Doclingサービス（テキスト抽出）のLambda化（ADR-026）。backend以外からは呼ばれない内部専用サービス
+# のため、API Gatewayではなく AWS_IAM 認証必須の Function URL を直接公開し、backend Lambdaの実行ロール
+# のみに呼び出しを許可する。APIキーを扱わないため ssm_prefix/ssm_parameter_arns は渡さない。
+module "ecr_docling" {
+  source           = "./modules/ecr"
+  repository_name  = "${local.name_prefix}-docling"
+  keep_last_images = var.ecr_keep_last_images
+}
+
+module "lambda_docling" {
+  source      = "./modules/lambda"
+  name        = "${local.name_prefix}-docling"
+  image_uri   = "${module.ecr_docling.repository_url}:${var.docling_image_tag}"
+  memory_size = var.docling_lambda_memory_size
+  timeout     = var.docling_lambda_timeout
+
+  create_function_url            = true
+  function_url_invoker_role_arns = [module.lambda.role_arn]
+}
+
+# pdf2htmlEXサービス（PDF→HTML変換）のLambda化（ADR-026）。設計はdocling-serviceと同じ。
+module "ecr_pdf2htmlex" {
+  source           = "./modules/ecr"
+  repository_name  = "${local.name_prefix}-pdf2htmlex"
+  keep_last_images = var.ecr_keep_last_images
+}
+
+module "lambda_pdf2htmlex" {
+  source      = "./modules/lambda"
+  name        = "${local.name_prefix}-pdf2htmlex"
+  image_uri   = "${module.ecr_pdf2htmlex.repository_url}:${var.pdf2htmlex_image_tag}"
+  memory_size = var.pdf2htmlex_lambda_memory_size
+  timeout     = var.pdf2htmlex_lambda_timeout
+
+  create_function_url            = true
+  function_url_invoker_role_arns = [module.lambda.role_arn]
+}
+
+# 入口エンドポイント（backend）のLambda。実行ロールにSSM読み取り＋KMS復号に加え、docling/pdf2htmlexの
+# Function URL呼び出し権限（identity-based）を最小権限で付与する。resource-based側の許可は上記
+# function_url_invoker_role_arnsが担う（ADR-026）。
 module "lambda" {
   source             = "./modules/lambda"
   name               = "${local.name_prefix}-backend"
@@ -36,6 +76,15 @@ module "lambda" {
   ssm_prefix         = local.ssm_prefix
   ssm_parameter_arns = module.ssm.parameter_arns
   use_mock_ai        = var.use_mock_ai
+
+  invoke_function_url_arns = [module.lambda_docling.function_arn, module.lambda_pdf2htmlex.function_arn]
+  extra_env = {
+    # remote_extractor.pyがこのURL宛にPOSTし、*_AUTH=aws_sigv4でSigV4署名を有効化する（ADR-026）。
+    DOCLING_SERVICE_URL     = module.lambda_docling.function_url
+    DOCLING_SERVICE_AUTH    = "aws_sigv4"
+    PDF2HTMLEX_SERVICE_URL  = module.lambda_pdf2htmlex.function_url
+    PDF2HTMLEX_SERVICE_AUTH = "aws_sigv4"
+  }
 }
 
 # 公開エンドポイント。WAFを前段に付けられるようREST API（REGIONAL）でLambdaへプロキシする。

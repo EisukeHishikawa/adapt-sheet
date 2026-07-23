@@ -73,3 +73,54 @@ def test_remote_extractor_raises_when_aws_sigv4_requested_without_credentials(mo
 
     with pytest.raises(PDFConversionError):
         extractor.convert_to_html("f.pdf", b"pdf-bytes")
+
+
+def test_warmup_pings_health_endpoint_and_returns_true():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json={"status": "ok"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is True
+    assert captured["method"] == "GET"
+    assert captured["url"] == "http://docling:8100/health"
+
+
+def test_warmup_signs_with_sigv4_when_auth_env_is_aws_sigv4(monkeypatch):
+    monkeypatch.setenv("DOCLING_SERVICE_AUTH", "aws_sigv4")
+    monkeypatch.setenv("AWS_REGION", "ap-northeast-1")
+    monkeypatch.setattr("boto3.Session.get_credentials", lambda self: _FakeCredentials())
+
+    captured_headers = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_headers.update(request.headers)
+        return httpx.Response(200, json={"status": "ok"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is True
+    assert captured_headers["authorization"].startswith("AWS4-HMAC-SHA256 ")
+
+
+def test_warmup_returns_false_instead_of_raising_on_failure():
+    # ウォームアップは画面表示のついでに投げる副次的な処理のため、失敗しても例外にしない。
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is False
+
+
+def test_warmup_returns_false_on_non_200_status():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={"Message": "Forbidden"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is False

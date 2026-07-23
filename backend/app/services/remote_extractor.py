@@ -31,6 +31,8 @@ class PDFHtmlExtractor(Protocol):
 
     def convert_to_html(self, filename: str, content: bytes) -> str: ...
 
+    def warmup(self) -> bool: ...
+
 
 class RemoteHtmlExtractor:
     """変換サービスへHTTPでPDF→HTML変換を委譲する本番実装の基底（ADR-013/016/026）。
@@ -64,10 +66,7 @@ class RemoteHtmlExtractor:
             files={"file": (filename, first_page_only(content), "application/pdf")},
             timeout=120.0,
         )
-        if self._auth_env_var and os.environ.get(self._auth_env_var) == "aws_sigv4":
-            # multipartボディはデフォルトでストリーミングのため、署名対象として読み切ってから使う。
-            request.read()
-            _sign_with_sigv4(request)
+        self._sign_if_required(request)
 
         try:
             response = self._client.send(request)
@@ -81,6 +80,28 @@ class RemoteHtmlExtractor:
             )
 
         return response.json()["html"]
+
+    def warmup(self) -> bool:
+        """`GET /health`を1回だけ叩き、Lambda実行環境を起こしておく（ADR-028）。
+
+        画面表示のついでに投げる副次的な処理であり、失敗しても本来の描画には影響しないため、
+        例外は送出せず成否をboolで返す。実行環境の起動を待つ必要はないので、変換時（120秒）より
+        大幅に短いタイムアウトにして、コールドスタート中でもフロントを待たせ続けない。
+        """
+        request = self._client.build_request("GET", f"{self._base_url}/health", timeout=10.0)
+        self._sign_if_required(request)
+
+        try:
+            return self._client.send(request).status_code == 200
+        except (httpx.HTTPError, PDFConversionError):
+            # PDFConversionErrorはAWS認証情報が無く署名できない場合（本番のみ）に上がる。
+            return False
+
+    def _sign_if_required(self, request: httpx.Request) -> None:
+        if self._auth_env_var and os.environ.get(self._auth_env_var) == "aws_sigv4":
+            # multipartボディはデフォルトでストリーミングのため、署名対象として読み切ってから使う。
+            request.read()
+            _sign_with_sigv4(request)
 
 
 def _sign_with_sigv4(request: httpx.Request) -> None:
@@ -100,14 +121,17 @@ def _sign_with_sigv4(request: httpx.Request) -> None:
 
     region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or _DEFAULT_AWS_REGION
 
+    # ボディの無いGET（/healthのウォームアップ）ではcontent-typeが存在しないため、
+    # 実際に送られるヘッダーだけを署名対象に含める。
+    signed_headers = {"host": request.url.host}
+    if "content-type" in request.headers:
+        signed_headers["content-type"] = request.headers["content-type"]
+
     aws_request = AWSRequest(
         method=request.method,
         url=str(request.url),
         data=request.content,
-        headers={
-            "host": request.url.host,
-            "content-type": request.headers["content-type"],
-        },
+        headers=signed_headers,
     )
     SigV4Auth(credentials.get_frozen_credentials(), _SIGV4_SERVICE_NAME, region).add_auth(aws_request)
 

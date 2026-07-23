@@ -238,3 +238,24 @@ describe('描画中の経過秒数表示（ステップ22）', () => {
     expect(screen.getByRole('button', { name: /描画中/ })).toHaveTextContent('描画中...(5秒)')
   })
 })
+
+// 画面を開いた時点でLambda・Supabaseを起こしておく（ADR-028）。
+describe('App（ホットスタンバイ）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+  })
+
+  it('マウント時に POST /api/warmup を投げる', async () => {
+    const calls: string[] = []
+    server.use(
+      http.post('/api/warmup', () => {
+        calls.push('warmup')
+        return HttpResponse.json({ docling: 'ok', pdf2htmlex: 'ok', database: 'ok' })
+      }),
+    )
+
+    render(<App />)
+
+    await waitFor(() => expect(calls).toEqual(['warmup']))
+  })
+})

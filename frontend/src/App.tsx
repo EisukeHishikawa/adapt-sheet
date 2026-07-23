@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { useSheetStore } from '@/store/sheetStore'
 import { useAuthStore } from '@/store/authStore'
 import { useTheme } from '@/lib/useTheme'
+import { runWarmup } from '@/lib/warmup'
 
 // 2カラム構成。左：サイズ操作・描画ボタン・PDF・プロンプト・プレビュー / 右：HTML/JSONのコード入力。
 // 各パネルはpropsで繋がず、それぞれがZustandストア（sheetStore）を参照して連動する。
@@ -27,6 +28,12 @@ function App() {
   useEffect(() => {
     const unsubscribe = useAuthStore.getState().init()
     return unsubscribe
+  }, [])
+
+  // 画面を開いた時点で、コールドスタートしがちなdocling/pdf2htmlexのLambdaとSupabaseを
+  // 起こしておく（ADR-028）。結果は画面へ反映しないため、完了を待たず投げっぱなしにする。
+  useEffect(() => {
+    void runWarmup()
   }, [])
 
   // ログインが確定した時点でhistoryが空なら、DB保存済みの履歴を取り直して表示する。sheetStoreは

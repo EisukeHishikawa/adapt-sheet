@@ -55,3 +55,18 @@ def test_convert_end_to_end_with_real_docling():
     )
     assert response.status_code == 200
     assert "Docling verification sample text" in response.json()["html"]
+
+
+def test_health_returns_ok_without_touching_converter():
+    # ウォームアップ（ADR-028）はLambda実行環境を起こすことだけが目的のため、
+    # PDF変換のDIを解決せずに即座に応答すること。
+    def _unused_converter():
+        raise AssertionError("/healthはPDF変換の依存を解決してはならない")
+
+    app.dependency_overrides[get_pdf_converter] = _unused_converter
+    try:
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+    finally:
+        app.dependency_overrides.pop(get_pdf_converter, None)

@@ -29,7 +29,8 @@ flowchart LR
     end
 
     Browser -->|静的アセット取得| CF --> S3
-    Browser -->|API呼び出し (ステージ単位スロットリング, ADR-027)| APIGW --> LambdaEntry
+    Browser -->|API呼び出し /api/* (同一オリジン, ADR-029)| CF
+    CF -->|オリジン転送 (ステージ単位スロットリング, ADR-027)| APIGW --> LambdaEntry
     LambdaEntry -->|変換エンジン選択時・SigV4署名 (HTTP, ADR-026)| LambdaDocling
     LambdaEntry -->|変換エンジン選択時・SigV4署名 (HTTP, ADR-026)| LambdaPdf2HtmlEx
     LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-015)| Gemini

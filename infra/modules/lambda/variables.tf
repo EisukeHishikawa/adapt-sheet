@@ -20,6 +20,18 @@ variable "timeout" {
   default     = 60
 }
 
+variable "ephemeral_storage_size" {
+  description = "/tmp のサイズ（MB、512〜10240）。読み取り専用のイメージ層に書けないキャッシュの置き場"
+  type        = number
+  default     = 512
+}
+
+variable "log_retention_in_days" {
+  description = "CloudWatch Logsの保持期間（日）"
+  type        = number
+  default     = 30
+}
+
 variable "ssm_prefix" {
   description = "APIキーのParameter Storeパス接頭辞（SSM_PARAMETER_PREFIX）。APIキーを扱わないLambda（docling/pdf2htmlex）は空文字のまま渡し、環境変数自体を設定しない（ADR-026）"
   type        = string

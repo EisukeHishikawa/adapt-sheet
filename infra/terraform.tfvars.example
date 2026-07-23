@@ -8,16 +8,18 @@ environment = "prod"
 # ECR Privateへpush済みのbackendイメージタグ（CIが更新する運用を想定）。
 image_tag = "latest"
 
-# Lambda（PDF処理に余裕を持たせる）。
+# Lambda（PDF処理に余裕を持たせる）。timeoutはAPI Gateway REST APIの統合タイムアウト上限に揃える。
 lambda_memory_size = 4096
-lambda_timeout     = 60
+lambda_timeout     = 29
 
 # docling-service / pdf2htmlex-service（ADR-026）。ECR Privateへpush済みのイメージタグ（CIが更新する運用を想定）。
 docling_image_tag    = "latest"
 pdf2htmlex_image_tag = "latest"
 
 docling_lambda_memory_size = 6144
-docling_lambda_timeout     = 120
+docling_lambda_timeout     = 60
+# MLモデルはイメージへ焼き込むが、torch/HuggingFaceの実行時キャッシュは/tmpへ書くため拡張する。
+docling_lambda_ephemeral_storage_size = 2048
 
 pdf2htmlex_lambda_memory_size = 2048
 pdf2htmlex_lambda_timeout     = 60

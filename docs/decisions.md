@@ -383,6 +383,24 @@
 
 ---
 
+## ADR-029: SPAとAPIをCloudFrontの単一オリジンへ集約し、本番デプロイの前提を揃える
+
+- **ステータス**: Accepted
+- **コンテキスト**: フェーズ4のインフラ定義（ADR-017/026/027）は個々のリソースとしては揃っていたが、本番デプロイ前の通しレビューで「applyしても動かない」配線の欠落が見つかった。(1) フロントは`src/lib/api.ts`で相対パス`/api/render`を叩くが、CloudFrontはS3オリジンしか持たずAPI Gatewayへ到達できない（`VITE_API_BASE_URL`はdocsにあるだけでコード上未使用）。(2) API Gateway REST APIに`binary_media_types`が無く、PDFのmultipart/form-dataがUTF-8テキストとして扱われ破壊される。(3) `SUPABASE_JWT_SECRET`/`DATABASE_URL`がLambdaへ渡っておらず、本番が常に未ログイン扱い（fail-closed、ADR-018）になる。(4) doclingのMLモデルはコンテナの読み取り専用領域へ書けず、初回変換で失敗する。
+- **決定**:
+  - **SPAとAPIを同一オリジン（CloudFront）へ集約する**。`infra/modules/frontend`にAPI Gatewayを2つ目のオリジンとして追加し、`/api/*`の`ordered_cache_behavior`（キャッシュ無効、`Authorization`/`Content-Type`転送、全HTTPメソッド許可）でLambdaへ転送する。ステージパス（`/prod`）はCloudFrontの`origin_path`が補うため、フロントは相対パスのままでよい。`VITE_API_BASE_URL`は導入しない。
+  - **SPAフォールバックを`custom_error_response`からCloudFront Functionへ移す**。`custom_error_response`はディストリビューション全体に適用されるため、`/api/*`が返す403（未ログインのゲート判定）や404まで`index.html`（200）へ差し替えてしまい、ADR-012の構造化エラーがフロントへ届かなくなる。ビューワーリクエストで「拡張子を持たないパスだけを`/index.html`へ書き換える」関数に置き換える。
+  - **API Gateway REST APIに`binary_media_types = ["*/*"]`を設定する**。これによりリクエストボディがbase64化され`isBase64Encoded=true`で渡るため、Lambda Web Adapterが元のバイト列を復元できる。
+  - **`SUPABASE_JWT_SECRET`/`DATABASE_URL`もParameter Store（SecureString）から実行時に展開する**（`app/secrets_loader.py`の`_SECRET_ENV_NAMES`へ追加、ADR-017の仕組みをそのまま拡張）。Lambdaの環境変数はコンソールで平文表示されるため、APIキーと同格に扱う。あわせて、Terraformが枠だけ作った未投入のダミー値（`PLACEHOLDER_SET_OUT_OF_BAND`）は`os.environ`へ展開しない。`DATABASE_URL`に不正値が入るとエンジン生成が失敗し、「DB未設定なら履歴保存を静かにスキップする」という既存の設計（ADR-019）が壊れるため。公開情報である`SUPABASE_JWT_JWKS_URL`のみLambda環境変数で渡す。
+  - **backend Lambdaのタイムアウトを29秒に揃える**。API Gateway REST APIの統合タイムアウト上限が29秒（引き上げ不可）で、それを超えて実行しても結果は破棄され課金だけが残るため。
+  - **doclingのモデルをイメージへ焼き込み、実行時キャッシュを`/tmp`へ逃がす**。Lambdaのコンテナは`/tmp`以外が読み取り専用のため、`HF_HOME`/`XDG_CACHE_HOME`/`TORCH_HOME`/`MPLCONFIGDIR`を`/tmp`配下へ向け、`ephemeral_storage`を2048MBへ拡張する。モデル本体はビルド時に`docling-tools models download`で`/opt/docling-models`へ取得し、`DOCLING_ARTIFACTS_PATH`で参照する（実行時ダウンロードは実測60秒超で、上記29秒に間に合わない）。
+  - **Lambdaの`architectures`を`x86_64`で明示し、ロググループをTerraform管理下に置く**（保持期間30日）。前者はADR-026が前提としながら未実装だった設定で、開発機（Apple Silicon）でのビルド事故を防ぐ意図を明文化する。後者は暗黙作成のロググループが無期限保持かつ`destroy`後も残るため。
+- **理由**: 同一オリジンへ集約すると、CORS設定（バックエンドの`CORSMiddleware`）とCSPの`connect-src`拡張（ADR-021）がどちらも不要になり、「XSSでトークンを盗まれる経路を狭める」というADR-021の意図を弱めずに済む。プリフライトのラウンドトリップも発生しない。秘密情報の追加もADR-017の既存経路に乗せるだけで、新しい受け渡し方式を増やさない。
+- **トレードオフ**: CloudFrontが全APIリクエストの経路に入るため、CloudFrontの障害・設定ミスがAPIにも波及する（オリジン直叩きのURLは`api_invoke_url`として残し、切り分けに使える）。CloudFront Functionはビューワーリクエストごとに実行される追加の可動部となる（ロジックは拡張子判定のみに限定）。doclingイメージはモデルを含む分だけ肥大化し、ECR無料枠（500MB）を確実に超える（ライフサイクルポリシーで世代数を抑える）。29秒への短縮により、それを超える生成・変換は必ず失敗するようになる（従来もAPI Gateway側で504になっていたため実質的な機能低下はないが、長時間処理を扱うには非同期化（202＋ポーリング）への設計変更が必要で、本ADRの範囲外とする）。
+- **関連**: ADR-012（構造化エラー）、ADR-017（Lambda化・Parameter Store・ECR Private）、ADR-018/019（認証・履歴DB）、ADR-021（CSP）、ADR-026（内部サービスのLambda化）、ADR-027（スロットリング）、ADR-028（ウォームアップ）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

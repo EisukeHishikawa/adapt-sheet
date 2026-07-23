@@ -29,13 +29,23 @@ output "pdf2htmlex_function_url" {
 }
 
 output "api_invoke_url" {
-  description = "API Gatewayのステージ呼び出しURL（疎通テスト・フロントのVITE_API_BASE_URL用）"
+  description = "API Gatewayのステージ呼び出しURL（CloudFrontを介さない直接疎通テスト用。ブラウザからはCloudFront経由の/api/*を使う）"
   value       = module.api.invoke_url
+}
+
+output "app_url" {
+  description = "アプリの入口URL。SPAと/api/*の両方をこのオリジンから配信する"
+  value       = "https://${module.frontend.distribution_domain_name}"
 }
 
 output "cloudfront_domain_name" {
   description = "フロントエンド配信のCloudFrontドメイン"
   value       = module.frontend.distribution_domain_name
+}
+
+output "cloudfront_distribution_id" {
+  description = "デプロイ後のキャッシュ無効化（aws cloudfront create-invalidation）に使うID"
+  value       = module.frontend.distribution_id
 }
 
 output "frontend_bucket_name" {

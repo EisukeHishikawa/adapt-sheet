@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { RenderApiError, renderSheet, saveEditHistory, updateEditHistory } from '@/lib/api'
+import { RenderApiError, getHistory, renderSheet, saveEditHistory, updateEditHistory } from '@/lib/api'
+import type { HistoryItemResponse } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
@@ -98,6 +99,18 @@ function toEditorState(entry: HistoryEntry): EditorState {
   }
 }
 
+// GET /api/historyのレスポンス行をローカルのHistoryEntryへ変換する。jsonはJSON入力エディタへ
+// 戻せる整形済みテキストにする（fetchRenderの結果反映と同じ扱い）。
+function fromHistoryResponse(row: HistoryItemResponse): HistoryEntry {
+  return {
+    html: row.html,
+    css: row.css,
+    json: JSON.stringify(row.json ?? {}, null, 2),
+    widthMm: row.width_mm ?? null,
+    heightMm: row.height_mm ?? null,
+  }
+}
+
 // バックエンドが構造化エラーの安全文言を返す（ADR-012）ため通常はそちらを表示する。これは
 // バックエンド不達・非JSONレスポンスでその文言が得られない場合のフォールバックで、
 // バックエンド（app/errors._ERROR_CATALOG）と同じ文言に揃える（docs/spec.md 4章）。
@@ -152,6 +165,12 @@ type SheetState = {
   setEngine: (engine: RenderEngineId) => void
   applySizePreset: (size: SizePresetName, orientation: Orientation) => void
   restoreFromHistory: (index: number) => void
+  // ログイン確定時・リロード後などhistoryが空のタイミングで、DB保存済みの履歴を取り直して
+  // 最大MAX_HISTORY_LENGTH件をhistoryへ反映する（セッションが切れてメモリ上のhistoryが
+  // 失われても、再ログイン後に描画・編集の履歴を表示し直すため）。
+  hydrateHistoryFromServer: () => Promise<void>
+  // HistoryArchive（MAX_HISTORY_LENGTH件の枠外にある過去データ一覧）から選んだ内容をエディタへ復元する。
+  restoreFromServerEntry: (row: HistoryItemResponse) => void
   // 保留中の待ち時間を待たず、その時点の編集内容を履歴へ確定する。
   commitEditSnapshot: () => void
   dismissError: () => void
@@ -271,6 +290,40 @@ export const useSheetStore = create<SheetState>((set, get) => ({
       // 編集中を選んだ場合はその1件の続きとして編集する。描画結果を選んだ場合は次の編集で
       // 新しい編集中スナップショットを作る。
       activeEditSeq: entry.kind === 'edit' ? entry.seq : null,
+    })
+  },
+  hydrateHistoryFromServer: async () => {
+    const accessToken = useAuthStore.getState().session?.access_token
+    if (!accessToken) return
+
+    try {
+      const rows = await getHistory(accessToken)
+      if (rows.length === 0) return
+
+      // rowsは新しい順（backend/app/services/history.list_history）。表示枠は
+      // MAX_HISTORY_LENGTHまでとし、それより古い行はHistoryArchive側でのみ扱う。
+      const visible = rows.slice(0, MAX_HISTORY_LENGTH)
+      const total = visible.length
+      set({
+        history: visible.map((row, index) => ({
+          ...fromHistoryResponse(row),
+          // 新しいものほどseqが大きい既存の並びに合わせる（先頭=最新=最大seq）。
+          seq: total - index,
+          kind: row.kind === 'edit' ? ('edit' as const) : ('render' as const),
+          serverId: row.id,
+        })),
+        historySeq: total,
+      })
+    } catch {
+      // 履歴の復元は補助機能のため、失敗しても画面の初期表示は止めない。
+    }
+  },
+  restoreFromServerEntry: (row) => {
+    get().commitEditSnapshot()
+    set({
+      ...toEditorState(fromHistoryResponse(row)),
+      // 表示中のhistory配列には無い行のため、続けて編集しても新しい編集中スナップショットとして積む。
+      activeEditSeq: null,
     })
   },
   commitEditSnapshot: () => {

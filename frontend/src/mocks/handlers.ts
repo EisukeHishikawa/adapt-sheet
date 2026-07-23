@@ -23,4 +23,6 @@ export const handlers = [
   http.put('/api/history/edit/:id', ({ params }) =>
     HttpResponse.json({ id: params.id, kind: 'edit' }),
   ),
+  // 一覧取得は既定で空配列とし、必要なテストがserver.useで個別に上書きする。
+  http.get('/api/history', () => HttpResponse.json([])),
 ]

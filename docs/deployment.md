@@ -74,6 +74,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
   - `api_gateway`: REST API（REGIONAL）→ backend Lambdaプロキシ。docling/pdf2htmlexはAPI Gatewayを経由しない。ステージ単位のスロットリング（`aws_api_gateway_method_settings`）で過度なAPIコールを防ぐ（WAFは使わない。ADR-027）
   - `ecr`: backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制）
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
+  - `monitoring`: CloudWatchアラーム（Lambdaのエラー/スロットル、API Gatewayの4XX/5XX、アプリログのERRORメトリクスフィルタ）と通知先のSNSトピック（ADR-030）
 - state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
 - AWS認証はOIDC等の安全な方式でGitHub Actionsから利用する（長期の静的アクセスキーは発行しない）。OIDCプロバイダ/デプロイロールはステップ26で定義する。
 - デプロイ後、ステージング環境のエンドポイントに対してローカルからAPIテストを実行し疎通を確認する。
@@ -93,6 +94,8 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 - **APIキーのローテーション**: Parameter Store（SecureString）の値を更新後、Lambdaの実行環境を入れ替える（新デプロイ or 再デプロイ）ことで、次のコールドスタート時に新しいキーが読み込まれる（ADR-017。キャッシュはコールドスタート単位）。
 - **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（全メソッド合算、認証有無を区別しない）で過度なAPIコールを防ぐ（ADR-027、[architecture.md](./architecture.md#5-セキュリティ概要図) 参照）。
 - **ロールバック**: Terraform管理下のため、問題発生時は直前のTerraform state / GitHub Actionsのデプロイ履歴から切り戻す。
+- **ログ・アラームの確認**: 障害時にどのログをどう引くかは [observability.md](./observability.md) に手順をまとめている。アラームはSNSトピック（`terraform output alarm_topic_arn`）へ集約され、`alarm_email` を設定した場合は**購読確認メールのリンクを踏むまで通知が届かない**点に注意（ADR-030）。
+- **ログの保持期間**: `log_retention_in_days`（既定30日）がLambda・API Gateway・CloudFrontのログへ一括で適用される。伸ばすほどCloudWatch Logs / S3の保管料が増える。
 
 ---
 

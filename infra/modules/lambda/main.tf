@@ -21,6 +21,14 @@ resource "aws_iam_role_policy_attachment" "logs" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# X-Rayへのセグメント送信。backend→docling/pdf2htmlexのFunction URL呼び出しが1本のトレースに
+# つながり、どのサービスで時間を使ったかを追える（ADR-030）。
+resource "aws_iam_role_policy_attachment" "xray" {
+  count      = var.enable_xray ? 1 : 0
+  role       = aws_iam_role.this.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 # APIキー取得のための最小権限。対象パラメータのGetと、SSM経由のKMS復号だけを許可する（ADR-017）。
 # docling/pdf2htmlex Lambda（ssm_parameter_arns未指定）はAPIキーを扱わないため、この権限自体を持たない（ADR-026）。
 data "aws_iam_policy_document" "ssm_read" {
@@ -96,6 +104,10 @@ resource "aws_lambda_function" "this" {
   # コンテナ内は/tmp以外が読み取り専用のため、MLモデル等の実行時キャッシュ置き場として拡張する。
   ephemeral_storage {
     size = var.ephemeral_storage_size
+  }
+
+  tracing_config {
+    mode = var.enable_xray ? "Active" : "PassThrough"
   }
 
   depends_on = [aws_cloudwatch_log_group.this]

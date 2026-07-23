@@ -9,8 +9,15 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 
 from app.converter import PDFConversionError, PDFConverter, get_pdf_converter
+from app.logging_config import RequestContextMiddleware, configure_logging
+
+# アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-011/030）。
+configure_logging()
 
 app = FastAPI()
+
+# backendから渡された相関ID（X-Request-ID）でアクセスログを出す（ADR-030）。
+app.add_middleware(RequestContextMiddleware)
 
 
 @app.get("/health")

@@ -30,6 +30,11 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # 認証依存（app/services/auth.py）はFastAPIによりスレッドプールで実行されうるため、
+        # contextvarでは相関できない。同一のscope dictを共有するstate経由でuser_idを受け取る
+        # （ADR-030）。Starletteが設定する前に読む可能性を避けるためここで初期化する。
+        scope.setdefault("state", {})
+
         request_id = str(uuid.uuid4())
         token = set_request_id(request_id)
         method = scope.get("method", "-")
@@ -60,16 +65,17 @@ class RequestContextMiddleware:
                 await response(scope, receive, send_wrapper)
 
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
-            logger.info(
-                "request completed",
-                extra={
-                    "method": method,
-                    "path": path,
-                    "status_code": state["status_code"],
-                    "duration_ms": duration_ms,
-                    "request_id": request_id,
-                },
-            )
+            fields = {
+                "method": method,
+                "path": path,
+                "status_code": state["status_code"],
+                "duration_ms": duration_ms,
+                "request_id": request_id,
+            }
+            user_id = scope["state"].get("user_id")
+            if user_id:
+                fields["user_id"] = user_id
+            logger.info("request completed", extra=fields)
         finally:
             # リクエスト間で相関IDが漏れないよう必ず元へ戻す。
             reset_request_id(token)

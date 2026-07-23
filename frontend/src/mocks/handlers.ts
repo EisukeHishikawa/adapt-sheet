@@ -25,4 +25,8 @@ export const handlers = [
   ),
   // 一覧取得は既定で空配列とし、必要なテストがserver.useで個別に上書きする。
   http.get('/api/history', () => HttpResponse.json([])),
+  // App表示時のホットスタンバイ（ADR-028）。全画面テストが未処理リクエストで落ちないよう既定で持つ。
+  http.post('/api/warmup', () =>
+    HttpResponse.json({ docling: 'ok', pdf2htmlex: 'ok', database: 'ok' }),
+  ),
 ]

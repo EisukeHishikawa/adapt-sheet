@@ -72,6 +72,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/warmup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Warmup
+         * @description フロント表示時に呼ばれるホットスタンバイ用エンドポイント（ADR-028）。
+         *
+         *     docling/pdf2htmlexはIAM認証必須のLambda Function URL（ADR-026）でフロントから直接
+         *     叩けないため、backendが署名付きで代理ピングする。あわせてSupabaseのDBへも最小クエリを
+         *     投げ、無操作による一時停止を避ける。認証は要求しない（画面を開いた時点で投げるため）。
+         *
+         *     結果は画面の挙動を左右しないため、どれが失敗しても常に200を返す。
+         */
+        post: operations["warmup_api_warmup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -181,6 +207,18 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * WarmupResponse
+         * @description 各対象の結果は"ok" / "unavailable"のいずれか。
+         */
+        WarmupResponse: {
+            /** Docling */
+            docling: string;
+            /** Pdf2Htmlex */
+            pdf2htmlex: string;
+            /** Database */
+            database: string;
         };
     };
     responses: never;
@@ -325,6 +363,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    warmup_api_warmup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WarmupResponse"];
                 };
             };
         };

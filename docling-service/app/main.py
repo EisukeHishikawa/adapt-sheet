@@ -13,6 +13,15 @@ from app.converter import PDFConversionError, PDFConverter, get_pdf_converter
 app = FastAPI()
 
 
+@app.get("/health")
+def health() -> dict:
+    """backendのウォームアップ用の軽量エンドポイント（ADR-028）。
+
+    Lambda実行環境を起こすことだけが目的のため、PDF変換の依存には一切触れない。
+    """
+    return {"status": "ok"}
+
+
 @app.post("/convert")
 def convert(
     file: UploadFile = File(...),

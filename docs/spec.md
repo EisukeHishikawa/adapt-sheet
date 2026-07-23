@@ -166,7 +166,26 @@ pdf2htmlEX変換専用のサービス（ADR-015）が公開する内部エンド
 
 > 未ログイン時に`POST /api/render`が成功しても履歴は保存されない。DB保存自体が失敗した場合も`POST /api/render`のレスポンスには影響しない（ADR-019。描画の成否とDB保存の成否を切り離す）。
 
-### 3.5 型同期
+### 3.5 `POST /api/warmup`（ホットスタンバイ、ADR-028）
+
+フロントの画面表示時に一度だけ呼ばれ、コールドスタートしがちな依存先を起こしておくためのエンドポイント。認証不要・リクエストボディなし。
+
+- `docling` / `pdf2htmlex`: 各サービスの`GET /health`をbackendが代理で叩く（IAM認証必須のLambda Function URLのためフロントからは直接叩けない。ADR-026）
+- `database`: SupabaseのPostgresへ`SELECT 1`（無料プロジェクトの一時停止を避けるキープアライブ）
+
+**レスポンス（常に200 OK）**
+
+```json
+{ "docling": "ok", "pdf2htmlex": "ok", "database": "ok" }
+```
+
+各値は`"ok"`または`"unavailable"`。ウォームアップの結果は画面の挙動を左右しないため、いずれかが失敗しても200を返し、エラーレスポンス（4章）にはしない（サーバー側はWARNINGログを残す）。`DATABASE_URL`未設定のローカル/pytestでは`database`は常に`"unavailable"`になる。
+
+#### `GET /health`（docling-service / pdf2htmlex-service、内部API）
+
+上記のウォームアップ専用。PDF変換の依存には触れず`{"status": "ok"}`を即座に返す。
+
+### 3.6 型同期
 
 FastAPIが自動生成する `openapi.json` からフロントエンド用のTypeScript型定義を生成し、フロント・バック間でキー名の手書き一致を排除する（[CLAUDE.md](../CLAUDE.md) 参照）。
 

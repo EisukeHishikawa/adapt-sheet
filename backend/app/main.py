@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.db import get_db_session, get_db_session_or_none
+from app.db import get_db_pinger, get_db_session, get_db_session_or_none
 from app.errors import (
     ai_generation_error_handler,
     http_exception_handler,
@@ -38,6 +38,7 @@ from app.services.pdf_layout import PDFLayoutConverter, get_layout_converter
 from app.services.pdf_common import PDFConversionError
 
 logger = logging.getLogger("app.history")
+warmup_logger = logging.getLogger("app.warmup")
 
 # アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-011）。
 configure_logging()
@@ -294,6 +295,52 @@ def update_edit_history_entry(
     if row is None:
         raise HTTPException(status_code=404)
     return _to_history_response(row)
+
+
+class WarmupResponse(BaseModel):
+    """各対象の結果は"ok" / "unavailable"のいずれか。"""
+
+    docling: str
+    pdf2htmlex: str
+    database: str
+
+
+@app.post("/api/warmup", response_model=WarmupResponse)
+async def warmup(
+    html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
+    pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
+    db_pinger: Callable[[], bool] = Depends(get_db_pinger),
+) -> WarmupResponse:
+    """フロント表示時に呼ばれるホットスタンバイ用エンドポイント（ADR-028）。
+
+    docling/pdf2htmlexはIAM認証必須のLambda Function URL（ADR-026）でフロントから直接
+    叩けないため、backendが署名付きで代理ピングする。あわせてSupabaseのDBへも最小クエリを
+    投げ、無操作による一時停止を避ける。認証は要求しない（画面を開いた時点で投げるため）。
+
+    結果は画面の挙動を左右しないため、どれが失敗しても常に200を返す。
+    """
+    docling_ok, pdf2htmlex_ok, database_ok = await asyncio.gather(
+        asyncio.to_thread(_safe_warmup, html_extractor.warmup, "docling"),
+        asyncio.to_thread(_safe_warmup, pdf2htmlex_extractor.warmup, "pdf2htmlex"),
+        asyncio.to_thread(_safe_warmup, db_pinger, "database"),
+    )
+    return WarmupResponse(
+        docling=_warmup_status(docling_ok),
+        pdf2htmlex=_warmup_status(pdf2htmlex_ok),
+        database=_warmup_status(database_ok),
+    )
+
+
+def _safe_warmup(ping: Callable[[], bool], target: str) -> bool:
+    try:
+        return bool(ping())
+    except Exception:
+        warmup_logger.warning("ウォームアップに失敗しました: %s", target, exc_info=True)
+        return False
+
+
+def _warmup_status(ok: bool) -> str:
+    return "ok" if ok else "unavailable"
 
 
 async def _convert_with_engine(

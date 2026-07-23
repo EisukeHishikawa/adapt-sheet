@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Optional
 
 from sqlalchemy import select
@@ -37,6 +38,48 @@ def save_history(
         kind=kind,
     )
     session.add(entry)
+    session.commit()
+    session.refresh(entry)
+    return entry
+
+
+def update_edit_history(
+    session: Session,
+    *,
+    entry_id: str,
+    user_id: str,
+    engine: str,
+    html: str,
+    css: str,
+    json_data: dict,
+    width_mm: Optional[float],
+    height_mm: Optional[float],
+) -> Optional[RenderHistory]:
+    """編集中スナップショットを上書きする。編集を続けても行を増やさないため（ADR-025）。
+
+    自分の編集中の行が見つからない場合はNoneを返す（他ユーザーの行・存在しないID・
+    UUIDとして解釈できないIDを含む）。
+    """
+    try:
+        target_id = uuid.UUID(entry_id)
+    except ValueError:
+        return None
+
+    stmt = select(RenderHistory).where(
+        RenderHistory.id == target_id,
+        RenderHistory.user_id == user_id,
+        RenderHistory.kind == "edit",
+    )
+    entry = session.scalars(stmt).first()
+    if entry is None:
+        return None
+
+    entry.engine = engine
+    entry.html = html
+    entry.css = css
+    entry.json_data = json_data
+    entry.width_mm = width_mm
+    entry.height_mm = height_mm
     session.commit()
     session.refresh(entry)
     return entry

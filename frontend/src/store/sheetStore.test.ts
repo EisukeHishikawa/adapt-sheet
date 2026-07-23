@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import { EDIT_SNAPSHOT_DELAY_MS, useSheetStore } from './sheetStore'
+import { EDIT_SNAPSHOT_DELAY_MS, MAX_HISTORY_LENGTH, useSheetStore } from './sheetStore'
 import { useAuthStore } from './authStore'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
@@ -25,6 +25,9 @@ const initialSheetState = {
   // 履歴の通し番号カウンタ。setStateは浅いマージのため、リセットに含めないとテスト間で
   // seqが漏れて番号検証がずれる。
   historySeq: 0,
+  // 編集中スナップショットの上書き先。setStateは浅いマージのため、ここに含めないと
+  // テスト間で前のテストの編集中カードを指したまま漏れる。
+  activeEditSeq: null,
   isLoading: false,
   error: null,
   successMessage: null,
@@ -144,7 +147,7 @@ describe('sheetStore（編集内容の履歴登録）', () => {
     expect(history[0]).toMatchObject({ html: '<p>editing</p>', kind: 'edit', seq: 1 })
   })
 
-  it('連続した入力は1件にまとまり、編集を再開すると次の履歴が追加される', () => {
+  it('連続した入力は1件にまとまる', () => {
     useSheetStore.getState().setHtmlContent('<p>a</p>')
     vi.advanceTimersByTime(EDIT_SNAPSHOT_DELAY_MS / 2)
     useSheetStore.getState().setHtmlContent('<p>ab</p>')
@@ -152,26 +155,79 @@ describe('sheetStore（編集内容の履歴登録）', () => {
 
     expect(useSheetStore.getState().history).toHaveLength(1)
     expect(useSheetStore.getState().history[0].html).toBe('<p>ab</p>')
+  })
 
+  // ユーザー要件: 編集中のデータを編集した場合は履歴を追加しない（同じ1件を上書きする）。
+  it('編集中スナップショットを編集し続けても履歴は増えず、同じ1件が最新内容へ更新される', () => {
+    useSheetStore.getState().setHtmlContent('<p>step1</p>')
+    vi.advanceTimersByTime(EDIT_SNAPSHOT_DELAY_MS)
+    useSheetStore.getState().setHtmlContent('<p>step2</p>')
+    vi.advanceTimersByTime(EDIT_SNAPSHOT_DELAY_MS)
     useSheetStore.getState().setJsonContent('{"x":1}')
     vi.advanceTimersByTime(EDIT_SNAPSHOT_DELAY_MS)
 
     const history = useSheetStore.getState().history
-    expect(history).toHaveLength(2)
-    expect(history[0]).toMatchObject({ json: '{"x":1}', kind: 'edit', seq: 2 })
+    expect(history).toHaveLength(1)
+    expect(history[0]).toMatchObject({
+      html: '<p>step2</p>',
+      json: '{"x":1}',
+      kind: 'edit',
+      seq: 1,
+    })
   })
 
-  it('編集履歴と描画履歴は同じ最大10件枠を共有し、古い順に破棄される', async () => {
-    vi.useRealTimers()
-    for (let i = 0; i < 11; i += 1) {
-      useSheetStore.getState().setHtmlContent(`<p>${i}</p>`)
-      useSheetStore.getState().commitEditSnapshot()
-    }
+  it('編集中の履歴を復元して編集し直しても、その1件が更新されるだけで履歴は増えない', () => {
+    useSheetStore.setState({
+      history: [
+        { html: '<p>wip</p>', css: '', json: '{}', widthMm: null, heightMm: null, seq: 2, kind: 'edit' },
+        { html: '<p>rendered</p>', css: '', json: '{}', widthMm: null, heightMm: null, seq: 1, kind: 'render' },
+      ],
+      historySeq: 2,
+    })
+
+    useSheetStore.getState().restoreFromHistory(0)
+    useSheetStore.getState().setHtmlContent('<p>wip2</p>')
+    vi.advanceTimersByTime(EDIT_SNAPSHOT_DELAY_MS)
 
     const history = useSheetStore.getState().history
-    expect(history).toHaveLength(10)
-    expect(history[0].html).toBe('<p>10</p>')
-    expect(history.at(-1)?.html).toBe('<p>1</p>')
+    expect(history).toHaveLength(2)
+    expect(history[0]).toMatchObject({ html: '<p>wip2</p>', seq: 2, kind: 'edit' })
+  })
+
+  it('描画後の編集は、新しい編集中スナップショットとして追加される', async () => {
+    vi.useRealTimers()
+    await useSheetStore.getState().fetchRender()
+    useSheetStore.getState().setHtmlContent('<p>after-render</p>')
+    useSheetStore.getState().commitEditSnapshot()
+
+    const history = useSheetStore.getState().history
+    expect(history).toHaveLength(2)
+    expect(history[0]).toMatchObject({ html: '<p>after-render</p>', kind: 'edit' })
+    expect(history[1]).toMatchObject({ kind: 'render' })
+  })
+
+  it('編集履歴と描画履歴は同じ最大10件枠を共有し、古い順に破棄される', () => {
+    useSheetStore.setState({
+      history: Array.from({ length: MAX_HISTORY_LENGTH }, (_, i) => ({
+        html: `<p>${MAX_HISTORY_LENGTH - i}</p>`,
+        css: '',
+        json: '{}',
+        widthMm: null,
+        heightMm: null,
+        seq: MAX_HISTORY_LENGTH - i,
+        kind: 'render' as const,
+      })),
+      historySeq: MAX_HISTORY_LENGTH,
+    })
+
+    useSheetStore.getState().setHtmlContent('<p>editing</p>')
+    vi.advanceTimersByTime(EDIT_SNAPSHOT_DELAY_MS)
+
+    const history = useSheetStore.getState().history
+    expect(history).toHaveLength(MAX_HISTORY_LENGTH)
+    expect(history[0]).toMatchObject({ html: '<p>editing</p>', kind: 'edit' })
+    // 最古（seq=1）が押し出される
+    expect(history.some((item) => item.seq === 1)).toBe(false)
   })
 
   it('内容が変わっていなければ履歴を重複登録しない', () => {
@@ -221,7 +277,7 @@ describe('sheetStore（編集中スナップショットのサーバー保存）
     useAuthStore.setState({ session: null })
   })
 
-  it('ログイン済みなら編集履歴の登録ごとにPOST /api/history/editへ保存する', async () => {
+  it('ログイン済みなら編集中スナップショットをPOST /api/history/editへ保存する', async () => {
     const requests: { authorization: string | null; body: unknown }[] = []
     server.use(
       http.post('/api/history/edit', async ({ request }) => {
@@ -229,7 +285,7 @@ describe('sheetStore（編集中スナップショットのサーバー保存）
           authorization: request.headers.get('Authorization'),
           body: await request.json(),
         })
-        return new HttpResponse(null, { status: 201 })
+        return HttpResponse.json({ id: 'edit-1', kind: 'edit' }, { status: 201 })
       }),
     )
     useAuthStore.setState({ session: { access_token: 'token-xyz' } as never })
@@ -243,12 +299,41 @@ describe('sheetStore（編集中スナップショットのサーバー保存）
     expect(requests[0].body).toMatchObject({ html: '<p>editing</p>', json: { x: 1 } })
   })
 
+  // 編集中のデータを編集し続けた場合は行を増やさず、同じ行をPUTで上書きする。
+  it('同じ編集中スナップショットの2回目以降は、PUTで同じ行を上書きする', async () => {
+    let postCount = 0
+    const putPaths: string[] = []
+    server.use(
+      http.post('/api/history/edit', () => {
+        postCount += 1
+        return HttpResponse.json({ id: 'edit-42', kind: 'edit' }, { status: 201 })
+      }),
+      http.put('/api/history/edit/:id', ({ params }) => {
+        putPaths.push(String(params.id))
+        return HttpResponse.json({ id: params.id, kind: 'edit' })
+      }),
+    )
+    useAuthStore.setState({ session: { access_token: 'token-xyz' } as never })
+
+    useSheetStore.getState().setHtmlContent('<p>step1</p>')
+    useSheetStore.getState().commitEditSnapshot()
+    await vi.waitFor(() => expect(postCount).toBe(1))
+
+    useSheetStore.getState().setHtmlContent('<p>step2</p>')
+    useSheetStore.getState().commitEditSnapshot()
+    await vi.waitFor(() => expect(putPaths).toEqual(['edit-42']))
+
+    // 新規作成は最初の1回だけで、クライアント側の履歴も1件のまま
+    expect(postCount).toBe(1)
+    expect(useSheetStore.getState().history).toHaveLength(1)
+  })
+
   it('未ログインならサーバーへは保存せず、クライアント側の履歴だけに積む', async () => {
     let called = false
     server.use(
       http.post('/api/history/edit', () => {
         called = true
-        return new HttpResponse(null, { status: 201 })
+        return HttpResponse.json({ id: 'edit-1', kind: 'edit' }, { status: 201 })
       }),
     )
 

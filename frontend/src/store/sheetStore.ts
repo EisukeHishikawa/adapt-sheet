@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { RenderApiError, renderSheet, saveEditHistory } from '@/lib/api'
+import { RenderApiError, renderSheet, saveEditHistory, updateEditHistory } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
@@ -54,11 +54,12 @@ export type HistoryEntry = {
 export type HistoryKind = 'render' | 'edit'
 
 // seqは履歴ごとの通し番号。古い履歴が消えても振り直さず単調増加させる（ユーザー要望）。
-export type HistoryItem = HistoryEntry & { seq: number; kind: HistoryKind }
+// serverIdはログイン時にサーバーへ保存した行のID。同じ編集中スナップショットを上書きするために持つ。
+export type HistoryItem = HistoryEntry & { seq: number; kind: HistoryKind; serverId?: string }
 
 // docs/spec.md 2.2「履歴スライド機能」の上限。描画結果と編集中スナップショットで枠を共有し、
 // 超過分はseqが最小＝最古のものから削除する。
-const MAX_HISTORY_LENGTH = 10
+export const MAX_HISTORY_LENGTH = 10
 
 // 編集を止めてからスナップショットを積むまでの待ち時間。1打鍵ごとに積むと履歴が即座に
 // 埋まるため、入力が落ち着いた区切りだけを1件として残す。
@@ -136,6 +137,9 @@ type SheetState = {
   engine: RenderEngineId
   history: HistoryItem[]
   historySeq: number
+  // 現在編集中のスナップショットのseq。編集を続けても履歴を増やさず、この1件を上書きする
+  // （ADR-025）。描画直後や描画履歴を復元した直後は、次の編集で新しい1件を作るためnullにする。
+  activeEditSeq: number | null
   isLoading: boolean
   error: string | null
   successMessage: string | null
@@ -174,34 +178,55 @@ function scheduleEditSnapshot(get: () => SheetState): void {
   }, EDIT_SNAPSHOT_DELAY_MS)
 }
 
+// 保存要求を直列化する。保存の往復より先に次の編集が確定すると、まだIDを受け取っていない
+// スナップショットを二重に新規作成してしまうため。
+let editSaveChain: Promise<void> = Promise.resolve()
+
+function toJsonData(rawJson: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = rawJson === '' ? {} : JSON.parse(rawJson)
+    // 編集途中のJSONは配列や不正な値になり得るが、その場合もHTML側は残したいので空で送る。
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    return {}
+  }
+  return {}
+}
+
 // ログイン済みの場合のみ、編集中スナップショットをサーバーの履歴へも残す（kind="edit"として
 // 保存される）。編集操作を妨げないよう、結果は待たず失敗も画面へ出さない。
-function saveEditSnapshotToServer(entry: HistoryEntry, engine: RenderEngineId): void {
+function syncEditSnapshotToServer(seq: number, entry: HistoryEntry, engine: RenderEngineId): void {
   const accessToken = useAuthStore.getState().session?.access_token
   if (!accessToken) return
 
-  let jsonData: Record<string, unknown> = {}
-  try {
-    const parsed: unknown = entry.json === '' ? {} : JSON.parse(entry.json)
-    // 編集途中のJSONは配列や不正な値になり得るが、その場合もHTML側は残したいので空で送る。
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      jsonData = parsed as Record<string, unknown>
-    }
-  } catch {
-    jsonData = {}
+  const payload = {
+    engine,
+    html: entry.html,
+    css: entry.css,
+    json: toJsonData(entry.json),
+    width_mm: entry.widthMm,
+    height_mm: entry.heightMm,
   }
 
-  void saveEditHistory(
-    {
-      engine,
-      html: entry.html,
-      css: entry.css,
-      json: jsonData,
-      width_mm: entry.widthMm,
-      height_mm: entry.heightMm,
-    },
-    accessToken,
-  ).catch(() => undefined)
+  editSaveChain = editSaveChain
+    .then(async () => {
+      // 直前の保存でIDが確定していることがあるため、送信の直前にストアから引き直す。
+      const serverId = useSheetStore.getState().history.find((item) => item.seq === seq)?.serverId
+      if (serverId) {
+        await updateEditHistory(serverId, payload, accessToken)
+        return
+      }
+
+      const saved = await saveEditHistory(payload, accessToken)
+      useSheetStore.setState((state) => ({
+        history: state.history.map((item) =>
+          item.seq === seq ? { ...item, serverId: saved.id } : item,
+        ),
+      }))
+    })
+    .catch(() => undefined)
 }
 
 export const useSheetStore = create<SheetState>((set, get) => ({
@@ -215,6 +240,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   engine: 'gemini_free',
   history: [],
   historySeq: 0,
+  activeEditSeq: null,
   isLoading: false,
   error: null,
   successMessage: null,
@@ -240,7 +266,12 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     if (!entry) return
 
     get().commitEditSnapshot()
-    set(toEditorState(entry))
+    set({
+      ...toEditorState(entry),
+      // 編集中を選んだ場合はその1件の続きとして編集する。描画結果を選んだ場合は次の編集で
+      // 新しい編集中スナップショットを作る。
+      activeEditSeq: entry.kind === 'edit' ? entry.seq : null,
+    })
   },
   commitEditSnapshot: () => {
     cancelScheduledEditSnapshot()
@@ -251,15 +282,27 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     if (current.html === '' && current.css === '' && current.json === '') return
     if (state.history.some((item) => entriesEqual(item, current))) return
 
+    // 編集中スナップショットを編集し続けている間は、履歴を増やさず同じ1件を上書きする。
+    const activeIndex = state.history.findIndex((item) => item.seq === state.activeEditSeq)
+    if (activeIndex >= 0) {
+      const updated = { ...state.history[activeIndex], ...current }
+      const history = [...state.history]
+      history[activeIndex] = updated
+      set({ history })
+      syncEditSnapshotToServer(updated.seq, current, state.engine)
+      return
+    }
+
     const nextSeq = state.historySeq + 1
     set({
       historySeq: nextSeq,
+      activeEditSeq: nextSeq,
       history: [{ ...current, seq: nextSeq, kind: 'edit' as const }, ...state.history].slice(
         0,
         MAX_HISTORY_LENGTH,
       ),
     })
-    saveEditSnapshotToServer(current, state.engine)
+    syncEditSnapshotToServer(nextSeq, current, state.engine)
   },
   dismissError: () => set({ error: null }),
   dismissSuccessMessage: () => set({ successMessage: null }),
@@ -306,6 +349,8 @@ export const useSheetStore = create<SheetState>((set, get) => ({
           isLoading: false,
           successMessage: '描画が完了しました',
           historySeq: nextSeq,
+          // 描画結果が新しい基準になるため、次の編集は新しい編集中スナップショットとして積む。
+          activeEditSeq: null,
           history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(
             0,
             MAX_HISTORY_LENGTH,

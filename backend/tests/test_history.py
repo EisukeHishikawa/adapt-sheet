@@ -270,6 +270,79 @@ def test_post_history_edit_saves_snapshot_with_edit_kind(monkeypatch):
         _clear_db_override()
 
 
+def test_put_history_edit_updates_existing_snapshot(monkeypatch):
+    # 編集中スナップショットを編集し続けても行は増やさず、同じ行を上書きする。
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    existing = save_history(
+        db_session,
+        user_id="user-123",
+        engine="gemini_free",
+        html="<p>before</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+        kind="edit",
+    )
+    _override_db(db_session)
+    try:
+        response = client.put(
+            f"/api/history/edit/{existing.id}",
+            json={"engine": "gemini_free", "html": "<p>after</p>", "css": "", "json": {"x": "1"}},
+            headers={"Authorization": _make_bearer_token()},
+        )
+        assert response.status_code == 200
+        assert response.json()["html"] == "<p>after</p>"
+
+        rows = list_history(db_session, user_id="user-123")
+        assert len(rows) == 1
+        assert rows[0].html == "<p>after</p>"
+        assert rows[0].kind == "edit"
+    finally:
+        _clear_db_override()
+
+
+def test_put_history_edit_returns_404_for_other_users_row(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    existing = save_history(
+        db_session,
+        user_id="other-user",
+        engine="gemini_free",
+        html="<p>other</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+        kind="edit",
+    )
+    _override_db(db_session)
+    try:
+        response = client.put(
+            f"/api/history/edit/{existing.id}",
+            json={"html": "<p>hacked</p>"},
+            headers={"Authorization": _make_bearer_token(sub="user-123")},
+        )
+        assert response.status_code == 404
+        assert list_history(db_session, user_id="other-user")[0].html == "<p>other</p>"
+    finally:
+        _clear_db_override()
+
+
+def test_put_history_edit_returns_403_when_not_logged_in():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.put(
+            "/api/history/edit/00000000-0000-0000-0000-000000000000",
+            json={"html": "<p>x</p>"},
+        )
+        assert response.status_code == 403
+    finally:
+        _clear_db_override()
+
+
 def test_post_history_edit_returns_403_when_not_logged_in():
     db_session = _sqlite_session()
     _override_db(db_session)

@@ -29,7 +29,7 @@ from app.services.ai_client import (
     validate_render_result,
 )
 from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
-from app.services.history import list_history, save_history
+from app.services.history import list_history, save_history, update_edit_history
 from app.services.pdf2htmlex_client import (
     PDFHtmlExtractor as Pdf2HtmlExExtractor,
     get_pdf2htmlex_extractor,
@@ -263,6 +263,36 @@ def create_edit_history(
         height_mm=payload.height_mm,
         kind="edit",
     )
+    return _to_history_response(row)
+
+
+@app.put(
+    "/api/history/edit/{entry_id}",
+    response_model=HistoryItemResponse,
+    response_model_by_alias=True,
+)
+def update_edit_history_entry(
+    entry_id: str,
+    payload: HistoryEditRequest,
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+    db_session: Session = Depends(get_db_session),
+) -> HistoryItemResponse:
+    if current_user is None:
+        raise HTTPException(status_code=403)
+
+    row = update_edit_history(
+        db_session,
+        entry_id=entry_id,
+        user_id=current_user.sub,
+        engine=payload.engine,
+        html=payload.html,
+        css=payload.css,
+        json_data=payload.json_,
+        width_mm=payload.width_mm,
+        height_mm=payload.height_mm,
+    )
+    if row is None:
+        raise HTTPException(status_code=404)
     return _to_history_response(row)
 
 

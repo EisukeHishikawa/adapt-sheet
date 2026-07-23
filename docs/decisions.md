@@ -242,6 +242,7 @@
   - **依存性注入**: `app/db.py`は`get_db_session`（DB必須、未設定ならRuntimeError）と`get_db_session_or_none`（未設定ならNoneを返す）の2種類を公開する。`/api/render`は後者を使いDB未設定でも描画自体を止めない。`/api/history`は前者を使う（DB無しでの一覧取得はそもそも成立しないため）。
 - **理由**: 素のPostgresコンテナは既存の`docker compose up`フローにそのまま統合でき、Supabase Local CLIのような多コンテナスタックの起動コスト・新規ツール導入を避けられる。自動保存は「保存を意識させない」体験を優先し、明示的な保存ボタンのUI設計判断を本ステップの対象外にできる。SQLAlchemy汎用型を使うことで、実PostgreSQLを起動しないpytestでもモデル・保存/取得ロジックを検証できる（CLAUDE.mdのTDD徹底）。
 - **トレードオフ**: 保存済み履歴を画面上で閲覧・復元するUI（クライアント側の`HistorySlider`とは別の「サーバー保存履歴」ビュー）は本ステップでは実装しない（残課題、docs/spec.md 5章）。名前付きテンプレート機能も対象外。Supabase Local CLIを使わないため、Auth（`auth.users`）との整合はローカルでは検証できず、`user_id`の外部キー制約なしという設計を本番でも維持する。
+  - **追記（残課題の解消）**: 上記「サーバー保存履歴ビュー」は`frontend/src/components/HistoryArchive.tsx`として実装した。ログイン確定時にhistoryが空であれば`GET /api/history`から取り直して`HistorySlider`の最大10件枠を復元し（`sheetStore.hydrateHistoryFromServer`）、それより古い過去データは`HistoryArchive`が開いたときにのみ同エンドポイントを呼び直して一覧表示・復元する（既存の50件上限はそのまま。真のページネーションは未実装）。
 - **関連**: ADR-007（認証・DBにSupabase採用）、ADR-009（Docker Compose化）、ADR-016（軽量イメージ、psycopg[binary]の選定理由と同じ方針）、ADR-018（JWT検証・`current_user`）。
 
 ---

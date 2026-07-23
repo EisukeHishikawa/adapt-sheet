@@ -508,6 +508,83 @@ describe('sheetStore（モデル選択・ADR-015）', () => {
 
 // DEVELOPMENT.md ステップ27のTDD要件: authStoreにログイン済みセッションがある場合、
 // fetchRenderがAuthorizationヘッダーへaccess_tokenを載せて送信することを検証する。
+// ユーザー要件: ログイン後にDBへ保存した履歴・編集中スナップショットは、セッションが切れて
+// （リロード等で）sheetStoreのhistoryがメモリ上から失われても、再ログイン後にDBから取り直して
+// 最大10件まで表示する。
+describe('sheetStore（サーバー履歴の復元・セッション切れ後の再表示）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+    useAuthStore.setState({ session: null })
+  })
+
+  it('ログイン済みでhistoryが空の場合、GET /api/historyの結果を新しい順で最大10件までhistoryへ反映する', async () => {
+    const rows = Array.from({ length: 12 }, (_, i) => {
+      const n = 12 - i
+      return {
+        id: `id-${n}`,
+        engine: 'gemini_free',
+        html: `<p>${n}</p>`,
+        css: '',
+        json: { n },
+        width_mm: null,
+        height_mm: null,
+        kind: n % 2 === 0 ? 'render' : 'edit',
+        created_at: new Date(2026, 0, n).toISOString(),
+      }
+    })
+    server.use(http.get('/api/history', () => HttpResponse.json(rows)))
+    useAuthStore.setState({ session: { access_token: 'token-xyz' } as never })
+
+    await useSheetStore.getState().hydrateHistoryFromServer()
+
+    const history = useSheetStore.getState().history
+    expect(history).toHaveLength(MAX_HISTORY_LENGTH)
+    expect(history[0]).toMatchObject({
+      html: '<p>12</p>',
+      kind: 'render',
+      seq: MAX_HISTORY_LENGTH,
+      serverId: 'id-12',
+    })
+    expect(history.at(-1)).toMatchObject({ html: '<p>3</p>', seq: 1, serverId: 'id-3' })
+    expect(useSheetStore.getState().historySeq).toBe(MAX_HISTORY_LENGTH)
+  })
+
+  it('未ログインなら何もせず、historyは空のままになる', async () => {
+    await useSheetStore.getState().hydrateHistoryFromServer()
+
+    expect(useSheetStore.getState().history).toHaveLength(0)
+  })
+
+  it('GET /api/historyが失敗しても、エラー表示にはならず既存の画面表示のまま保つ', async () => {
+    server.use(http.get('/api/history', () => new HttpResponse(null, { status: 500 })))
+    useAuthStore.setState({ session: { access_token: 'token-xyz' } as never })
+
+    await useSheetStore.getState().hydrateHistoryFromServer()
+
+    expect(useSheetStore.getState().history).toHaveLength(0)
+    expect(useSheetStore.getState().error).toBeNull()
+  })
+
+  it('restoreFromServerEntryで、履歴の枠外にある過去データの内容をエディタへ復元できる', () => {
+    useSheetStore.getState().restoreFromServerEntry({
+      id: 'old-1',
+      engine: 'gemini_free',
+      html: '<p>old</p>',
+      css: '/* old */',
+      json: { label: 'old' },
+      width_mm: 210,
+      height_mm: 297,
+      kind: 'render',
+      created_at: '2026-01-01T00:00:00Z',
+    })
+
+    expect(useSheetStore.getState().htmlContent).toBe('<p>old</p>')
+    expect(useSheetStore.getState().cssContent).toBe('/* old */')
+    expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify({ label: 'old' }, null, 2))
+    expect(useSheetStore.getState().activeEditSeq).toBeNull()
+  })
+})
+
 describe('sheetStore（ログイン状態の反映・ステップ27）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)

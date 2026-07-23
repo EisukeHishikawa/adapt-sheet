@@ -29,6 +29,16 @@ function App() {
     return unsubscribe
   }, [])
 
+  // ログインが確定した時点でhistoryが空なら、DB保存済みの履歴を取り直して表示する。sheetStoreは
+  // メモリ上のみでリロード等では保持されないため、セッションが切れて履歴が見えなくなっても
+  // 再ログイン後にここで復元される。既にhistoryがある間は上書きしない（進行中の編集を守るため）。
+  const session = useAuthStore((state) => state.session)
+  useEffect(() => {
+    if (!session) return
+    if (useSheetStore.getState().history.length > 0) return
+    void useSheetStore.getState().hydrateHistoryFromServer()
+  }, [session])
+
   return (
     // md未満（モバイル）はh-screen固定を外してページ全体を縦スクロールさせ、2カラムを縦積みにする。
     // md以上は1画面完結（h-screen＋各パネル内スクロール）を維持する。

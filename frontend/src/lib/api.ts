@@ -129,6 +129,22 @@ export async function updateEditHistory(
   )
 }
 
+// GET /api/history。ログイン済みユーザーがDBへ保存した生成履歴・編集中スナップショットの一覧
+// （新しい順、最大50件。backend/app/services/history.MAX_HISTORY_ITEMS）を取得する。
+// セッションが切れて（リロード等で）sheetStoreのhistoryがメモリ上から失われた後の
+// 再表示・過去データ閲覧（HistoryArchive）の両方から呼ばれる。
+export async function getHistory(accessToken: string): Promise<HistoryItemResponse[]> {
+  const response = await fetch('/api/history', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
+
+  return (await response.json()) as HistoryItemResponse[]
+}
+
 async function requestEditHistory(
   path: string,
   method: 'POST' | 'PUT',

@@ -69,8 +69,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 - モジュール構成（`infra/modules/`）
   - `frontend`: CloudFront + S3（非公開バケット＋OAC、SPAフォールバック）
   - `lambda`: Lambda関数の共通モジュール。`backend`（入口エンドポイント、メモリ4GB既定、SSM読み取り＋SSM経由KMS復号の最小権限）と、`docling`/`pdf2htmlex`（内部専用、AWS_IAM認証Function URL、backendのみ呼び出し許可。ADR-026）の3関数で共用する
-  - `api_gateway`: REST API（REGIONAL）→ backend Lambdaプロキシ（WAF関連付けのためHTTP APIではなくREST）。docling/pdf2htmlexはAPI Gatewayを経由しない
-  - `waf`: AWSマネージドルール＋IPレート制限。API Gatewayステージへ関連付け
+  - `api_gateway`: REST API（REGIONAL）→ backend Lambdaプロキシ。docling/pdf2htmlexはAPI Gatewayを経由しない。ステージ単位のスロットリング（`aws_api_gateway_method_settings`）で過度なAPIコールを防ぐ（WAFは使わない。ADR-027）
   - `ecr`: backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制）
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
 - state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
@@ -90,7 +89,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 ## 6. 運用時の注意点
 
 - **APIキーのローテーション**: Parameter Store（SecureString）の値を更新後、Lambdaの実行環境を入れ替える（新デプロイ or 再デプロイ）ことで、次のコールドスタート時に新しいキーが読み込まれる（ADR-017。キャッシュはコールドスタート単位）。
-- **レート制限**: 未認証エリアはIP単位、認証エリアはユーザーID単位でAWS WAFのレート制限を設定・監視する（[architecture.md](./architecture.md#3-セキュリティ概要図) 参照）。
+- **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（全メソッド合算、認証有無を区別しない）で過度なAPIコールを防ぐ（ADR-027、[architecture.md](./architecture.md#3-セキュリティ概要図) 参照）。
 - **ロールバック**: Terraform管理下のため、問題発生時は直前のTerraform state / GitHub Actionsのデプロイ履歴から切り戻す。
 
 ---

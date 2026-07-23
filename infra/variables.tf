@@ -82,10 +82,16 @@ variable "use_mock_ai" {
   default     = "false"
 }
 
-variable "waf_rate_limit" {
-  description = "WAFのレートベースルール上限（5分あたり・IP単位のリクエスト数）"
+variable "api_throttle_rate_limit" {
+  description = "API Gatewayステージ全体（全メソッド合算）の定常リクエスト数上限（req/秒。ADR-027）"
   type        = number
-  default     = 2000
+  default     = 50
+}
+
+variable "api_throttle_burst_limit" {
+  description = "API Gatewayステージ全体（全メソッド合算）のバースト上限（ADR-027）"
+  type        = number
+  default     = 100
 }
 
 variable "ecr_keep_last_images" {

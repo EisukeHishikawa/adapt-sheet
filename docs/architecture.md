@@ -19,7 +19,6 @@ flowchart LR
         LambdaEntry["Lambda (入口エンドポイント)\nFastAPI + Lambda Web Adapter\nPyMuPDFレイアウト変換を内包 (ADR-014)\nengineごとの分岐・ゲート判定 (ADR-015)"]
         LambdaDocling["Lambda (DoclingのPDF→HTML変換)\nFunction URL・AWS_IAM認証 (ADR-015/026)"]
         LambdaPdf2HtmlEx["Lambda (pdf2htmlEXのPDF→HTML変換)\nFunction URL・AWS_IAM認証 (ADR-015/026)"]
-        WAF["AWS WAF"]
     end
 
     subgraph External["外部サービス"]
@@ -30,7 +29,7 @@ flowchart LR
     end
 
     Browser -->|静的アセット取得| CF --> S3
-    Browser -->|API呼び出し| WAF --> APIGW --> LambdaEntry
+    Browser -->|API呼び出し (ステージ単位スロットリング, ADR-027)| APIGW --> LambdaEntry
     LambdaEntry -->|変換エンジン選択時・SigV4署名 (HTTP, ADR-026)| LambdaDocling
     LambdaEntry -->|変換エンジン選択時・SigV4署名 (HTTP, ADR-026)| LambdaPdf2HtmlEx
     LambdaEntry -->|生成AI選択時・PDFを直接添付 (ADR-015)| Gemini
@@ -81,16 +80,16 @@ sequenceDiagram
 
 ## 3. セキュリティ概要図
 
-未認証エリアと認証エリアのアクセス制御の違い（詳細は [`spec.md`](./spec.md) の要件、決定理由は [`decisions.md`](./decisions.md) を参照）。
+未認証エリアと認証エリアのアクセス制御の違い（詳細は [`spec.md`](./spec.md) の要件、決定理由は [`decisions.md`](./decisions.md) を参照）。API Gatewayのステージ単位スロットリングはIPアドレスやユーザーIDを区別せず全体合算でカウントする点に注意（ADR-027）。
 
 ```mermaid
 flowchart TD
-    User["ユーザー"] --> WAF["AWS WAF\n(IP制限・レート制限)"]
-    WAF --> Router{"認証トークンあり?"}
+    User["ユーザー"] --> APIGW["API Gateway\n(ステージ単位スロットリング)"]
+    APIGW --> Router{"認証トークンあり?"}
 
-    Router -->|なし| Public["未認証エリア\n・ステートレスな変換/生成のみ\n・DBアクセス不可\n・IP単位レート制限"]
+    Router -->|なし| Public["未認証エリア\n・ステートレスな変換/生成のみ\n・DBアクセス不可\n・ステージ全体合算のスロットリング"]
     Router -->|あり| SupabaseAuthCheck["Supabase AuthでJWT検証"]
-    SupabaseAuthCheck -->|有効| Private["認証エリア\n・Supabaseへの保存/閲覧許可\n・ユーザーID単位レート制限"]
+    SupabaseAuthCheck -->|有効| Private["認証エリア\n・Supabaseへの保存/閲覧許可\n・ステージ全体合算のスロットリング"]
     SupabaseAuthCheck -->|無効| Reject["401/403エラー返却"]
 ```
 

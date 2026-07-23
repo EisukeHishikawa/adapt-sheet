@@ -1,5 +1,3 @@
-# WAF（REGIONAL）を前段に付けられるよう、HTTP APIではなくREST API（REGIONAL）を用いる。
-# WAFv2のWeb ACL関連付けはREST APIステージに対応するため（HTTP APIは非対応）。
 resource "aws_api_gateway_rest_api" "this" {
   name = var.name
 
@@ -78,6 +76,20 @@ resource "aws_api_gateway_stage" "this" {
   rest_api_id   = aws_api_gateway_rest_api.this.id
   deployment_id = aws_api_gateway_deployment.this.id
   stage_name    = var.stage_name
+}
+
+# ステージ全体（全メソッド合算）のリクエスト数を制限する（WAFを使わない代替。ADR-027）。
+# API Gatewayのスロットリングはクライアント（IP等）を区別せず合算でカウントするため、
+# WAFのレートベースルールと異なり1クライアントの連打が他の利用者にも影響しうる。
+resource "aws_api_gateway_method_settings" "default" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  stage_name  = aws_api_gateway_stage.this.stage_name
+  method_path = "*/*"
+
+  settings {
+    throttling_rate_limit  = var.throttle_rate_limit
+    throttling_burst_limit = var.throttle_burst_limit
+  }
 }
 
 # API GatewayからのLambda呼び出しを許可する。

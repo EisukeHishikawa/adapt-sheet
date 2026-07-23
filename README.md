@@ -10,7 +10,7 @@
 - **バックエンド**: Python / FastAPI / PyMuPDF / Docling / pdf2htmlEX / Gemini SDK / Anthropic SDK / OpenAI SDK / SQLAlchemy
 - **型同期**: openapi-typescript（FastAPIの`openapi.json`からフロント用TypeScript型を生成。ADR-005参照）
 - **テスト**: Vitest + React Testing Library + MSW / pytest / Playwright
-- **インフラ**: Terraform / AWS (Lambda, CloudFront, S3, API Gateway, WAF) / GitHub Actions
+- **インフラ**: Terraform / AWS (Lambda, CloudFront, S3, API Gateway) / GitHub Actions
 - **ツールバージョン管理**: mise（ホスト側で直接実行するツールを`mise.toml`で固定。ADR-023参照）
 - **認証・DB**: Supabase（Auth + PostgreSQL）
 

@@ -18,3 +18,15 @@ variable "stage_name" {
   type        = string
   default     = "prod"
 }
+
+variable "throttle_rate_limit" {
+  description = "ステージ全体（全メソッド合算）の定常リクエスト数上限（req/秒）"
+  type        = number
+  default     = 50
+}
+
+variable "throttle_burst_limit" {
+  description = "ステージ全体（全メソッド合算）のバースト上限（同時トークンバケット容量）"
+  type        = number
+  default     = 100
+}

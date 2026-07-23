@@ -25,5 +25,6 @@ pdf2htmlex_lambda_timeout     = 60
 # 本番は実AIを叩く。
 use_mock_ai = "false"
 
-# WAFのレート制限（5分あたり・IP単位）。
-waf_rate_limit = 2000
+# API Gatewayステージ全体（全メソッド合算）のスロットリング（IP単位ではない。ADR-027）。
+api_throttle_rate_limit  = 50
+api_throttle_burst_limit = 100

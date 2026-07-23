@@ -1,10 +1,12 @@
+import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/authStore'
 
 // EngineSelectのgated engine（gemini/claude/openai）を使うにはログインが必要（DEVELOPMENT.md
 // ステップ27）。VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY未設定の環境ではisAuthAvailableがfalseに
 // なり、ヘッダーには何も表示しない（Supabaseプロジェクト未作成のローカル開発を壊さないため）。
-// アカウント作成はscripts/create_user.shによる管理者操作のみのため、新規登録の導線は持たない（ADR-021）。
+// アカウント作成はscripts/create_user.shによる管理者操作のみのため、新規登録の導線は持たず、
+// その旨を未ログイン表示に注記して利用者に明示する（ADR-021）。
 // ログイン手段はGoogleアカウントのみで、メールアドレス・パスワードの入力欄は持たない（ADR-022）。
 
 export function AuthPanel() {
@@ -35,12 +37,18 @@ export function AuthPanel() {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" disabled={isSubmitting} onClick={() => void signInWithGoogle()}>
-        <GoogleMark className="size-3.5" />
-        Googleでログイン
-      </Button>
-      {error && <span className="text-xs text-destructive">{error}</span>}
+    <div className="flex flex-col items-end gap-1.5">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" disabled={isSubmitting} onClick={() => void signInWithGoogle()}>
+          <GoogleMark className="size-3.5" />
+          Googleでログイン
+        </Button>
+        {error && <span className="text-xs text-destructive">{error}</span>}
+      </div>
+      <p className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[11px] leading-none text-muted-foreground">
+        <Lock aria-hidden="true" className="size-3" />
+        アカウント登録はシステム管理者のみ可能です
+      </p>
     </div>
   )
 }

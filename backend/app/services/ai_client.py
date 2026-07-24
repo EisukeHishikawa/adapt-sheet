@@ -207,6 +207,11 @@ def build_hybrid_prompt(
 def _common_output_rules(size_line: str, prompt: str) -> str:
     """build_prompt/build_hybrid_prompt共通の出力形式・フォントサイズ・プレースホルダ規約。"""
     return (
+        "【文書構造（セマンティックHTML）】\n"
+        "ページ全体を意味の伝わるセマンティックHTML5要素で構造化してください: 帳票名・発行元情報・"
+        "発行日等の冒頭部分は<header>、明細等の主要コンテンツは<main>（または区切りごとに<section>）、"
+        "合計・振込先・備考等の末尾情報は<footer>で囲んでください。<div>の羅列にせず、"
+        "<header>/<main>/<footer>を帳票のどの部分に対応するか判別できる形で使ってください。\n"
         "【フォントサイズと余白（重要）】\n"
         "生成するCSSでは、すべての文字要素に明示的にfont-sizeを指定してください。"
         "特に<h1><h2><h3>などの見出しタグはブラウザ既定のfont-sizeが大きすぎる（h1は約32px）ため、"

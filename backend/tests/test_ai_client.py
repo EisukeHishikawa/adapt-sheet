@@ -92,6 +92,15 @@ def test_build_prompt_ignores_current_html_and_json_when_has_pdf():
     assert '{"name": "sample"}' not in prompt
 
 
+def test_build_prompt_instructs_semantic_document_structure():
+    # div一辺倒ではなく<header>/<main>/<footer>で帳票を構造化させる契約を固定する。
+    prompt = build_prompt(prompt="x", width_mm=None, height_mm=None, has_pdf=True)
+
+    assert "<header>" in prompt
+    assert "<main>" in prompt
+    assert "<footer>" in prompt
+
+
 def test_build_prompt_instructs_not_to_enlarge_font_sizes():
     # 帳票として過大にならないよう、AIにフォントを大きくしない指示を与える契約を固定する。
     prompt = build_prompt(prompt="x", width_mm=None, height_mm=None, has_pdf=True)

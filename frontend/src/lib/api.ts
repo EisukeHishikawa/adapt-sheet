@@ -11,11 +11,13 @@ export type HistoryItemResponse = components['schemas']['HistoryItemResponse']
 
 // docs/spec.md 3.1の契約に沿ったリクエスト項目。
 // cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提）。
-// jsonも持たない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
-// htmlも持たない（生成AIへの入力はPDFファイルの直接添付のみ。変換エンジンもpdfのみを見る）。
+// current_html/current_jsonは、PDFを添付しない生成AIリクエストでのみ意味を持つ
+// （PDFがある場合はPDFファイルの直接添付を正とし、backendがこの2項目を無視する）。
 export type RenderRequestFields = {
   prompt?: string
   pdf?: File
+  current_html?: string
+  current_json?: string
   width_mm?: number
   height_mm?: number
   // EngineSelectで選択した生成エンジン。gemini_free/gemini/claude/openai/

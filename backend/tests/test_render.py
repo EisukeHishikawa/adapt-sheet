@@ -138,6 +138,59 @@ def test_render_threads_prompt_into_ai_prompt():
         app.dependency_overrides.pop(get_ai_client_factory, None)
 
 
+def test_render_sends_current_html_and_json_to_ai_when_no_pdf():
+    # PDFが無い生成AIリクエストでは、画面のHTML/JSON（current_html/current_json）を
+    # プロンプトへ含めて送る契約を検証する。
+    captured_prompts = []
+
+    class _RecordingAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            captured_prompts.append(prompt)
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    _override_ai_client(_RecordingAIClient())
+    try:
+        response = client.post(
+            "/api/render",
+            data={
+                "current_html": '<div class="page">{{name}}</div>',
+                "current_json": '{"name": "sample"}',
+            },
+        )
+        assert response.status_code == 200
+        assert '<div class="page">{{name}}</div>' in captured_prompts[0]
+        assert '{"name": "sample"}' in captured_prompts[0]
+    finally:
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+
+
+def test_render_ignores_current_html_and_json_when_pdf_attached():
+    # PDFがある場合はPDFの直接添付を正とし、current_html/current_jsonが送られても
+    # プロンプトへは含めない。
+    captured_prompts = []
+
+    class _RecordingAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            captured_prompts.append(prompt)
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    _override_ai_client(_RecordingAIClient())
+    try:
+        response = client.post(
+            "/api/render",
+            data={
+                "current_html": '<div class="page">{{name}}</div>',
+                "current_json": '{"name": "sample"}',
+            },
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+        assert '<div class="page">{{name}}</div>' not in captured_prompts[0]
+        assert '{"name": "sample"}' not in captured_prompts[0]
+    finally:
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+
+
 def test_render_ignores_json_field_if_sent():
     # jsonはAIへの入力として不要なため、リクエストの宣言済みフィールドではなくなった。
     # クライアントが送っても未知のフォームフィールドとしてFastAPIが無視し、

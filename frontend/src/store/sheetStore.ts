@@ -367,10 +367,10 @@ export const useSheetStore = create<SheetState>((set, get) => ({
 
     try {
       // cssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提）。
-      // jsonContentも送らない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
-      // htmlContentも送らない（生成AIへの入力はPDFファイルの直接添付のみで、
-      // HTML・Docling抽出テキストは使わない）。
-      const { promptContent, pdfFile, widthMm, heightMm, engine } = get()
+      // PDFがある場合はPDFの直接添付を正とし、current_html/current_jsonは送らない
+      // （backend側もhas_pdf=Trueの間は無視する）。PDFが無い場合は、現在画面に
+      // 表示中のHTML/JSONを生成AIへの入力として送る。
+      const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } = get()
       // gemini/claude/openai（標準プラン）はログイン済みユーザーのみ利用可能。
       // 未ログイン時はaccess_tokenがundefinedのままrenderSheetへ渡り、
       // ゲート対象engineはバックエンドが403を返す。
@@ -379,6 +379,8 @@ export const useSheetStore = create<SheetState>((set, get) => ({
         {
           prompt: promptContent,
           pdf: pdfFile ?? undefined,
+          current_html: pdfFile ? undefined : htmlContent || undefined,
+          current_json: pdfFile ? undefined : jsonContent || undefined,
           width_mm: widthMm ?? undefined,
           height_mm: heightMm ?? undefined,
           engine,
@@ -404,6 +406,10 @@ export const useSheetStore = create<SheetState>((set, get) => ({
           historySeq: nextSeq,
           // 描画結果が新しい基準になるため、次の編集は新しい編集中スナップショットとして積む。
           activeEditSeq: null,
+          // 添付したPDFは1回の描画にのみ使う。応答が返った時点で解除し、次回以降は
+          // 現在のHTML/JSON（今回の描画結果）を基準に生成させる。
+          pdfFile: null,
+          pdfFileName: null,
           history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(
             0,
             MAX_HISTORY_LENGTH,

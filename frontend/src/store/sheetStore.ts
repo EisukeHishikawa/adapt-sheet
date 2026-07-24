@@ -258,7 +258,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   pdfFile: null,
   pdfFileName: null,
   ...dimensionsFor('A4', 'tate'),
-  engine: 'gemini_free',
+  engine: 'hybrid',
   history: [],
   historySeq: 0,
   activeEditSeq: null,

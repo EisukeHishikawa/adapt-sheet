@@ -19,6 +19,13 @@ type EngineDefinition = {
 // AIを介さない変換エンジン（PDF→HTML変換結果をそのまま描画結果にする）3種。
 const ENGINES: readonly EngineDefinition[] = [
   {
+    id: 'hybrid',
+    label: '精密復元（無料）',
+    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（PDF添付必須）',
+    icon: Layers,
+    gated: false,
+  },
+  {
     id: 'gemini_free',
     label: 'Gemini API（無料）',
     description: 'PDFを直接読み取り、無料枠モデルで整形します',
@@ -45,13 +52,6 @@ const ENGINES: readonly EngineDefinition[] = [
     description: 'OpenAIのモデルで高精度に整形します',
     icon: Brain,
     gated: true,
-  },
-  {
-    id: 'hybrid',
-    label: 'ハイブリッド',
-    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（PDF添付必須）',
-    icon: Layers,
-    gated: false,
   },
   {
     id: 'docling',

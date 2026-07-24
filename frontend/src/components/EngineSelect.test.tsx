@@ -26,11 +26,11 @@ describe('EngineSelect（描画エンジン選択）', () => {
     const options = await screen.findAllByRole('option')
     const labels = options.map((option) => option.textContent)
     expect(labels).toHaveLength(8)
-    expect(labels[0]).toContain('Gemini API（無料）')
-    expect(labels[1]).toContain('Gemini API')
-    expect(labels[2]).toContain('Claude API')
-    expect(labels[3]).toContain('OpenAI API')
-    expect(labels[4]).toContain('ハイブリッド')
+    expect(labels[0]).toContain('精密復元')
+    expect(labels[1]).toContain('Gemini API（無料）')
+    expect(labels[2]).toContain('Gemini API')
+    expect(labels[3]).toContain('Claude API')
+    expect(labels[4]).toContain('OpenAI API')
     expect(labels[5]).toContain('Docling')
     expect(labels[6]).toContain('pdf2htmlEX')
     expect(labels[7]).toContain('PyMuPDF')
@@ -39,7 +39,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     expect(screen.getByText('PDFのレイアウトを座標付きで再現します（AIなし）')).toBeInTheDocument()
   })
 
-  it('標準プラン・Claude・OpenAIには要アカウント登録のロックアイコンが表示される（ハイブリッドは無料枠のため対象外）', async () => {
+  it('標準プラン・Claude・OpenAIには要アカウント登録のロックアイコンが表示される（精密復元は無料枠のため対象外）', async () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 

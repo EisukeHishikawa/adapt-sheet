@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { Bot, Brain, FileCode2, FileText, Gem, Lock, Rows3, Sparkles } from 'lucide-react'
+import { Bot, Brain, FileCode2, FileText, Gem, Layers, Lock, Rows3, Sparkles } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSheetStore } from '@/store/sheetStore'
 import type { RenderEngineId } from '@/store/sheetStore'
@@ -15,9 +15,16 @@ type EngineDefinition = {
   gated: boolean
 }
 
-// 描画エンジンの一覧。生成AI（LLMがHTML/CSS/JSONを作る）4種と、
+// 描画エンジンの一覧。生成AI（LLMがHTML/CSS/JSONを作る）5種と、
 // AIを介さない変換エンジン（PDF→HTML変換結果をそのまま描画結果にする）3種。
 const ENGINES: readonly EngineDefinition[] = [
+  {
+    id: 'hybrid',
+    label: '精密復元（無料）',
+    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（PDF添付必須）',
+    icon: Layers,
+    gated: false,
+  },
   {
     id: 'gemini_free',
     label: 'Gemini API（無料）',

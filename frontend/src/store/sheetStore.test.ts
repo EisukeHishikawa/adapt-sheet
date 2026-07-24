@@ -19,7 +19,7 @@ const initialSheetState = {
   widthMm: null,
   heightMm: null,
   // setStateは浅いマージのため、リセットに含めないとテスト間で前回選択したengineが漏れる。
-  engine: 'gemini_free' as const,
+  engine: 'hybrid' as const,
   history: [],
   // 履歴の通し番号カウンタ。setStateは浅いマージのため、リセットに含めないとテスト間で
   // seqが漏れて番号検証がずれる。
@@ -490,14 +490,14 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
 })
 
 // EngineSelectで選択したengineがfetchRenderのリクエストへ反映されること、
-// 既定値がgemini_free（無料枠）であることを検証する。
+// 既定値がhybrid（精密復元・無料枠）であることを検証する。
 describe('sheetStore（モデル選択）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })
 
-  it('engineの既定値はgemini_free（無料枠）である', () => {
-    expect(useSheetStore.getState().engine).toBe('gemini_free')
+  it('engineの既定値はhybrid（精密復元・無料枠）である', () => {
+    expect(useSheetStore.getState().engine).toBe('hybrid')
   })
 
   it('setEngineでengineを変更できる', () => {

@@ -20,7 +20,7 @@ export type RenderRequestFields = {
   current_json?: string
   width_mm?: number
   height_mm?: number
-  // EngineSelectで選択した生成エンジン。gemini_free/gemini/claude/openai/
+  // EngineSelectで選択した生成エンジン。gemini_free/gemini/claude/openai/hybrid/
   // docling/pdf2htmlex/pymupdfのいずれか。
   engine?: string
 }

@@ -24,6 +24,7 @@ from app.services.ai_client import (
     AIGenerationError,
     CONVERTER_ENGINES,
     GATED_ENGINES,
+    build_hybrid_prompt,
     build_prompt,
     get_ai_client_factory,
     validate_render_result,
@@ -122,6 +123,40 @@ async def render(
             height_mm=height_mm,
         )
         return RenderResponse(html=html, css="", json_={})
+
+    if engine == "hybrid":
+        # PyMuPDF（正確なフォントサイズ・位置）とDocling（表・段落構造）の変換結果を、
+        # PDF本体と一緒にGemini（VLM）へ渡して1つのHTML/CSS/JSONへ統合させる。PDF添付必須。
+        if pdf is None:
+            raise HTTPException(status_code=400)
+        content = await pdf.read()
+        filename = pdf.filename or "uploaded.pdf"
+        pymupdf_html, docling_html = await asyncio.gather(
+            asyncio.to_thread(layout_converter.convert_to_html, filename, content),
+            asyncio.to_thread(html_extractor.convert_to_html, filename, content),
+        )
+        prompt_text = build_hybrid_prompt(
+            prompt=prompt,
+            width_mm=width_mm,
+            height_mm=height_mm,
+            pymupdf_html=pymupdf_html,
+            docling_html=docling_html,
+        )
+        ai_client = ai_client_factory(engine)
+        result = await asyncio.to_thread(ai_client.generate, prompt_text, content)
+        validate_render_result(result)
+
+        _save_history(
+            db_session,
+            current_user,
+            engine=engine,
+            html=result.html,
+            css=result.css,
+            json_data=result.data,
+            width_mm=width_mm,
+            height_mm=height_mm,
+        )
+        return RenderResponse(html=result.html, css=result.css, json_=result.data)
 
     # 生成AI（gemini_free。gemini/claude/openaiは上記ゲートにより現状ここへは到達しない）。
     # PDFがある場合はマルチモーダル入力として直接添付する（PyMuPDF/Docling経由の事前変換は

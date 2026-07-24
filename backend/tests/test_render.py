@@ -446,6 +446,89 @@ def test_render_returns_422_when_pymupdf_engine_conversion_fails():
         app.dependency_overrides.pop(get_layout_converter, None)
 
 
+# hybridエンジン（PyMuPDF×Docling×Gemini VLM）の分岐検証。
+# gemini_free同様に無料枠モデルを使うため、ログインなしで利用できる（GATED_ENGINES対象外）。
+
+
+def test_render_hybrid_engine_requires_pdf_but_not_login():
+    # ゲート対象ではないため未ログインでも403にはならず、PDF未添付のみが400になる。
+    response = client.post("/api/render", data={"engine": "hybrid"})
+    assert response.status_code == 400
+
+
+def test_render_hybrid_engine_combines_pymupdf_docling_and_ai():
+    # hybridはPyMuPDF/Doclingの両方を変換し、その結果をAIクライアントへ渡した上でPDFも添付する。
+
+    class _FakeLayoutConverter:
+        def convert_to_html(self, filename, content):
+            return "<html>pymupdf-marker</html>"
+
+    class _FakeHtmlExtractor:
+        def convert_to_html(self, filename, content):
+            return "<html>docling-marker</html>"
+
+    captured = {}
+
+    class _RecordingAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            captured["prompt"] = prompt
+            captured["pdf"] = pdf
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    _override_ai_client(_RecordingAIClient())
+    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
+    app.dependency_overrides[get_html_extractor] = lambda: _FakeHtmlExtractor()
+    try:
+        pdf_bytes = SAMPLE_PDF.read_bytes()
+        response = client.post(
+            "/api/render",
+            data={"engine": "hybrid"},
+            files={"pdf": ("sample.pdf", pdf_bytes, "application/pdf")},
+        )
+        assert response.status_code == 200
+        assert "pymupdf-marker" in captured["prompt"]
+        assert "docling-marker" in captured["prompt"]
+        assert captured["pdf"] == pdf_bytes
+    finally:
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
+        app.dependency_overrides.pop(get_html_extractor, None)
+
+
+def test_render_returns_422_when_hybrid_pymupdf_conversion_fails():
+    class _FailingConverter:
+        def convert_to_html(self, filename, content):
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_layout_converter] = lambda: _FailingConverter()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "hybrid"},
+            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_layout_converter, None)
+
+
+def test_render_returns_422_when_hybrid_docling_conversion_fails():
+    class _FailingExtractor:
+        def convert_to_html(self, filename, content):
+            raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
+
+    app.dependency_overrides[get_html_extractor] = lambda: _FailingExtractor()
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "hybrid"},
+            files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_html_extractor, None)
+
+
 def test_render_returns_422_when_pdf2htmlex_engine_conversion_fails():
     class _FailingConverter:
         def convert_to_html(self, filename, content):

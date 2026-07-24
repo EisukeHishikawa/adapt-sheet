@@ -35,13 +35,14 @@ def test_build_prompt_includes_context():
     assert "210" in prompt and "297" in prompt
 
 
-def test_build_prompt_signature_excludes_html_and_markdown_inputs():
-    # 生成AIへのリクエストにHTML・JSON・Docling抽出テキストを一切含めない契約を、
-    # build_promptの引数レベルで固定する（htmlやmarkdownという入力自体を受け付けない）。
+def test_build_prompt_signature_excludes_markdown_input():
+    # Docling由来のMarkdown/抽出テキストは生成AIへのリクエストに一切含めない契約を、
+    # build_promptの引数レベルで固定する（markdownという入力自体を受け付けない）。
+    # current_html/current_jsonはPDF未添付時の入力として意図的に受け付ける。
     params = inspect.signature(build_prompt).parameters
-    assert "html" not in params
     assert "markdown" not in params
-    assert "json" not in params
+    assert "current_html" in params
+    assert "current_json" in params
 
 
 def test_build_prompt_instructs_treating_pdf_as_visual_source_when_has_pdf():
@@ -52,9 +53,42 @@ def test_build_prompt_instructs_treating_pdf_as_visual_source_when_has_pdf():
 
 
 def test_build_prompt_instructs_fresh_generation_when_no_pdf():
-    # PDF未添付時は、生成方針のみから新規生成する指示に切り替わる。
+    # PDF未添付かつ現在のHTML/JSONも無い場合は、生成方針のみから新規生成する指示に切り替わる。
     prompt = build_prompt(prompt="x", width_mm=None, height_mm=None, has_pdf=False)
     assert "PDFの添付はありません" in prompt
+    assert "現在のHTML/CSSここから" not in prompt
+
+
+def test_build_prompt_includes_current_html_and_json_when_no_pdf():
+    # PDF未添付で現在のHTML/JSONがある場合は、それを基準に改変させる指示へ切り替わり、
+    # 渡した内容自体もプロンプトに含める（画面のHTML/JSONを生成AIへ送る契約）。
+    prompt = build_prompt(
+        prompt="x",
+        width_mm=None,
+        height_mm=None,
+        has_pdf=False,
+        current_html='<div class="page">{{name}}</div>',
+        current_json='{"name": "sample"}',
+    )
+    assert "PDFの添付はありません" in prompt
+    assert "現在のHTML/CSSここから" in prompt
+    assert '<div class="page">{{name}}</div>' in prompt
+    assert '{"name": "sample"}' in prompt
+
+
+def test_build_prompt_ignores_current_html_and_json_when_has_pdf():
+    # PDFがある場合はPDFの直接添付を正とし、current_html/current_jsonが渡されても
+    # プロンプトへは含めない。
+    prompt = build_prompt(
+        prompt="x",
+        width_mm=None,
+        height_mm=None,
+        has_pdf=True,
+        current_html='<div class="page">{{name}}</div>',
+        current_json='{"name": "sample"}',
+    )
+    assert '<div class="page">{{name}}</div>' not in prompt
+    assert '{"name": "sample"}' not in prompt
 
 
 def test_build_prompt_instructs_not_to_enlarge_font_sizes():

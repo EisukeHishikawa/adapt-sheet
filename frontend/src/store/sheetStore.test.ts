@@ -415,14 +415,14 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
 })
 
 // プロンプト入力欄の値がfetchRenderでバックエンドのリクエスト形式（promptフィールド）と
-// 一致する形で送信されること、cssフィールドが送信されないこと、jsonContent（業務データJSON）が
-// Geminiへの入力として不要なため送信されないことを検証する。
+// 一致する形で送信されること、cssフィールドが送信されないこと、PDF未添付時は画面の
+// htmlContent/jsonContentがcurrent_html/current_jsonとして送信されることを検証する。
 describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })
 
-  it('promptContentの値がfetchRenderでリクエストのpromptフィールドとして送信され、jsonContentは送信されない', async () => {
+  it('promptContentの値がfetchRenderでリクエストのpromptフィールドとして送信され、PDF未添付時はhtmlContent/jsonContentがcurrent_html/current_jsonとして送信される', async () => {
     let capturedFormData: FormData | undefined
     server.use(
       http.post('/api/render', async ({ request }) => {
@@ -439,7 +439,9 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
     await useSheetStore.getState().fetchRender()
 
     expect(capturedFormData?.get('prompt')).toBe('請求書レイアウトにして')
-    // jsonContentはローカルのJSON入力エディタ状態のみで、リクエストには含めない。
+    expect(capturedFormData?.get('current_html')).toBe('<p>x</p>')
+    expect(capturedFormData?.get('current_json')).toBe('{"customer_name":"田中"}')
+    // jsonContentそのものはローカルのJSON入力エディタ状態のためリクエストへは含めない。
     expect(capturedFormData?.has('json')).toBe(false)
     // cssは独立したリクエストフィールドを持たないため、送信されないことを固定する。
     expect(capturedFormData?.has('css')).toBe(false)
@@ -454,7 +456,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
     expect(useSheetStore.getState().promptContent).toBe('請求書レイアウトにして')
   })
 
-  it('htmlContentはfetchRenderで送信されない（生成AIへPDFを直接送るため不要）', async () => {
+  it('PDFを添付している場合はcurrent_html/current_jsonを送信しない（PDFの直接添付を正とする）', async () => {
     let capturedFormData: FormData | undefined
     server.use(
       http.post('/api/render', async ({ request }) => {
@@ -462,11 +464,28 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
         return HttpResponse.json(dummyRenderResponse)
       }),
     )
-    useSheetStore.setState({ htmlContent: '<p>古いHTML</p>' })
+    const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
+    useSheetStore.setState({
+      htmlContent: '<p>古いHTML</p>',
+      jsonContent: '{"a":1}',
+      pdfFile,
+      pdfFileName: pdfFile.name,
+    })
 
     await useSheetStore.getState().fetchRender()
 
-    expect(capturedFormData?.has('html')).toBe(false)
+    expect(capturedFormData?.has('current_html')).toBe(false)
+    expect(capturedFormData?.has('current_json')).toBe(false)
+  })
+
+  it('PDFを添付して描画に成功すると、応答が返った時点でPDFの添付が解除される', async () => {
+    const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
+    useSheetStore.setState({ pdfFile, pdfFileName: pdfFile.name })
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().pdfFile).toBeNull()
+    expect(useSheetStore.getState().pdfFileName).toBeNull()
   })
 })
 

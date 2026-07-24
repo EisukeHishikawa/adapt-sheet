@@ -83,6 +83,10 @@ async def render(
     # フロント（EngineSelect）が選択した生成エンジン。7値のいずれか。
     engine: str = Form("gemini_free"),
     pdf: Optional[UploadFile] = File(None),
+    # PDFが無い生成AIリクエストで、現在画面に表示中のHTML/CSSとJSONを送るための項目
+    # （build_promptがhas_pdf=False時にのみ使う。ai_client.build_prompt参照）。
+    current_html: str = Form(""),
+    current_json: str = Form(""),
     # Dependsで注入することで、テスト側がdependency_overridesにより成功/失敗や高速なフェイクへ
     # 差し替えられるようにする。ai_client_factoryはengineがリクエスト時にしか
     # 決まらないため、AIClientインスタンスではなく関数を注入する。
@@ -120,14 +124,20 @@ async def render(
         return RenderResponse(html=html, css="", json_={})
 
     # 生成AI（gemini_free。gemini/claude/openaiは上記ゲートにより現状ここへは到達しない）。
-    # PDFがある場合はマルチモーダル入力として直接添付し、PyMuPDF/Docling経由の事前変換は行わない。
+    # PDFがある場合はマルチモーダル入力として直接添付する（PyMuPDF/Docling経由の事前変換は
+    # 行わない）。PDFが無い場合は現在のHTML/JSON（current_html/current_json）を送る。
     # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う。
     pdf_bytes: Optional[bytes] = None
     if pdf is not None:
         pdf_bytes = await pdf.read()
 
     prompt_text = build_prompt(
-        prompt=prompt, width_mm=width_mm, height_mm=height_mm, has_pdf=pdf_bytes is not None
+        prompt=prompt,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        has_pdf=pdf_bytes is not None,
+        current_html=current_html,
+        current_json=current_json,
     )
 
     ai_client = ai_client_factory(engine)

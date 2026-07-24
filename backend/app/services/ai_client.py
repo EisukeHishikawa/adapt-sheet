@@ -351,9 +351,10 @@ class GeminiAIClient:
     標準プランはフェーズ5まで自由アクセスのユーザーには提供しない（main.pyのゲート判定）。
     """
 
-    # 2026-07-08時点、gemini-2.0-flashは無料枠クォータが0（429 RESOURCE_EXHAUSTED）だったため、
-    # 現行の無料枠推奨モデルを既定にしている。
-    _DEFAULT_MODEL_FREE = "gemini-2.5-flash"
+    # 2026-07-08時点、gemini-2.0-flashは無料枠クォータが0（429 RESOURCE_EXHAUSTED）だった。
+    # 2026-07-25時点、gemini-2.5-flashは新規ユーザーに提供終了（404 NOT_FOUND）していたため、
+    # Google側のモデル廃止に追従して既定が古くならないよう、常に最新安定版を指すエイリアスにしている。
+    _DEFAULT_MODEL_FREE = "gemini-flash-latest"
     # 標準プラン（有料枠）の既定モデル。実装時点の最新Pro系モデルを想定し、環境変数で上書き可能にする。
     _DEFAULT_MODEL_STANDARD = "gemini-2.5-pro"
 
@@ -377,15 +378,15 @@ class GeminiAIClient:
                 os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL_FREE).strip()
                 or self._DEFAULT_MODEL_FREE
             )
-        # 思考モデル（gemini-2.5-flash等）は思考トークンもmax_output_tokensの予算を消費するため、
-        # 動的思考が予算の大半を食うとJSON本体が出力途中で打ち切られ不正JSONになる。本タスクは
-        # PDFを保守しやすい構造へ作り替える構造化変換であり深い推論を要さないため、
-        # 思考を無効化して出力予算を全てJSON本体へ充てる。
+        # 思考モデルは思考トークンもmax_output_tokensの予算を消費するため、動的思考が予算の大半を
+        # 食うとJSON本体が出力途中で打ち切られ不正JSONになりうる。thinking_budget=0（思考の完全
+        # 無効化）が理想だが、gemini-flash-latest等の新しいモデルではbudget=0が400 INVALID_ARGUMENT
+        # になり無効化自体を受け付けないため、モデルに予算配分を任せる動的思考（-1）で妥協する。
         # response_mime_typeでJSON出力を強制し、コードフェンスや前置きで壊れないようにする。
         self._config = genai_types.GenerateContentConfig(
             response_mime_type="application/json",
             max_output_tokens=self._MAX_OUTPUT_TOKENS,
-            thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+            thinking_config=genai_types.ThinkingConfig(thinking_budget=-1),
         )
 
     def generate(self, prompt: str, pdf: Optional[bytes] = None) -> RenderResult:

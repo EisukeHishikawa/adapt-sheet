@@ -485,7 +485,7 @@ def test_gemini_client_uses_default_free_model(monkeypatch):
 
     client.generate("prompt")
 
-    assert models.last_model == "gemini-2.5-flash"
+    assert models.last_model == "gemini-flash-latest"
 
 
 def test_gemini_client_uses_model_from_env(monkeypatch):
@@ -542,15 +542,15 @@ def test_gemini_client_sends_pdf_as_part_when_provided():
     assert part.inline_data.data == b"%PDF-1.4 dummy"
 
 
-def test_gemini_client_disables_thinking_to_preserve_output_budget():
-    # 思考モデル（gemini-2.5-flash等）は思考にmax_output_tokensの予算を食うため、思考を無効化して
-    # 出力予算をJSON本体へ全て充て、出力途中の打ち切り（不正JSON）を防ぐ。
+def test_gemini_client_uses_dynamic_thinking_budget():
+    # thinking_budget=0（思考の完全無効化）はgemini-flash-latest等で400 INVALID_ARGUMENTになるため、
+    # モデルに予算配分を任せる動的思考（-1）を使う契約を固定する。
     models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)
     client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
 
     client.generate("prompt")
 
-    assert models.last_config.thinking_config.thinking_budget == 0
+    assert models.last_config.thinking_config.thinking_budget == -1
 
 
 def test_gemini_client_raises_clear_error_when_output_truncated():

@@ -20,10 +20,6 @@ from app.services.ai_client import (
     validate_render_result,
 )
 
-# DEVELOPMENT.md ステップ6のTDD要件: ai_client.py実装前に、
-# 「プレースホルダーを含むHTML/CSS/JSONが厳格に返ってくるか」の期待値を先に定義する（Red状態）。
-
-
 def test_build_prompt_includes_context():
     prompt = build_prompt(
         prompt="請求書のレイアウトにして",

@@ -4,15 +4,12 @@ import { HistorySlider } from './HistorySlider'
 import { useSheetStore } from '@/store/sheetStore'
 import type { HistoryItem } from '@/store/sheetStore'
 
-// ステップ8: docs/spec.md 2.2「履歴スライド機能」のUI。
-// 「履歴が横に並んで表示される」「クリックで過去の描画内容をプレビューに復元できる」を検証する。
 // seqは描画ごとの通し番号（表示ラベルの基準）。大きいほど新しい描画。
 function makeEntry(label: string, seq: number, kind: HistoryItem['kind'] = 'render'): HistoryItem {
   return {
     html: `<p>${label}</p>`,
     css: `/* ${label} */`,
-    // ステップ16: HistoryEntry.jsonはJSON入力エディタへ戻せる生テキストとして保持する
-    // （sheetStore.HistoryEntry参照）。
+    // HistoryEntry.jsonはJSON入力エディタへ戻せる生テキストとして保持する（sheetStore.HistoryEntry参照）。
     json: JSON.stringify({ label }),
     widthMm: 210,
     heightMm: 297,

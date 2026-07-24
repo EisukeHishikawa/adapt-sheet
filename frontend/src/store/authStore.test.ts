@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// DEVELOPMENT.md ステップ27のTDD要件: Supabase Auth SDKを直接叩かず、認証状態（session）の
-// 更新ロジックだけをストア単体として検証する（実SupabaseAPIには接続しない）。
+// Supabase Auth SDKを直接叩かず、認証状態（session）の更新ロジックだけをストア単体として検証する
+// （実SupabaseAPIには接続しない）。
 const mockAuth = {
   getSession: vi.fn(),
   onAuthStateChange: vi.fn(),

@@ -157,7 +157,7 @@ export interface components {
         };
         /**
          * HistoryItemResponse
-         * @description GET /api/historyの1件分（docs/spec.md 3.x、DEVELOPMENT.md ステップ28）。
+         * @description GET /api/historyの1件分。
          */
         HistoryItemResponse: {
             /** Id */

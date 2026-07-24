@@ -1,12 +1,10 @@
-"""Supabase発行JWTの検証（DEVELOPMENT.md ステップ27）。
+"""Supabase発行JWTの検証。
 
-未ログインユーザーにも`/api/render`を開放し続ける方針（docs/spec.md）のため、検証失敗時は
-例外を送出せずNoneを返す。呼び出し側（app/main.py）がNoneかどうかでゲート対象engineの
-403判定を行う。
+未ログインユーザーにも`/api/render`を開放し続けるため、検証失敗時は例外を送出せずNoneを返す。
+呼び出し側（app/main.py）がNoneかどうかでゲート対象engineの403判定を行う。
 
-Supabase Authは従来のHS256共有シークレット方式に加えて、JWT Signing Keys機能（ES256等の
-非対称鍵、JWKSで公開鍵を配布）をプロジェクトごとに選択でき、Supabase Local CLIは既定で
-後者を発行する。トークンヘッダーの`alg`でどちらの方式かを判別し、対応する検証経路へ振り分ける。
+SupabaseはHS256共有シークレットとES256/JWKS（非対称鍵）のどちらかをプロジェクトごとに選択でき、
+トークンヘッダーの`alg`で検証経路を振り分ける。
 """
 
 from __future__ import annotations

@@ -105,7 +105,6 @@ def test_list_history_caps_at_max_items(session, monkeypatch):
     assert len(results) == 3
 
 
-# DEVELOPMENT.md ステップ28: /api/render・/api/historyのエンドポイント統合テスト。
 # 実PostgreSQLは使わず、SQLiteのin-memory DBをdependency_overridesで差し込む。
 
 client = TestClient(app)

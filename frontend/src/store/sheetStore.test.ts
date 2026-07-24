@@ -4,11 +4,6 @@ import { useAuthStore } from './authStore'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 
-// DEVELOPMENT.md ステップ8のTDD要件:
-// 1. 定型サイズ自動入力（docs/spec.md 2.2「定型サイズ自動入力」の寸法表）
-// 2. 履歴スライド機能（最大10件、11件目以降は最古を破棄）
-// 3. ステータスコードに準拠したエラー/成功メッセージ
-// をUIコンポーネントより先にストアのロジックとして検証する（Red状態から開始）。
 const initialSheetState = {
   htmlContent: '',
   cssContent: '',
@@ -76,7 +71,7 @@ describe('sheetStore（履歴スライド機能）', () => {
     expect(useSheetStore.getState().history[0]).toMatchObject({
       html: dummyRenderResponse.html,
       css: dummyRenderResponse.css,
-      // ステップ16: history[].jsonはJSON入力エディタへ戻せる整形済みテキストとして保持する。
+      // history[].jsonはJSON入力エディタへ戻せる整形済みテキストとして保持する。
       json: JSON.stringify(dummyRenderResponse.json, null, 2),
     })
   })
@@ -522,9 +517,9 @@ describe('sheetStore（モデル選択）', () => {
   })
 })
 
-// DEVELOPMENT.md ステップ27のTDD要件: authStoreにログイン済みセッションがある場合、
-// fetchRenderがAuthorizationヘッダーへaccess_tokenを載せて送信することを検証する。
-// ユーザー要件: ログイン後にDBへ保存した履歴・編集中スナップショットは、セッションが切れて
+// authStoreにログイン済みセッションがある場合、fetchRenderがAuthorizationヘッダーへ
+// access_tokenを載せて送信することを検証する。ログイン後にDBへ保存した履歴・編集中
+// スナップショットは、セッションが切れて
 // （リロード等で）sheetStoreのhistoryがメモリ上から失われても、再ログイン後にDBから取り直して
 // 最大10件まで表示する。
 describe('sheetStore（サーバー履歴の復元・セッション切れ後の再表示）', () => {
@@ -601,7 +596,7 @@ describe('sheetStore（サーバー履歴の復元・セッション切れ後の
   })
 })
 
-describe('sheetStore（ログイン状態の反映・ステップ27）', () => {
+describe('sheetStore（ログイン状態の反映）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
     useAuthStore.setState({ session: null })

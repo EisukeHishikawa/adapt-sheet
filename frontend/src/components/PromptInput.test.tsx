@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { PromptInput } from './PromptInput'
 import { useSheetStore } from '@/store/sheetStore'
 
-// ステップ18: EditorPanelから分離したプロンプト入力欄の検証。
 // 見出しは非表示にしプレースホルダで用途を示す方針のため、プレースホルダ文言と
 // ストア連動（promptContent更新）を固定する。
 describe('PromptInput（プロンプト入力・左カラム）', () => {

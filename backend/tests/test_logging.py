@@ -1,4 +1,4 @@
-"""構造化ログ基盤（ADR-011、DEVELOPMENT.md ステップ13）の検証テスト。
+"""構造化ログ基盤の検証テスト。
 
 - 全レスポンスにX-Request-IDヘッダーが付くこと
 - アクセスログが構造化フィールド（request_id/method/path/status_code/duration_ms）付きで出ること
@@ -93,7 +93,7 @@ def test_json_formatter_outputs_ai_payload_fields():
 
 
 def test_json_formatter_outputs_audit_and_diagnostic_fields():
-    # user_id（監査証跡）とreason（失敗理由）は許可リスト漏れで欠落していた（ADR-030）。
+    # user_id（監査証跡）とreason（失敗理由）は許可リストに含まれることを検証する。
     record = logging.LogRecord(
         name="app.auth",
         level=logging.INFO,
@@ -119,7 +119,7 @@ def test_json_formatter_outputs_audit_and_diagnostic_fields():
 
 
 def test_access_log_records_user_id_for_authenticated_request(monkeypatch, caplog):
-    # 監査証跡として「誰の操作か」をアクセスログへ残す（ADR-030）。Supabase側のAuthログは
+    # 監査証跡として「誰の操作か」をアクセスログへ残す。Supabase側のAuthログは
     # 保持期間がプラン依存のため、アプリ側のログだけで追える状態にしておく。
     # 認証依存はFastAPIによりスレッドプールで実行されうるため、contextvarではなくscopeの
     # stateを経由してミドルウェアへ届く。実トークンを使い、その経路ごと検証する。

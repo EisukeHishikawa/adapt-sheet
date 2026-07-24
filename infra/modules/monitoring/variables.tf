@@ -37,7 +37,7 @@ variable "api_5xx_threshold" {
 }
 
 variable "api_4xx_threshold" {
-  description = "評価期間内のAPI Gateway 4XXError数がこの値以上で発報する。スロットリング（429、ADR-027）の常態化に気づくための閾値"
+  description = "評価期間内のAPI Gateway 4XXError数がこの値以上で発報する。スロットリング（429）の常態化に気づくための閾値"
   type        = number
   default     = 20
 }

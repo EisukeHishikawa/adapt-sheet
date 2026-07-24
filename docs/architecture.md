@@ -40,10 +40,10 @@ flowchart LR
     LambdaEntry --> Supabase
 ```
 
-- フロントとAPIは同一オリジン（CloudFront配下の`/api/*`）で提供する（ADR-029）。
-- 入口Lambdaは`FastAPI + Lambda Web Adapter`で動き、PyMuPDFによるレイアウト変換を内包する（ADR-014）。
-- Docling/pdf2htmlEXの各Lambdaは内部専用で、API Gatewayを介さずAWS_IAM認証必須のFunction URLとして公開する（ADR-026）。
-- 生成AIへはPDFをマルチモーダル入力として直接添付する（ADR-015）。
+- フロントとAPIは同一オリジン（CloudFront配下の`/api/*`）で提供する。
+- 入口Lambdaは`FastAPI + Lambda Web Adapter`で動き、PyMuPDFによるレイアウト変換を内包する。
+- Docling/pdf2htmlEXの各Lambdaは内部専用で、API Gatewayを介さずAWS_IAM認証必須のFunction URLとして公開する。
+- 生成AIへはPDFをマルチモーダル入力として直接添付する。
 
 ---
 
@@ -122,10 +122,10 @@ flowchart LR
     DBConn -->|"auth.uid() で行を制限"| SBDB
 ```
 
-- トークンは `sessionStorage` に保持し、タブを閉じた時点で破棄する（ADR-021）。
+- トークンは `sessionStorage` に保持し、タブを閉じた時点で破棄する（ADR-020）。
 - 検証鍵は署名方式で切り替わる（`HS256`は共有シークレット、`ES256`/`RS256`はJWKS。ADR-020）。設定が無い場合は常に未ログイン扱い（fail-closed）。
-- 認可は2段構え。ゲート対象engine（`gemini`/`claude`/`openai`）は未ログインなら403 `FREE_ACCESS_FORBIDDEN`、履歴データはPostgreSQLのRLSで`auth.uid()`一致行のみに制限する（ADR-019/021）。
-- アカウント作成は `scripts/create_user.sh` のみで、画面からの新規登録は提供しない（ADR-021）。
+- 認可は2段構え。ゲート対象engine（`gemini`/`claude`/`openai`）は未ログインなら403 `FREE_ACCESS_FORBIDDEN`、履歴データはPostgreSQLのRLSで`auth.uid()`一致行のみに制限する（ADR-020）。
+- アカウント作成は `scripts/create_user.sh` のみで、画面からの新規登録は提供しない（ADR-020）。
 
 ---
 
@@ -133,7 +133,7 @@ flowchart LR
 
 `POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。
 
-エンジン選択（`engine`、ADR-015）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
+エンジン選択（`engine`）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
 
 ```mermaid
 sequenceDiagram
@@ -146,7 +146,7 @@ sequenceDiagram
 
     FE->>API: PDF/プロンプト/サイズ/engine送信
     alt engineが標準プラン（Gemini標準/Claude/OpenAI）
-        API-->>FE: 403（フェーズ5まで自由アクセス不可、ADR-015）
+        API-->>FE: 403（フェーズ5まで自由アクセス不可）
     else engineが変換エンジン（Docling/pdf2htmlEX/PyMuPDF）
         Note over API,Pdf2HtmlEx: いずれか1つをengineに応じて呼び出す。AIは介さない
         API->>Layout: PDF（pymupdf選択時）
@@ -169,7 +169,7 @@ sequenceDiagram
 
 ## 5. セキュリティ概要図
 
-未認証エリアと認証エリアのアクセス制御の違い（詳細は [`spec.md`](./spec.md) の要件、決定理由は [`decisions.md`](./decisions.md) を参照）。API Gatewayのステージ単位スロットリングはIPアドレスやユーザーIDを区別せず全体合算でカウントする点に注意（ADR-027）。
+未認証エリアと認証エリアのアクセス制御の違い（詳細は [`spec.md`](./spec.md) の要件、決定理由は [`decisions.md`](./decisions.md) を参照）。API Gatewayのステージ単位スロットリングはIPアドレスやユーザーIDを区別せず全体合算でカウントする点に注意。
 
 ```mermaid
 flowchart TD
@@ -198,7 +198,7 @@ flowchart LR
 
 ---
 
-## 7. データベース（PostgreSQL、ステップ28・ADR-019）
+## 7. データベース（PostgreSQL、ステップ28）
 
 `render_history`テーブル（`backend/app/models.py`）のみ。登録ユーザーが`POST /api/render`を成功させるたびに1行追加される。`user_id`はSupabase Auth（`auth.users.id`）のUUIDをそのまま文字列で持つが、本DBは`auth`スキーマを所有しないため外部キー制約は張らない。
 
@@ -213,7 +213,7 @@ flowchart LR
 
 マイグレーションは`backend/migrations/`（Alembic）で管理する。
 
-## 8. ログ・可観測性の構成図（ADR-011 / ADR-030）
+## 8. ログ・可観測性の構成図（ADR-011）
 
 記録先はCloudWatch（＋CloudFrontログのS3）へ寄せ、Supabase側のログは二次ソースと位置づける。運用手順は [`observability.md`](./observability.md) を参照。
 
@@ -246,5 +246,4 @@ flowchart TD
 
 ## 9. 今後の追記予定
 
-- フェーズ4（インフラ構築）着手時に、Terraformモジュール構成図を追加する。
-- 保存済み履歴の閲覧UI・名前付きテンプレート機能を追加する際、テーブル設計を拡張する（ADR-019のトレードオフ参照）。
+- 名前付きテンプレート機能を追加する際、テーブル設計を拡張する。

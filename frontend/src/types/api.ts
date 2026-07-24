@@ -83,9 +83,9 @@ export interface paths {
         put?: never;
         /**
          * Warmup
-         * @description フロント表示時に呼ばれるホットスタンバイ用エンドポイント（ADR-028）。
+         * @description フロント表示時に呼ばれるホットスタンバイ用エンドポイント。
          *
-         *     docling/pdf2htmlexはIAM認証必須のLambda Function URL（ADR-026）でフロントから直接
+         *     docling/pdf2htmlexはIAM認証必須のLambda Function URLでフロントから直接
          *     叩けないため、backendが署名付きで代理ピングする。あわせてSupabaseのDBへも最小クエリを
          *     投げ、無操作による一時停止を避ける。認証は要求しない（画面を開いた時点で投げるため）。
          *

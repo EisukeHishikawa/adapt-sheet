@@ -1,4 +1,4 @@
-"""Parameter Store からのAPIキー読み込み（ADR-017）。
+"""Parameter Store からのAPIキー読み込み。
 
 AWS Lambda のコールドスタート時（＝このモジュールを import するグローバルスコープ）に一度だけ
 Parameter Store を呼び出し、取得したAPIキーを os.environ へ展開する。これにより、リクエストを
@@ -74,7 +74,7 @@ def load_secrets_into_env(ssm_client_factory: Optional[Callable[[], object]] = N
             continue
         if value:
             os.environ[name] = value
-            # 値そのものは機微情報のためログへ出さない（ADR-011）。取得できた事実のみ残す。
+            # 値そのものは機微情報のためログへ出さない。取得できた事実のみ残す。
             logger.info("Parameter Storeからキーを読み込みました", extra={"secret_name": name})
 
     for invalid in response.get("InvalidParameters", []):

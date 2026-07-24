@@ -5,9 +5,8 @@
 403判定を行う。
 
 Supabase Authは従来のHS256共有シークレット方式に加えて、JWT Signing Keys機能（ES256等の
-非対称鍵、JWKSで公開鍵を配布）をプロジェクトごとに選択できる（Supabase Local CLIは既定で
-後者を発行する。ADR-018のトレードオフ、ADR-020）。トークンヘッダーの`alg`でどちらの方式かを
-判別し、対応する検証経路へ振り分ける。
+非対称鍵、JWKSで公開鍵を配布）をプロジェクトごとに選択でき、Supabase Local CLIは既定で
+後者を発行する。トークンヘッダーの`alg`でどちらの方式かを判別し、対応する検証経路へ振り分ける。
 """
 
 from __future__ import annotations
@@ -49,7 +48,7 @@ def get_current_user(
     挙動とする。
 
     検証できたユーザーは`request.state`へ載せ、アクセスログ（app/middleware.py）が監査証跡として
-    user_idを記録できるようにする（ADR-030）。
+    user_idを記録できるようにする。
     """
     user = _authenticate(authorization)
     if user is not None:
@@ -93,7 +92,7 @@ def _decode_with_shared_secret(token: str, alg: str) -> Optional[dict]:
     try:
         return jwt.decode(token, secret, algorithms=[alg], audience=_EXPECTED_AUDIENCE)
     except jwt.PyJWTError as exc:
-        # トークンの中身は機微情報のためログへ出さない（ADR-011）。失敗理由のみ残す。
+        # トークンの中身は機微情報のためログへ出さない。失敗理由のみ残す。
         logger.info("Supabase JWT検証に失敗しました", extra={"reason": str(exc)})
         return None
 

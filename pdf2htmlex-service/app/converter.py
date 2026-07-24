@@ -1,9 +1,8 @@
-"""pdf2htmlEXによるPDF→HTML変換レイヤー（ADR-015）。
+"""pdf2htmlEXによるPDF→HTML変換レイヤー。
 
 pdf2htmlEXはPDFのテキスト・フォント・背景をピクセル単位で忠実に再現したHTMLを生成する
-専用バイナリ（ベースイメージpdf2htmlex/pdf2htmlexに同梱、ADR-014で一度撤去されたが
-本サービスとして復活させた）。CLIをsubprocessで呼び出し、生成された単一HTMLファイルを
-（フォント・画像・CSSを埋め込んだ自己完結ファイルとして）読み込んで返す。
+専用バイナリ（ベースイメージpdf2htmlex/pdf2htmlexに同梱）。CLIをsubprocessで呼び出し、
+生成された単一HTMLファイルを（フォント・画像・CSSを埋め込んだ自己完結ファイルとして）読み込んで返す。
 """
 
 from __future__ import annotations
@@ -57,7 +56,7 @@ class Pdf2HtmlExConverter:
                         "1",
                         "--embed-outline",
                         "1",
-                        # 帳票テンプレートは1ページ完結が前提（ADR-014）。
+                        # 帳票テンプレートは1ページ完結が前提。
                         "--first-page",
                         "1",
                         "--last-page",

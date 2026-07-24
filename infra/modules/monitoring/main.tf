@@ -1,4 +1,4 @@
-# ログを取るだけでは障害に気づけないため、発報経路までをコード化する（ADR-030）。
+# ログを取るだけでは障害に気づけないため、発報経路までをコード化する。
 # 通知先はSNSトピックに集約し、購読手段（メール/後からChatbot等）はトピックへ足す形にする。
 resource "aws_sns_topic" "alarms" {
   name = "${var.name}-alarms"
@@ -90,15 +90,15 @@ resource "aws_cloudwatch_metric_alarm" "api_4xx" {
   ok_actions    = [aws_sns_topic.alarms.arn]
 }
 
-# --- アプリログ（ADR-011のJSON構造化ログ）由来 ---
+# --- アプリログ（JSON構造化ログ）由来 ---
 
-# AWS/Lambdaの Errors はハンドラが例外で落ちた場合しか数えない。ADR-012により想定外例外も
+# AWS/Lambdaの Errors はハンドラが例外で落ちた場合しか数えない。想定外例外も
 # 500レスポンスへ変換して正常終了するため、アプリ内部のERRORはログからしか観測できない。
 resource "aws_cloudwatch_log_metric_filter" "backend_errors" {
   name           = "${var.name}-backend-app-errors"
   log_group_name = var.backend_log_group_name
 
-  # ADR-011のJSON1行ログを前提に、levelフィールドで絞る。
+  # JSON1行ログを前提に、levelフィールドで絞る。
   pattern = "{ $.level = \"ERROR\" }"
 
   metric_transformation {

@@ -33,19 +33,19 @@ variable "log_retention_in_days" {
 }
 
 variable "enable_xray" {
-  description = "X-Rayのアクティブトレースを有効にするか（ADR-030）"
+  description = "X-Rayのアクティブトレースを有効にするか"
   type        = bool
   default     = true
 }
 
 variable "ssm_prefix" {
-  description = "APIキーのParameter Storeパス接頭辞（SSM_PARAMETER_PREFIX）。APIキーを扱わないLambda（docling/pdf2htmlex）は空文字のまま渡し、環境変数自体を設定しない（ADR-026）"
+  description = "APIキーのParameter Storeパス接頭辞（SSM_PARAMETER_PREFIX）。APIキーを扱わないLambda（docling/pdf2htmlex）は空文字のまま渡し、環境変数自体を設定しない"
   type        = string
   default     = ""
 }
 
 variable "ssm_parameter_arns" {
-  description = "読み取りを許可するSecureStringパラメータのARN一覧。空リストならSSM読み取り権限を一切付与しない（ADR-026）"
+  description = "読み取りを許可するSecureStringパラメータのARN一覧。空リストならSSM読み取り権限を一切付与しない"
   type        = list(string)
   default     = []
 }
@@ -63,7 +63,7 @@ variable "extra_env" {
 }
 
 variable "create_function_url" {
-  description = "AWS_IAM認証必須のLambda Function URLを作成するか。内部専用サービス（docling/pdf2htmlex）をAPI Gatewayを介さず直接HTTPで公開する場合にtrue（ADR-026）"
+  description = "AWS_IAM認証必須のLambda Function URLを作成するか。内部専用サービス（docling/pdf2htmlex）をAPI Gatewayを介さず直接HTTPで公開する場合にtrue"
   type        = bool
   default     = false
 }
@@ -75,7 +75,7 @@ variable "function_url_invoker_role_arns" {
 }
 
 variable "invoke_function_url_arns" {
-  description = "このLambdaの実行ロールにlambda:InvokeFunctionUrlを許可する呼び出し先Lambda関数ARNの一覧（identity-based）。backend LambdaがDocling/pdf2htmlexのFunction URLを呼ぶために使う（ADR-026）"
+  description = "このLambdaの実行ロールにlambda:InvokeFunctionUrlを許可する呼び出し先Lambda関数ARNの一覧（identity-based）。backend LambdaがDocling/pdf2htmlexのFunction URLを呼ぶために使う"
   type        = list(string)
   default     = []
 }

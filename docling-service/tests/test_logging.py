@@ -1,4 +1,4 @@
-"""内部サービスの構造化ログと相関ID引き継ぎ（app/logging_config.py、ADR-030）の検証。
+"""内部サービスの構造化ログと相関ID引き継ぎ（app/logging_config.py）の検証。
 
 app.mainではなく最小のFastAPIアプリへミドルウェアを載せて検証する。変換エンジン本体
 （Docling/pdf2htmlEX）の重い依存を引かずに、ログの契約だけを固定できるため。

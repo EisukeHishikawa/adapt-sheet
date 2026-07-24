@@ -18,8 +18,7 @@ const initialSheetState = {
   pdfFileName: null,
   widthMm: null,
   heightMm: null,
-  // ADR-015で追加したエンジン選択。setStateは浅いマージのため、リセットに含めないとテスト間で
-  // 前回選択したengineが漏れる。
+  // setStateは浅いマージのため、リセットに含めないとテスト間で前回選択したengineが漏れる。
   engine: 'gemini_free' as const,
   history: [],
   // 履歴の通し番号カウンタ。setStateは浅いマージのため、リセットに含めないとテスト間で
@@ -386,7 +385,7 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
     expect(useSheetStore.getState().successMessage).toBeNull()
   })
 
-  it('バックエンドの構造化エラーボディのmessageを、ステータス別の既定文言より優先して表示する（ADR-012）', async () => {
+  it('バックエンドの構造化エラーボディのmessageを、ステータス別の既定文言より優先して表示する', async () => {
     // 既定文言（messageForStatus(502)）とは異なる文言をバックエンドが返すケースを用意し、
     // バックエンド提供のmessageが実際に画面表示用のerrorへ入ることを検証する。
     const backendMessage = 'モデルが混雑しています。数分後に再度お試しください。(#req-xyz)'
@@ -415,12 +414,10 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
   })
 })
 
-// DEVELOPMENT.md ステップ16のTDD要件:
 // プロンプト入力欄の値がfetchRenderでバックエンドのリクエスト形式（promptフィールド）と
-// 一致する形で送信されること、およびADR-014に基づきcssフィールドが送信されないことを検証する。
-// jsonContent（業務データJSON）はGeminiへの入力として不要になったため送信されない
-// （backend/app/main.pyのjson_fieldパラメータ廃止と対）。
-describe('sheetStore（JSON/プロンプト入力欄の送信・ADR-014）', () => {
+// 一致する形で送信されること、cssフィールドが送信されないこと、jsonContent（業務データJSON）が
+// Geminiへの入力として不要なため送信されないことを検証する。
+describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })
@@ -444,7 +441,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信・ADR-014）', () 
     expect(capturedFormData?.get('prompt')).toBe('請求書レイアウトにして')
     // jsonContentはローカルのJSON入力エディタ状態のみで、リクエストには含めない。
     expect(capturedFormData?.has('json')).toBe(false)
-    // ADR-014: cssは独立したリクエストフィールドを持たないため、送信されないことを固定する。
+    // cssは独立したリクエストフィールドを持たないため、送信されないことを固定する。
     expect(capturedFormData?.has('css')).toBe(false)
   })
 
@@ -457,7 +454,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信・ADR-014）', () 
     expect(useSheetStore.getState().promptContent).toBe('請求書レイアウトにして')
   })
 
-  it('htmlContentはfetchRenderで送信されない（ADR-015：生成AIへPDFを直接送るため不要）', async () => {
+  it('htmlContentはfetchRenderで送信されない（生成AIへPDFを直接送るため不要）', async () => {
     let capturedFormData: FormData | undefined
     server.use(
       http.post('/api/render', async ({ request }) => {
@@ -473,9 +470,9 @@ describe('sheetStore（JSON/プロンプト入力欄の送信・ADR-014）', () 
   })
 })
 
-// ADR-015のTDD要件: EngineSelectで選択したengineがfetchRenderのリクエストへ反映されること、
+// EngineSelectで選択したengineがfetchRenderのリクエストへ反映されること、
 // 既定値がgemini_free（無料枠）であることを検証する。
-describe('sheetStore（モデル選択・ADR-015）', () => {
+describe('sheetStore（モデル選択）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })

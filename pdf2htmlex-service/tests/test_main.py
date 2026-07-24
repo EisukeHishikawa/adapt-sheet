@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.converter import PDFConversionError, get_pdf_converter
 from app.main import app
 
-# 内部契約（ADR-015）: POST /convert に file を送ると {"html": ...} が返る。
+# 内部契約: POST /convert に file を送ると {"html": ...} が返る。
 # 実際のpdf2htmlEX変換の正しさはtest_converter.pyで検証済みのため、ここではDIをフェイクに
 # 差し替えてHTTPレイヤーの配線（成功時200/失敗時422）のみを検証する。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
@@ -58,7 +58,7 @@ def test_convert_end_to_end_with_real_pdf2htmlex():
 
 
 def test_health_returns_ok_without_touching_converter():
-    # ウォームアップ（ADR-028）はLambda実行環境を起こすことだけが目的のため、
+    # ウォームアップはLambda実行環境を起こすことだけが目的のため、
     # PDF変換のDIを解決せずに即座に応答すること。
     def _unused_converter():
         raise AssertionError("/healthはPDF変換の依存を解決してはならない")

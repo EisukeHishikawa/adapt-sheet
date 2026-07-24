@@ -1,4 +1,4 @@
-# pdf2htmlEXによるPDF→HTML変換専用の内部サービス用イメージ（docker-compose.yml参照、ADR-023）。
+# pdf2htmlEXによるPDF→HTML変換専用の内部サービス用イメージ（docker-compose.yml参照）。
 #
 # pdf2htmlEXは特殊パッチ済みpoppler/libfontforgeに強く依存し、Debian/Ubuntu標準リポジトリでは
 # 配布が終了している（apt-cache検証済み、backend/docling-serviceと同じpython:3.9-slimベースでは
@@ -6,7 +6,6 @@
 # pdf2htmlex/pdf2htmlexイメージを土台にする。Alpineベースのタグはmusl 1.1のみに対応し、
 # ruff等の一部パッケージがmusllinux_1_2向けの配布しか持たずソースビルドも失敗するため、
 # glibcベースのUbuntu 20.04（focal）タグを採用する。
-# ADR-019で撤去されたpdf2htmlEX専用コンテナを、モデル選択機能の1エンジンとして復活させたもの。
 FROM pdf2htmlex/pdf2htmlex:0.18.8.rc1-master-20200630-Ubuntu-focal-x86_64
 
 WORKDIR /app

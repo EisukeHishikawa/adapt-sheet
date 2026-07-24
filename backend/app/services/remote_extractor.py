@@ -1,11 +1,11 @@
-"""内部変換サービス（docling-service / pdf2htmlex-service）へHTTPで委譲する共通実装（ADR-013/016）。
+"""内部変換サービス（docling-service / pdf2htmlex-service）へHTTPで委譲する共通実装。
 
 Docling（torch等の大容量ML依存）とpdf2htmlEX（AGPL、特殊パッチ済みpoppler/libfontforgeに依存する
 重量級ネイティブ依存）はいずれも専用コンテナへ分離しており、backendからはHTTP経由の`POST /convert`を
 呼ぶだけという配線が共通する。サービスごとの違いは「表示名・環境変数名・既定URL」だけのため、
 共通部分を本モジュールへ集約し、各クライアント（docling_client / pdf2htmlex_client）は差分のみを持つ。
 
-Lambda本番では両サービスともIAM認証必須のLambda Function URLとして公開する（ADR-026）ため、
+Lambda本番では両サービスともIAM認証必須のLambda Function URLとして公開するため、
 `_auth_env_var`で指定した環境変数が"aws_sigv4"のときだけAWS SigV4でリクエストに署名する。
 未設定のローカル/pytestではdocker-compose内部DNS宛のプレーンなHTTPのままで、boto3/botocoreは
 importされない（secrets_loader.pyと同じ、本番専用機能を開発の必須依存にしない方針）。
@@ -25,7 +25,7 @@ from app.services.pdf_common import PDFConversionError, first_page_only
 logger = logging.getLogger("app.extractor")
 
 # 相関IDを伝播させるヘッダー名。SigV4の署名対象はhost/content-typeのみのため、
-# このヘッダーを足しても署名は崩れない（ADR-026/030）。
+# このヘッダーを足しても署名は崩れない。
 _REQUEST_ID_HEADER = "X-Request-ID"
 
 # Lambda Function URLのSigV4署名で使うサービス名。API Gatewayではなく関数URLを直接叩くため
@@ -43,7 +43,7 @@ class PDFHtmlExtractor(Protocol):
 
 
 class RemoteHtmlExtractor:
-    """変換サービスへHTTPでPDF→HTML変換を委譲する本番実装の基底（ADR-013/016/026）。
+    """変換サービスへHTTPでPDF→HTML変換を委譲する本番実装の基底。
 
     サブクラスは表示名・環境変数名・既定URL・認証方式の環境変数名を定義する。
     """
@@ -52,7 +52,7 @@ class RemoteHtmlExtractor:
     _service_label: str
     _env_var: str
     _default_url: str
-    # このLambdaが値"aws_sigv4"を持つときのみSigV4署名する（未定義/他の値なら常に無署名。ADR-026）。
+    # このLambdaが値"aws_sigv4"を持つときのみSigV4署名する（未定義/他の値なら常に無署名）。
     _auth_env_var: str = ""
 
     def __init__(
@@ -100,7 +100,7 @@ class RemoteHtmlExtractor:
         return response.json()["html"]
 
     def warmup(self) -> bool:
-        """`GET /health`を1回だけ叩き、Lambda実行環境を起こしておく（ADR-028）。
+        """`GET /health`を1回だけ叩き、Lambda実行環境を起こしておく。
 
         画面表示のついでに投げる副次的な処理であり、失敗しても本来の描画には影響しないため、
         例外は送出せず成否をboolで返す。実行環境の起動を待つ必要はないので、変換時（120秒）より
@@ -162,7 +162,7 @@ def _sign_with_sigv4(request: httpx.Request) -> None:
 
 
 def _correlation_headers() -> dict:
-    """呼び出し元リクエストの相関IDを内部サービスへ引き継ぐ（ADR-013の積み残しを解消。ADR-030）。"""
+    """呼び出し元リクエストの相関IDを内部サービスへ引き継ぐ。"""
     request_id = get_request_id()
     return {_REQUEST_ID_HEADER: request_id} if request_id else {}
 

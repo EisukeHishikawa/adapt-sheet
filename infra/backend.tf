@@ -1,4 +1,4 @@
-# Terraform state はS3（ロックはDynamoDB）で管理する（ADR-005）。バケット/テーブル自体は
+# Terraform state はS3（ロックはDynamoDB）で管理する。バケット/テーブル自体は
 # infra/bootstrap で先に作成し、その値を init 時に -backend-config で渡す（partial configuration）。
 # 値をここへ直書きしないのは、state置き場をコミットせず環境ごとに差し替えられるようにするため。
 terraform {

@@ -32,12 +32,12 @@ describe('useAuthStore', () => {
     expect(useAuthStore.getState().isAuthAvailable).toBe(true)
   })
 
-  // ログイン手段はGoogleアカウントのみとしたため、パスワードログインの口を持たない（ADR-022）。
+  // ログイン手段はGoogleアカウントのみとしたため、パスワードログインの口を持たない。
   it('パスワードログイン用のアクションを公開しない', () => {
     expect(useAuthStore.getState()).not.toHaveProperty('signInWithPassword')
   })
 
-  // アカウント作成は管理者のコマンド操作のみに限定したため、ストアに新規登録の口を持たせない（ADR-021）。
+  // アカウント作成は管理者のコマンド操作のみに限定したため、ストアに新規登録の口を持たせない。
   it('新規登録用のアクションを公開しない', () => {
     expect(useAuthStore.getState()).not.toHaveProperty('signUpWithPassword')
   })

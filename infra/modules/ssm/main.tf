@@ -1,6 +1,5 @@
 # APIキーの入れ物（SecureString）のみをTerraformで作成する。実値はイメージにもstateにも残さないため、
 # ダミー値で作成し、以降の実値はコンソール/CLIで投入する（ignore_changesでTerraformは値を追跡しない）。
-# ADR-017・CLAUDE.mdのセキュリティ規約に基づく。
 resource "aws_ssm_parameter" "secret" {
   for_each = toset(var.secret_names)
 

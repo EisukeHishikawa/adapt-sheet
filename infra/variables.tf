@@ -23,7 +23,7 @@ variable "image_tag" {
 }
 
 variable "lambda_memory_size" {
-  description = "Lambdaのメモリ割り当て（MB）。PDF処理に余裕を持たせる（ADR-005）"
+  description = "Lambdaのメモリ割り当て（MB）。PDF処理に余裕を持たせる"
   type        = number
   default     = 4096
 }
@@ -41,19 +41,19 @@ variable "docling_image_tag" {
 }
 
 variable "docling_lambda_memory_size" {
-  description = "docling-service Lambdaのメモリ割り当て（MB）。torch等のML推論に余裕を持たせる（ADR-026）"
+  description = "docling-service Lambdaのメモリ割り当て（MB）。torch等のML推論に余裕を持たせる"
   type        = number
   default     = 6144
 }
 
 variable "docling_lambda_timeout" {
-  description = "docling-service Lambdaのタイムアウト（秒）。backendは29秒で打ち切られるが、その時点で処理を止めても得るものがないため余裕を残す（ADR-026）"
+  description = "docling-service Lambdaのタイムアウト（秒）。backendは29秒で打ち切られるが、その時点で処理を止めても得るものがないため余裕を残す"
   type        = number
   default     = 60
 }
 
 variable "docling_lambda_ephemeral_storage_size" {
-  description = "docling-service Lambdaの/tmpサイズ（MB）。torch/HuggingFaceの実行時キャッシュ置き場（ADR-026）"
+  description = "docling-service Lambdaの/tmpサイズ（MB）。torch/HuggingFaceの実行時キャッシュ置き場"
   type        = number
   default     = 2048
 }
@@ -65,26 +65,26 @@ variable "pdf2htmlex_image_tag" {
 }
 
 variable "pdf2htmlex_lambda_memory_size" {
-  description = "pdf2htmlex-service Lambdaのメモリ割り当て（MB）（ADR-026）"
+  description = "pdf2htmlex-service Lambdaのメモリ割り当て（MB）"
   type        = number
   default     = 2048
 }
 
 variable "pdf2htmlex_lambda_timeout" {
-  description = "pdf2htmlex-service Lambdaのタイムアウト（秒）（ADR-026）"
+  description = "pdf2htmlex-service Lambdaのタイムアウト（秒）"
   type        = number
   default     = 60
 }
 
 variable "secret_parameter_names" {
-  description = "Parameter Store（SecureString）で管理する秘密情報の環境変数名（ADR-017）。backendのapp/secrets_loader.pyが読む名前と一致させる"
+  description = "Parameter Store（SecureString）で管理する秘密情報の環境変数名。backendのapp/secrets_loader.pyが読む名前と一致させる"
   type        = list(string)
   default = [
     "GEMINI_API_KEY",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
     # JWT検証鍵とDB接続文字列。Lambdaの環境変数（コンソールで平文表示される）ではなく
-    # SecureStringから実行時に展開する。未投入だと本番が常に未ログイン扱いになる（ADR-018/019）。
+    # SecureStringから実行時に展開する。未投入だと本番が常に未ログイン扱いになる。
     "SUPABASE_JWT_SECRET",
     "DATABASE_URL",
   ]
@@ -97,19 +97,19 @@ variable "supabase_jwt_jwks_url" {
 }
 
 variable "use_mock_ai" {
-  description = "LambdaのUSE_MOCK_AI環境変数。実AIを叩く本番はfalse（ADR-006）"
+  description = "LambdaのUSE_MOCK_AI環境変数。実AIを叩く本番はfalse"
   type        = string
   default     = "false"
 }
 
 variable "api_throttle_rate_limit" {
-  description = "API Gatewayステージ全体（全メソッド合算）の定常リクエスト数上限（req/秒。ADR-027）"
+  description = "API Gatewayステージ全体（全メソッド合算）の定常リクエスト数上限（req/秒）"
   type        = number
   default     = 50
 }
 
 variable "api_throttle_burst_limit" {
-  description = "API Gatewayステージ全体（全メソッド合算）のバースト上限（ADR-027）"
+  description = "API Gatewayステージ全体（全メソッド合算）のバースト上限"
   type        = number
   default     = 100
 }
@@ -127,25 +127,25 @@ variable "tags" {
 }
 
 variable "log_retention_in_days" {
-  description = "ログの保持期間（日）。Lambda・API GatewayのCloudWatch LogsとCloudFrontのS3ログに共通で適用する（ADR-030）"
+  description = "ログの保持期間（日）。Lambda・API GatewayのCloudWatch LogsとCloudFrontのS3ログに共通で適用する"
   type        = number
   default     = 30
 }
 
 variable "enable_xray" {
-  description = "X-Rayのトレースを有効にするか。backend→docling/pdf2htmlexの呼び出しを1本のトレースで追える（ADR-030）"
+  description = "X-Rayのトレースを有効にするか。backend→docling/pdf2htmlexの呼び出しを1本のトレースで追える"
   type        = bool
   default     = true
 }
 
 variable "enable_cloudfront_access_logging" {
-  description = "CloudFrontの標準アクセスログをS3へ出力するか（ADR-030）"
+  description = "CloudFrontの標準アクセスログをS3へ出力するか"
   type        = bool
   default     = true
 }
 
 variable "alarm_email" {
-  description = "CloudWatchアラームの通知先メールアドレス。空文字ならSNSトピックのみ作成し購読は作らない（ADR-030）"
+  description = "CloudWatchアラームの通知先メールアドレス。空文字ならSNSトピックのみ作成し購読は作らない"
   type        = string
   default     = ""
 }

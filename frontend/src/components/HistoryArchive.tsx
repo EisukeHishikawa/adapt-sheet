@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 
 const KIND_LABEL: Record<string, string> = { edit: '編集中', render: '描画結果' }
 
-// docs/spec.md 5章・ADR-019の残課題「保存済み履歴を画面上で閲覧・復元するUI」。
+// 保存済み履歴を画面上で閲覧・復元するUI。
 // HistorySlider（クライアント側・最大MAX_HISTORY_LENGTH件）の枠外にある過去データは、
 // 開いたときにだけGET /api/historyから取り直して一覧表示する（常時保持はしない）。
 export function HistoryArchive() {

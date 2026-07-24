@@ -1,4 +1,4 @@
-"""生成履歴の保存・一覧取得（DEVELOPMENT.md ステップ28、ADR-019）。"""
+"""生成履歴の保存・一覧取得。"""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def update_edit_history(
     width_mm: Optional[float],
     height_mm: Optional[float],
 ) -> Optional[RenderHistory]:
-    """編集中スナップショットを上書きする。編集を続けても行を増やさないため（ADR-025）。
+    """編集中スナップショットを上書きする。編集を続けても行を増やさないため。
 
     自分の編集中の行が見つからない場合はNoneを返す（他ユーザーの行・存在しないID・
     UUIDとして解釈できないIDを含む）。

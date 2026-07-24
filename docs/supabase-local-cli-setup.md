@@ -1,14 +1,13 @@
 # Supabase Local CLIによるログイン機能のローカル検証手順
 
 Supabase Auth（ログイン）とPostgres（生成履歴・RLS）を、実際のクラウドプロジェクトを作成せずに
-ローカルだけで検証するための手順（ADR-020/021）。`supabase` CLIコマンドで、Postgres・
+ローカルだけで検証するための手順。`supabase` CLIコマンドで、Postgres・
 GoTrue（Auth）等のスタックをDockerコンテナとしてローカルに起動する。
 
 - **対象範囲**: Googleアカウントでのログイン・ゲート対象エンジン（Gemini標準/Claude/OpenAI）・
   生成履歴の保存と`GET /api/history`・RLSの動作検証。
-- **生成履歴の保存先**: Supabase Local CLIが起動するPostgres（ADR-021でSupabase側へ統合。
-  かつて`docker-compose.yml`にあった`db`サービスは廃止）。
-- **ログイン手段**: **Googleアカウントのみ**（ADR-022）。メール＋パスワードでのログインは無効。
+- **生成履歴の保存先**: Supabase Local CLIが起動するPostgres。
+- **ログイン手段**: **Googleアカウントのみ**（ADR-020）。メール＋パスワードでのログインは無効。
 - **アカウント作成**: 画面からの新規登録は提供しない。`scripts/create_user.sh`（後述）でのみ作成でき、
   **Google OAuthの設定が無いと作成できない**。
 - **前提**: `docker compose up --build`でアプリ自体は起動済みであること。
@@ -27,7 +26,7 @@ supabase --version
 
 ## 2. Google OAuthクライアントの取得（初回のみ）
 
-ログイン手段はGoogleアカウントのみのため、ローカル検証でもこの手順が必須（ADR-022）。
+ログイン手段はGoogleアカウントのみのため、ローカル検証でもこの手順が必須（ADR-020）。
 
 1. [Google Cloud Console](https://console.cloud.google.com/) にアクセスし、プロジェクトを選択（無ければ新規作成）する。
 2. **OAuth同意画面** を設定する（「APIとサービス」→「OAuth同意画面」）。
@@ -57,13 +56,13 @@ supabase --version
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=<supabase status の ANON_KEY>
 # 従来のHS256共有シークレット方式のSupabaseプロジェクト用（Local CLIでは実際には未使用だが、
-# 本番プロジェクトが旧方式のままの場合に備えて設定しておく。app/services/auth.py、ADR-018）
+# 本番プロジェクトが旧方式のままの場合に備えて設定しておく。app/services/auth.py、ADR-020）
 SUPABASE_JWT_SECRET=<supabase status の JWT_SECRET>
 # Supabase Local CLIが既定で使うJWT Signing Keys（ES256/JWKS）方式の検証に必要（ADR-020）。
 # backendコンテナからDocker Desktopのホストブリッジ経由でSupabase CLIのコンテナへ到達する。
 SUPABASE_JWT_JWKS_URL=http://host.docker.internal:54321/auth/v1/.well-known/jwks.json
 
-# 生成履歴の保存先（ADR-021）。実行時はRLSを迂回しないauthenticatorロール、マイグレーションは
+# 生成履歴の保存先。実行時はRLSを迂回しないauthenticatorロール、マイグレーションは
 # 所有者権限が要るpostgresロールを使う。
 DATABASE_URL=postgresql+psycopg://authenticator:postgres@host.docker.internal:54322/postgres
 MIGRATION_DATABASE_URL=postgresql+psycopg://postgres:postgres@host.docker.internal:54322/postgres
@@ -89,7 +88,7 @@ docker compose up -d backend frontend
    本リポジトリの設定が一切効かない状態になる。
 2. **`.env`をシェルへ読み込んでから起動する。** `config.toml`の`env(...)`はこのシェルの環境変数から
    展開されるため、読み込まずに起動するとGoogleのclient_idがリテラル文字列`env(...)`のままGoTrueへ渡り、
-   「有効に見えるのにログインだけ失敗する」状態になる（ADR-022）。
+   「有効に見えるのにログインだけ失敗する」状態になる（ADR-020）。
 
 ```bash
 cd <supabase/config.toml があるリポジトリのルート>
@@ -128,7 +127,7 @@ docker compose exec backend alembic upgrade head
 ```
 
 `render_history`テーブルの作成に加えて、行レベルセキュリティ（`auth.uid()`による所有者限定の
-SELECT/INSERT/DELETEポリシー）が有効になる（ADR-021）。
+SELECT/INSERT/DELETEポリシー）が有効になる（ADR-020）。
 
 ## 6. アカウントの作成（唯一の手段）
 
@@ -145,7 +144,7 @@ scripts/create_user.sh user@example.com
 identityを自動的に紐付ける。
 
 Google OAuthが未設定の場合、このスクリプトは**アカウントを作らずにエラーで終了する**（ログインできない
-アカウントだけが増えるのを防ぐため。ADR-022）。
+アカウントだけが増えるのを防ぐため。ADR-020）。
 
 ## 7. 動作確認
 
@@ -154,7 +153,7 @@ Google OAuthが未設定の場合、このスクリプトは**アカウントを
 2. ログイン後、`EngineSelect`でGemini標準/Claude/OpenAIを選択して描画できる（未ログイン時は403
    `FREE_ACCESS_FORBIDDEN`になっていたことと比較する）。
 3. 描画に成功すると生成履歴が自動保存される。保存内容はAPIで確認できる（画面上の履歴閲覧UIは
-   未実装。ADR-019のトレードオフ）。
+   未実装）。
 
 アクセストークンはブラウザのDevTools（Application → Session Storage → `sb-*-auth-token`）から取得できる。
 
@@ -197,7 +196,7 @@ supabase stop
 | ログイン後もゲート対象エンジンが403のまま | `SUPABASE_JWT_JWKS_URL`未設定、または`host.docker.internal`にbackendコンテナから到達できない | `.env`の設定を確認し、`docker compose exec backend curl http://host.docker.internal:54321/auth/v1/.well-known/jwks.json`で疎通確認する |
 | `GET /api/history`が500 | `render_history`テーブル未作成（マイグレーション未適用） | `docker compose exec backend alembic upgrade head`を実行する |
 | 履歴が保存されない（描画は成功する） | `DATABASE_URL`未設定、またはRLSポリシーに合致しない | `.env`の`DATABASE_URL`がauthenticatorロールになっているか確認する。保存失敗時はbackendのログに警告が出る |
-| メール＋パスワードで`email_provider_disabled` | 仕様どおり。ログイン手段はGoogleのみ（ADR-022） | 「Googleでログイン」を使う |
+| メール＋パスワードで`email_provider_disabled` | 仕様どおり。ログイン手段はGoogleのみ（ADR-020） | 「Googleでログイン」を使う |
 | Googleログインで`Unsupported provider` / 認証情報エラー | `.env`を読み込まずに`supabase start`したため`env(...)`が展開されていない | `set -a; source .env; set +a` の後に`supabase stop && supabase start`をやり直す（手順4の確認コマンド参照） |
 | Googleログイン後に`redirect_uri_mismatch` | Google Cloud側のリダイレクトURI登録漏れ | 承認済みリダイレクトURIに`http://127.0.0.1:54321/auth/v1/callback`を追加する |
 | Googleログインで`Signups not allowed` | そのGoogleアカウントのメールアドレスが未登録 | `scripts/create_user.sh <そのメールアドレス>`で先に作成する |

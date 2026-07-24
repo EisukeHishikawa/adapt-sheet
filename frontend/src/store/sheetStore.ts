@@ -4,7 +4,7 @@ import type { HistoryItemResponse } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
-// グローバルストア（ADR-008）。
+// グローバルストア。
 //
 // 用紙寸法の表（docs/spec.md 2.2「定型サイズ自動入力」）。仕様書のカラム見出し「たて (mm)」
 // 「よこ (mm)」をそのままキー名にして1対1で追えるようにする。tateは長辺、yokoは短辺。
@@ -18,7 +18,7 @@ export type SizePresetName = keyof typeof SIZE_PRESETS
 export type Orientation = 'tate' | 'yoko'
 export type Dimensions = { widthMm: number; heightMm: number }
 
-// モデル選択（EngineSelect）の7エンジン（ADR-015）。gemini_free/gemini/claude/openaiは
+// モデル選択（EngineSelect）の7エンジン。gemini_free/gemini/claude/openaiは
 // 生成AI（LLMがHTML/CSS/JSONを作る）、docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン
 // （変換結果をそのまま描画結果にする）。アイコン・説明文などの表示情報はEngineSelect.tsx側が持つ。
 export type RenderEngineId =
@@ -111,7 +111,7 @@ function fromHistoryResponse(row: HistoryItemResponse): HistoryEntry {
   }
 }
 
-// バックエンドが構造化エラーの安全文言を返す（ADR-012）ため通常はそちらを表示する。これは
+// バックエンドが構造化エラーの安全文言を返すため通常はそちらを表示する。これは
 // バックエンド不達・非JSONレスポンスでその文言が得られない場合のフォールバックで、
 // バックエンド（app/errors._ERROR_CATALOG）と同じ文言に揃える（docs/spec.md 4章）。
 function messageForStatus(status: number): string {
@@ -146,12 +146,12 @@ type SheetState = {
   // nullは「未入力」。fetchRenderではAPIへ送らない（backendのOptional[float] = Form(None)に対応）。
   widthMm: number | null
   heightMm: number | null
-  // 描画ボタンの隣（EngineSelect）で選択する生成エンジン（ADR-015）。既定は無料枠のGemini。
+  // 描画ボタンの隣（EngineSelect）で選択する生成エンジン。既定は無料枠のGemini。
   engine: RenderEngineId
   history: HistoryItem[]
   historySeq: number
-  // 現在編集中のスナップショットのseq。編集を続けても履歴を増やさず、この1件を上書きする
-  // （ADR-025）。描画直後や描画履歴を復元した直後は、次の編集で新しい1件を作るためnullにする。
+  // 現在編集中のスナップショットのseq。編集を続けても履歴を増やさず、この1件を上書きする。
+  // 描画直後や描画履歴を復元した直後は、次の編集で新しい1件を作るためnullにする。
   activeEditSeq: number | null
   isLoading: boolean
   error: string | null
@@ -366,13 +366,13 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     set({ isLoading: true, error: null, successMessage: null })
 
     try {
-      // cssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提。ADR-014）。
+      // cssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提）。
       // jsonContentも送らない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
-      // htmlContentも送らない（ADR-015：生成AIへの入力はPDFファイルの直接添付のみで、
+      // htmlContentも送らない（生成AIへの入力はPDFファイルの直接添付のみで、
       // HTML・Docling抽出テキストは使わない）。
       const { promptContent, pdfFile, widthMm, heightMm, engine } = get()
-      // gemini/claude/openai（標準プラン）はログイン済みユーザーのみ利用可能（DEVELOPMENT.md
-      // ステップ27）。未ログイン時はaccess_tokenがundefinedのままrenderSheetへ渡り、
+      // gemini/claude/openai（標準プラン）はログイン済みユーザーのみ利用可能。
+      // 未ログイン時はaccess_tokenがundefinedのままrenderSheetへ渡り、
       // ゲート対象engineはバックエンドが403を返す。
       const accessToken = useAuthStore.getState().session?.access_token
       const result = await renderSheet(
@@ -411,7 +411,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
         }
       })
     } catch (err) {
-      // バックエンド提供の安全文言（ADR-012）を最優先し、得られない場合のみ既定文言へ落とす。
+      // バックエンド提供の安全文言を最優先し、得られない場合のみ既定文言へ落とす。
       const message =
         err instanceof RenderApiError
           ? (err.backendMessage ?? messageForStatus(err.status))

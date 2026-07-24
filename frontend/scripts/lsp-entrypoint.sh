@@ -1,5 +1,5 @@
 #!/bin/sh
-# frontend-lspサービスの起動前処理（ADR-024）。
+# frontend-lspサービスの起動前処理。
 #
 # ESLintのflat config（eslint.config.js）はプラグインをESMのbare importで読み込むため、
 # 解決はconfigファイルの位置（ホストからbind mountしたfrontend配下）からのnode_modules探索に

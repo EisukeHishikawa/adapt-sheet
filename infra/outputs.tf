@@ -19,12 +19,12 @@ output "ecr_pdf2htmlex_repository_url" {
 }
 
 output "docling_function_url" {
-  description = "docling-service LambdaのFunction URL（AWS_IAM認証必須、backendのみ呼び出し可。ADR-026）"
+  description = "docling-service LambdaのFunction URL（AWS_IAM認証必須、backendのみ呼び出し可）"
   value       = module.lambda_docling.function_url
 }
 
 output "pdf2htmlex_function_url" {
-  description = "pdf2htmlex-service LambdaのFunction URL（AWS_IAM認証必須、backendのみ呼び出し可。ADR-026）"
+  description = "pdf2htmlex-service LambdaのFunction URL（AWS_IAM認証必須、backendのみ呼び出し可）"
   value       = module.lambda_pdf2htmlex.function_url
 }
 
@@ -59,11 +59,11 @@ output "ssm_parameter_prefix" {
 }
 
 output "alarm_topic_arn" {
-  description = "CloudWatchアラームの通知先SNSトピックARN（購読を後から追加する際に使う。ADR-030）"
+  description = "CloudWatchアラームの通知先SNSトピックARN（購読を後から追加する際に使う）"
   value       = module.monitoring.alarm_topic_arn
 }
 
 output "api_access_log_group_name" {
-  description = "API GatewayアクセスログのCloudWatch Logsロググループ名（ADR-030）"
+  description = "API GatewayアクセスログのCloudWatch Logsロググループ名"
   value       = module.api.access_log_group_name
 }

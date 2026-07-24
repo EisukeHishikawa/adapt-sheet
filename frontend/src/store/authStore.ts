@@ -2,11 +2,11 @@ import { create } from 'zustand'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabaseClient'
 
-// DEVELOPMENT.md ステップ27。VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY未設定（lib/supabaseClientが
+// VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY未設定（lib/supabaseClientが
 // null）の環境では、認証系メソッドを呼んでもクラッシュさせず何もしない（AuthPanel自体を
 // isAuthAvailable===falseで非表示にするための土台）。
-// アカウント作成はscripts/create_user.shによる管理者操作のみとし、画面からの新規登録は提供しない
-// （ADR-021）。ログイン手段はGoogleアカウントのみで、パスワードログインは持たない（ADR-022）。
+// アカウント作成はscripts/create_user.shによる管理者操作のみとし、画面からの新規登録は提供しない。
+// ログイン手段はGoogleアカウントのみで、パスワードログインは持たない。
 type AuthState = {
   session: Session | null
   isAuthAvailable: boolean

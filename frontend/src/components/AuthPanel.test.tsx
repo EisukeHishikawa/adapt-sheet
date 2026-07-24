@@ -71,7 +71,7 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(signOut).toHaveBeenCalledTimes(1)
   })
 
-  // ログイン手段はGoogleのみのため、メールアドレス・パスワードの入力欄自体を持たない（ADR-022）。
+  // ログイン手段はGoogleのみのため、メールアドレス・パスワードの入力欄自体を持たない。
   it('メールアドレス・パスワードの入力欄を表示しない', () => {
     setStoreState({})
 
@@ -81,7 +81,7 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(screen.queryByLabelText('パスワード')).not.toBeInTheDocument()
   })
 
-  // アカウント作成は管理者のコマンド操作のみに限定したため、画面には新規登録の導線を出さない（ADR-021）。
+  // アカウント作成は管理者のコマンド操作のみに限定したため、画面には新規登録の導線を出さない。
   it('新規登録ボタンを表示しない', () => {
     setStoreState({})
 
@@ -90,7 +90,7 @@ describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
     expect(screen.queryByRole('button', { name: '新規登録' })).not.toBeInTheDocument()
   })
 
-  // 新規登録の導線が無い理由（管理者のみが登録できる）を利用者に明示する（ADR-021）。
+  // 新規登録の導線が無い理由（管理者のみが登録できる）を利用者に明示する。
   it('未ログイン時にアカウント登録が管理者のみ可能である旨を表示する', () => {
     setStoreState({})
 

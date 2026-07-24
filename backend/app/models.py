@@ -1,4 +1,4 @@
-"""SQLAlchemyモデル定義（DEVELOPMENT.md ステップ28、ADR-019）。
+"""SQLAlchemyモデル定義。
 
 PostgreSQL/SQLite双方でDDLを生成できるよう、方言固有型（postgresql.JSONB等）ではなく
 SQLAlchemy 2.0の汎用型（Uuid/JSON）を使う。pytestはSQLiteのin-memory DBでこのメタデータを
@@ -26,7 +26,7 @@ class RenderHistory(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # SupabaseのJWT `sub`（auth.users.id）。本DBはSupabaseのauth schemaを所有しないため
-    # 外部キー制約は張らない（ADR-019）。
+    # 外部キー制約は張らない。
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     engine: Mapped[str] = mapped_column(String(32), nullable=False)
     # "render"（描画結果）か "edit"（描画前の編集中スナップショット）か。編集中も履歴として

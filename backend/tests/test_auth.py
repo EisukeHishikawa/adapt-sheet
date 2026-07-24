@@ -1,7 +1,7 @@
-"""Supabase発行JWTの検証（app.services.auth、DEVELOPMENT.md ステップ27）のテスト。
+"""Supabase発行JWTの検証（app.services.auth）のテスト。
 
 実Supabaseプロジェクトには接続せず、SUPABASE_JWT_SECRETと同じ鍵でPyJWTが自前で
-署名したトークンを使い、検証ロジック単体を確認する。JWKS/ES256経路（ADR-020）は
+署名したトークンを使い、検証ロジック単体を確認する。JWKS/ES256経路は
 実際のネットワーク越しのJWKS取得を行わず、PyJWKClientをフェイクに差し替えて検証する。
 """
 
@@ -141,7 +141,7 @@ def test_returns_none_for_unsupported_algorithm():
 
 
 def test_verified_user_id_is_exposed_on_request_state():
-    # アクセスログ（app/middleware.py）が監査証跡としてuser_idを載せられるようにする（ADR-030）。
+    # アクセスログ（app/middleware.py）が監査証跡としてuser_idを載せられるようにする。
     request = _request()
     token = _make_token(sub="user-abc")
 

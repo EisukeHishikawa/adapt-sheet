@@ -7,7 +7,7 @@ resource "aws_ecr_repository" "this" {
   }
 }
 
-# 古いイメージを自動失効させ、ECR Privateの無料枠500MBの逼迫を抑える（ADR-017）。
+# 古いイメージを自動失効させ、ECR Privateの無料枠500MBの逼迫を抑える。
 resource "aws_ecr_lifecycle_policy" "this" {
   repository = aws_ecr_repository.this.name
 

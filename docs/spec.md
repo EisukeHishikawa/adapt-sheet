@@ -6,12 +6,12 @@
 
 ## 1. プロダクト概要
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI、PDFを直接読み取るマルチモーダル入力）と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能（ADR-015）、リアルタイムプレビューを統合したSPA。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI、PDFを直接読み取るマルチモーダル入力）と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 
 ### 対象ユーザー
 
 - **未認証ユーザー**: アカウント登録なしで帳票の生成・プレビューを試せる（データ保存は不可）。
-- **登録ユーザー**: Supabase Authでログインし、`POST /api/render`成功時に生成履歴が自動的にSupabase（PostgreSQL）へ保存される（ステップ28）。保存済み履歴の閲覧UIは実装済み（5章参照）。名前付きテンプレート機能は未実装。
+- **登録ユーザー**: Supabase Authでログインし、`POST /api/render`成功時に生成履歴が自動的にSupabase（PostgreSQL）へ保存される。保存済み履歴は`HistorySlider`（最大10件、セッション切れ後もログイン確定時に再取得）と`HistoryArchive`（それより古い過去データ、最大50件）で閲覧できる。名前付きテンプレート機能は未実装。
 
 ---
 
@@ -22,9 +22,9 @@
 | # | 要素 | 説明 |
 |---|---|---|
 | 1 | HTMLプレビュー表示エリア | 生成されたHTML/CSSをレスポンシブに描画するiframe等のコンポーネント |
-| 2 | 3大入力エディタ | HTML入力 / JSON入力 / プロンプト入力（CSSはHTMLの`<style>`に埋め込む前提のため、独立の入力エディタ・APIフィールドとしては持たない。ADR-014） |
+| 2 | 3大入力エディタ | HTML入力 / JSON入力 / プロンプト入力（CSSはHTMLの`<style>`に埋め込む前提のため、独立の入力エディタ・APIフィールドとしては持たない） |
 | 3 | ファイル操作 | PDFアップロードエリア（ドラッグ＆ドロップ対応） |
-| 4 | コントロール | 縦幅・横幅サイズ入力、生成エンジン選択（EngineSelect、ADR-015）、描画ボタン |
+| 4 | コントロール | 縦幅・横幅サイズ入力、生成エンジン選択（EngineSelect）、描画ボタン |
 | 5 | アーキテクチャインフォメーション | バックエンドAPI設計・システム構成・セキュリティ・CI/CD概要図（Mermaid埋め込み、インライン表示） |
 
 ### 2.2 主要機能
@@ -47,15 +47,15 @@
 | B5 | 257 | 182 |
 
 #### 履歴スライド機能
-- 描画ボタン押下時、PDF・プロンプト・サイズ・生成エンジン選択をAPIへ送信する（CSS・JSON・HTMLは独立フィールドを持たない。ADR-014/016）。
+- 描画ボタン押下時、PDF・プロンプト・サイズ・生成エンジン選択をAPIへ送信する（CSS・JSON・HTMLは独立フィールドを持たない）。
 - レスポンス（HTML/CSS/JSON）を反映し、再描画時は過去の描画内容を最大10件まで横にスライドしてスタックする（11件目以降は最も古い履歴を破棄）。
-- エディタ（HTML/JSON）を編集した場合も、入力が止まった区切りで「編集中」のスナップショットとして同じ履歴へ積む（ADR-025）。描画結果と同じ10件枠を共有し、点線枠と「編集中」バッジで描画結果と区別する。ログイン時はサーバー側の履歴にも`kind="edit"`として保存する。
+- エディタ（HTML/JSON）を編集した場合も、入力が止まった区切りで「編集中」のスナップショットとして同じ履歴へ積む。描画結果と同じ10件枠を共有し、点線枠と「編集中」バッジで描画結果と区別する。ログイン時はサーバー側の履歴にも`kind="edit"`として保存する。
 - 編集中のスナップショットを続けて編集した場合は履歴を追加せず、その1件を最新内容へ更新する。新しい「編集中」が増えるのは、描画結果を編集したとき、または描画履歴を復元して編集したときのみ。
 
 #### インテリジェントメッセージ表示
 - バックエンドAPIのステータスコード（4xx, 5xx等）に準拠したエラー/成功メッセージをトースト等で表示する。
 
-#### 描画中の進捗表示（ADR-014）
+#### 描画中の進捗表示
 - Docling解析（PDFアップロード時）は数秒〜十数秒かかることがあるため、描画ボタン押下から完了までの間は「描画中...(N秒)」の形式で経過秒数を1秒ごとに表示し、処理が進行中であることを伝える。
 
 ---
@@ -64,7 +64,7 @@
 
 ### 3.1 `POST /api/render`
 
-PDF・プロンプト・サイズ指定・生成エンジン選択を受け取り、選択したエンジンに応じてHTML/CSS/JSONを返却する中核エンドポイント（ADR-015）。
+PDF・プロンプト・サイズ指定・生成エンジン選択を受け取り、選択したエンジンに応じてHTML/CSS/JSONを返却する中核エンドポイント。
 
 **リクエスト（multipart/form-data）**
 
@@ -76,8 +76,8 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 | `height_mm` | number | 任意 | 帳票の縦幅（mm） |
 | `engine` | string | 任意 | 生成エンジン。`gemini_free`（既定）/`gemini`/`claude`/`openai`/`docling`/`pdf2htmlex`/`pymupdf`のいずれか |
 
-> `css`・`json`（業務データ）・`html`（既存HTML）はいずれも独立したリクエストフィールドを持たない（ADR-014/016）。生成AIへはPDFファイルをそのままマルチモーダル入力として渡し、PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない。
-> `engine`が`gemini`/`claude`/`openai`（標準プラン）の場合、未ログインユーザーには`403 FREE_ACCESS_FORBIDDEN`を返す（4章参照）。ログイン済みかどうかは`Authorization: Bearer <Supabaseアクセストークン>`ヘッダーの有効性で判定する（DEVELOPMENT.md ステップ27、ADR-018）。
+> `css`・`json`（業務データ）・`html`（既存HTML）はいずれも独立したリクエストフィールドを持たない。生成AIへはPDFファイルをそのままマルチモーダル入力として渡し、PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない。
+> `engine`が`gemini`/`claude`/`openai`（標準プラン）の場合、未ログインユーザーには`403 FREE_ACCESS_FORBIDDEN`を返す（4章参照）。ログイン済みかどうかは`Authorization: Bearer <Supabaseアクセストークン>`ヘッダーの有効性で判定する（DEVELOPMENT.md ステップ27、ADR-020）。
 
 **レスポンス（200 OK）**
 
@@ -93,7 +93,7 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 
 ### 3.2 `POST /convert`（docling-service、内部API）
 
-Docling変換専用のサービス（ADR-013/016）が公開する内部エンドポイント。ホストへはポートを公開せず、Docker Compose内部ネットワーク経由で`backend`からのみ呼び出される想定のため、CORS設定・認証は行わない。
+Docling変換専用のサービスが公開する内部エンドポイント。ホストへはポートを公開せず、Docker Compose内部ネットワーク経由で`backend`からのみ呼び出される想定のため、CORS設定・認証は行わない。
 
 **リクエスト（multipart/form-data）**
 
@@ -117,7 +117,7 @@ Docling変換専用のサービス（ADR-013/016）が公開する内部エン�
 
 ### 3.3 `POST /convert`（pdf2htmlex-service、内部API）
 
-pdf2htmlEX変換専用のサービス（ADR-015）が公開する内部エンドポイント。docling-service（3.2）と同じ設計方針で、ホストへはポートを公開せず、Docker Compose内部ネットワーク経由で`backend`からのみ呼び出される。
+pdf2htmlEX変換専用のサービスが公開する内部エンドポイント。docling-service（3.2）と同じ設計方針で、ホストへはポートを公開せず、Docker Compose内部ネットワーク経由で`backend`からのみ呼び出される。
 
 **リクエスト（multipart/form-data）**
 
@@ -141,7 +141,7 @@ pdf2htmlEX変換専用のサービス（ADR-015）が公開する内部エンド
 
 ### 3.4 GET /api/history（登録ユーザー限定、DEVELOPMENT.md ステップ28）
 
-ログイン中のユーザーが`POST /api/render`で成功させた生成履歴を、新しい順に最大50件返す。`POST /api/render`成功時にサーバー側で自動保存されるため、専用の保存操作（保存ボタン等）はない（ADR-019）。
+ログイン中のユーザーが`POST /api/render`で成功させた生成履歴を、新しい順に最大50件返す。`POST /api/render`成功時にサーバー側で自動保存されるため、専用の保存操作（保存ボタン等）はない。
 
 **リクエスト**
 
@@ -164,13 +164,13 @@ pdf2htmlEX変換専用のサービス（ADR-015）が公開する内部エンド
 ]
 ```
 
-> 未ログイン時に`POST /api/render`が成功しても履歴は保存されない。DB保存自体が失敗した場合も`POST /api/render`のレスポンスには影響しない（ADR-019。描画の成否とDB保存の成否を切り離す）。
+> 未ログイン時に`POST /api/render`が成功しても履歴は保存されない。DB保存自体が失敗した場合も`POST /api/render`のレスポンスには影響しない（描画の成否とDB保存の成否を切り離す）。
 
-### 3.5 `POST /api/warmup`（ホットスタンバイ、ADR-028）
+### 3.5 `POST /api/warmup`（ホットスタンバイ）
 
 フロントの画面表示時に一度だけ呼ばれ、コールドスタートしがちな依存先を起こしておくためのエンドポイント。認証不要・リクエストボディなし。
 
-- `docling` / `pdf2htmlex`: 各サービスの`GET /health`をbackendが代理で叩く（IAM認証必須のLambda Function URLのためフロントからは直接叩けない。ADR-026）
+- `docling` / `pdf2htmlex`: 各サービスの`GET /health`をbackendが代理で叩く（IAM認証必須のLambda Function URLのためフロントからは直接叩けない）
 - `database`: SupabaseのPostgresへ`SELECT 1`（無料プロジェクトの一時停止を避けるキープアライブ）
 
 **レスポンス（常に200 OK）**
@@ -199,10 +199,10 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 | HTTPステータス | `error.code` | ケース | 発生条件 |
 |---|---|---|---|
 | `400 Bad Request` | `VALIDATION_ERROR` | バリデーションエラー | 必須項目の欠如、サイズ指定の型不正、JSON構文エラーなど（変換エンジン選択時にPDF未添付の場合を含む） |
-| `403 Forbidden` | `FREE_ACCESS_FORBIDDEN` | 標準プランの生成AI利用不可 | `engine`が`gemini`/`claude`/`openai`（標準プラン）で、フェーズ5のアカウント登録機能導入前（ADR-015） |
+| `403 Forbidden` | `FREE_ACCESS_FORBIDDEN` | 標準プランの生成AI利用不可 | `engine`が`gemini`/`claude`/`openai`（標準プラン）で、フェーズ5のアカウント登録機能導入前 |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
 | `422 Unprocessable Entity` | `PDF_CONVERSION_ERROR` | PDF解析エラー | PDFの構造が破損している、パスワード保護されている等でDocling/pdf2htmlEX/PyMuPDFによる変換に失敗 |
-| `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | API Gatewayステージ全体（全利用者合算、認証有無に関わらず）のスロットリングに抵触（ADR-027） |
+| `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | API Gatewayステージ全体（全利用者合算、認証有無に関わらず）のスロットリングに抵触 |
 | `502 Bad Gateway` | `AI_GENERATION_ERROR` | AI生成エラー | Gemini/Claude/OpenAI API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
 | `500 Internal Server Error` | `INTERNAL_ERROR` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
 
@@ -235,5 +235,4 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 
 ## 5. 今後の追記予定
 
-- フェーズ2・3の実装が進み次第、画面のワイヤーフレームやAPIのリクエスト/レスポンス実例を追記する。
-- 保存済み履歴（GET /api/history）を画面上で閲覧・復元するUIは`HistorySlider`（最大10件、セッション切れ後もログイン確定時に再取得）と`HistoryArchive`（それより古い過去データ、最大50件）として実装済み（ADR-019追記）。
+- 画面のワイヤーフレームやAPIのリクエスト/レスポンス実例を追記する。

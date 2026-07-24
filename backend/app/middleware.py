@@ -1,4 +1,4 @@
-"""リクエスト相関ID採番・アクセスログ・想定外例外の500化を行うASGIミドルウェア（ADR-011/013）。
+"""リクエスト相関ID採番・アクセスログ・想定外例外の500化を行うASGIミドルウェア。
 
 BaseHTTPMiddlewareではなく素のASGIミドルウェアにしているのは、request_idのcontextvarを
 リクエストの最外周で設定し、内側の全処理（ルート・例外ハンドラ）から確実に参照できるようにするため
@@ -31,8 +31,8 @@ class RequestContextMiddleware:
             return
 
         # 認証依存（app/services/auth.py）はFastAPIによりスレッドプールで実行されうるため、
-        # contextvarでは相関できない。同一のscope dictを共有するstate経由でuser_idを受け取る
-        # （ADR-030）。Starletteが設定する前に読む可能性を避けるためここで初期化する。
+        # contextvarでは相関できない。同一のscope dictを共有するstate経由でuser_idを受け取る。
+        # Starletteが設定する前に読む可能性を避けるためここで初期化する。
         scope.setdefault("state", {})
 
         request_id = str(uuid.uuid4())

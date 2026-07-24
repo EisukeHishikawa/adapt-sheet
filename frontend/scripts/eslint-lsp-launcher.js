@@ -1,4 +1,4 @@
-// vscode-eslint-language-serverをコンテナ内で起動するための中継（ADR-024）。
+// vscode-eslint-language-serverをコンテナ内で起動するための中継。
 //
 // vscode-languageserverはinitializeで受け取ったprocessId（エディタのPID）を定期的に
 // kill(0)で生存確認し、見つからなければ孤児プロセスとみなして自らexitする。ホストのPIDは

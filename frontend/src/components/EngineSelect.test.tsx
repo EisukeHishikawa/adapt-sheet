@@ -3,9 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { EngineSelect } from './EngineSelect'
 import { useSheetStore } from '@/store/sheetStore'
 
-// ADR-015: 描画エンジン（生成AI4種＋変換エンジン3種、計7つ）を選ぶSelect。
+// 描画エンジン（生成AI4種＋変換エンジン3種、計7つ）を選ぶSelect。
 // SizeControls.test.tsxと同じBase UI Selectのテストパターン（combobox→option）を踏襲する。
-describe('EngineSelect（描画エンジン選択・ADR-015）', () => {
+describe('EngineSelect（描画エンジン選択）', () => {
   beforeEach(() => {
     useSheetStore.setState({ engine: 'gemini_free' })
   })

@@ -4,7 +4,7 @@ import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// XSSでアクセストークン（sessionStorage）を盗まれる経路を狭めるCSP（ADR-021）。開発サーバーは
+// XSSでアクセストークン（sessionStorage）を盗まれる経路を狭めるCSP。開発サーバーは
 // React Fast Refreshのインラインscriptとwebsocket(HMR)を使うため同じポリシーでは動かず、
 // ビルド成果物にのみ注入する。本番配信時はCloudFront側の応答ヘッダーで同等のCSPを付けるのが
 // 本筋で（metaタグはframe-ancestors等を解釈できない）、これはその二重化。
@@ -56,7 +56,7 @@ export default defineConfig({
   },
   server: {
     // Viteの既定は127.0.0.1のみへのbindだが、コンテナ外（ホストPC）からアクセスするため
-    // 全interfaceでlistenする（ADR-009）。
+    // 全interfaceでlistenする。
     host: true,
     // ポートを固定し、5173が使用中でも別ポートへ自動退避させない。自動退避を許すと
     // 「コンテナが公開している5173に実アプリが居ない」というポートずれが起き、

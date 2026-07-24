@@ -15,6 +15,67 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
   restrict_public_buckets = true
 }
 
+# CloudFrontのアクセスログ置き場。公開の入口であるCloudFrontのログが無いと、
+# 「誰がどのパスを叩いたか」がAPI Gatewayへ到達したリクエストの分しか残らない（ADR-030）。
+resource "aws_s3_bucket" "logs" {
+  count  = var.enable_access_logging ? 1 : 0
+  bucket = "${var.name}-cf-logs-${data.aws_caller_identity.current.account_id}"
+
+  # ログは再作成できない資産ではないため、destroy時に中身ごと消せるようにして
+  # `terraform destroy`がバケット非空で失敗するのを避ける。
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  count  = var.enable_access_logging ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# CloudFrontの標準ログ配信はバケットACL（awslogsdeliveryへのFULL_CONTROL付与）を使うため、
+# ACL無効（BucketOwnerEnforced）だと配信自体が失敗する。ACLの付与はCloudFrontが自動で行う。
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  count  = var.enable_access_logging ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  count  = var.enable_access_logging ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      # CloudFrontの標準ログ配信はSSE-KMSのバケットへ書き込めないため、SSE-S3にする。
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# 保持期間を明示しないとログが無期限に積み上がり、コストだけが増え続ける。
+resource "aws_s3_bucket_lifecycle_configuration" "logs" {
+  count  = var.enable_access_logging ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.log_retention_in_days
+    }
+  }
+}
+
 resource "aws_cloudfront_origin_access_control" "this" {
   name                              = "${var.name}-frontend-oac"
   origin_access_control_origin_type = "s3"
@@ -49,6 +110,17 @@ resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   default_root_object = "index.html"
   price_class         = "PriceClass_200"
+
+  dynamic "logging_config" {
+    for_each = var.enable_access_logging ? [1] : []
+
+    content {
+      bucket = aws_s3_bucket.logs[0].bucket_domain_name
+      prefix = "cloudfront/"
+      # 認証はAuthorizationヘッダーのJWTで行いCookieを使わないため、記録する価値がない。
+      include_cookies = false
+    }
+  }
 
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
@@ -128,6 +200,9 @@ resource "aws_cloudfront_distribution" "this" {
     # 独自ドメインは未使用のため、CloudFront既定証明書（*.cloudfront.net）を使う。
     cloudfront_default_certificate = true
   }
+
+  # ログ配信のACL付与はバケットのACLが有効になっている必要があるため、作成順を固定する。
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
 }
 
 # CloudFront（このディストリビューション）からのみS3読み取りを許可する。

@@ -57,3 +57,13 @@ output "ssm_parameter_prefix" {
   description = "APIキーのParameter Storeパス接頭辞（LambdaのSSM_PARAMETER_PREFIX）"
   value       = local.ssm_prefix
 }
+
+output "alarm_topic_arn" {
+  description = "CloudWatchアラームの通知先SNSトピックARN（購読を後から追加する際に使う。ADR-030）"
+  value       = module.monitoring.alarm_topic_arn
+}
+
+output "api_access_log_group_name" {
+  description = "API GatewayアクセスログのCloudWatch Logsロググループ名（ADR-030）"
+  value       = module.api.access_log_group_name
+}

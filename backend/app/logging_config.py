@@ -26,6 +26,15 @@ class JsonLogFormatter(logging.Formatter):
         "status_code",
         "duration_ms",
         "detail",
+        # 監査証跡。Supabase Auth側のログは保持期間がプラン依存のため、誰の操作かはアプリ側の
+        # ログにも残してCloudWatch上で完結して追えるようにする（ADR-030）。
+        "user_id",
+        # 失敗の原因（JWT検証エラー等）。安全な要約のみを載せ、トークン本体は決して載せない。
+        "reason",
+        "engine",
+        # サービス間ログ突き合わせ用。docling/pdf2htmlexのどちらを呼んだかと、その応答状況。
+        "service",
+        "upstream_status",
         # AI生成の入出力全文。app/services/ai_client.pyがLOG_AI_PAYLOAD有効時のみ付与する。
         "ai_model",
         "ai_prompt",

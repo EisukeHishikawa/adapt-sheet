@@ -124,3 +124,38 @@ def test_warmup_returns_false_on_non_200_status():
     extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
 
     assert extractor.warmup() is False
+
+
+def test_request_id_is_propagated_to_internal_service():
+    # backendが採番した相関IDを内部サービスへ引き継ぎ、CloudWatch上で1つのrequest_idから
+    # 両サービスのログを追えるようにする（ADR-013の積み残しを解消。ADR-030）。
+    from app.request_context import reset_request_id, set_request_id
+
+    captured_headers = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_headers.update(request.headers)
+        return httpx.Response(200, json={"html": "<html>x</html>"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+    token = set_request_id("11111111-2222-3333-4444-555555555555")
+    try:
+        extractor.convert_to_html("f.pdf", b"pdf-bytes")
+    finally:
+        reset_request_id(token)
+
+    assert captured_headers["x-request-id"] == "11111111-2222-3333-4444-555555555555"
+
+
+def test_request_id_header_is_omitted_outside_request_scope():
+    # 起動時処理など相関IDが無い経路で、空のヘッダーを送らない。
+    captured_headers = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_headers.update(request.headers)
+        return httpx.Response(200, json={"html": "<html>x</html>"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+    extractor.convert_to_html("f.pdf", b"pdf-bytes")
+
+    assert "x-request-id" not in captured_headers

@@ -13,6 +13,16 @@ output "origin_path" {
   value       = "/${aws_api_gateway_stage.this.stage_name}"
 }
 
+output "stage_name" {
+  description = "ステージ名（CloudWatchアラームのディメンションに使う）"
+  value       = aws_api_gateway_stage.this.stage_name
+}
+
+output "access_log_group_name" {
+  description = "アクセスログのCloudWatch Logsロググループ名"
+  value       = aws_cloudwatch_log_group.access.name
+}
+
 output "rest_api_id" {
   description = "REST APIのID"
   value       = aws_api_gateway_rest_api.this.id

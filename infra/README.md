@@ -13,8 +13,9 @@ infra/
 │   ├── ecr/          # backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可）
 │   ├── ssm/          # APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
 │   ├── lambda/       # Lambda関数の共通モジュール。backend（SSM読み取り＋SSM経由KMS復号の最小権限）と、docling/pdf2htmlex（AWS_IAM認証Function URL、backendのみ呼び出し許可。ADR-026）で共用
-│   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ。ステージ全体のスロットリングで過度なAPIコールを防ぐ（WAFは使わない。ADR-027）
-│   └── frontend/     # 非公開S3 ＋ CloudFront（OAC）。SPAフォールバック付き
+│   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ。ステージ全体のスロットリングで過度なAPIコールを防ぐ（WAFは使わない。ADR-027）。アクセスログ（JSON）をCloudWatch Logsへ出す（ADR-030）
+│   ├── monitoring/   # CloudWatchアラーム（Lambda・API Gateway・アプリログのERROR）と通知先SNSトピック（ADR-030）
+│   └── frontend/     # 非公開S3 ＋ CloudFront（OAC）。SPAフォールバック付き。標準アクセスログを専用S3バケットへ出す（ADR-030）
 ├── versions.tf / providers.tf / backend.tf
 ├── variables.tf / main.tf / outputs.tf
 └── terraform.tfvars.example

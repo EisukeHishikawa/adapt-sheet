@@ -13,12 +13,20 @@ importされない（secrets_loader.pyと同じ、本番専用機能を開発の
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Optional, Protocol
 
 import httpx
 
+from app.request_context import get_request_id
 from app.services.pdf_common import PDFConversionError, first_page_only
+
+logger = logging.getLogger("app.extractor")
+
+# 相関IDを伝播させるヘッダー名。SigV4の署名対象はhost/content-typeのみのため、
+# このヘッダーを足しても署名は崩れない（ADR-026/030）。
+_REQUEST_ID_HEADER = "X-Request-ID"
 
 # Lambda Function URLのSigV4署名で使うサービス名。API Gatewayではなく関数URLを直接叩くため
 # 署名対象サービスは常に"lambda"になる（AWS公式のFunction URL署名仕様）。
@@ -64,6 +72,7 @@ class RemoteHtmlExtractor:
             "POST",
             f"{self._base_url}/convert",
             files={"file": (filename, first_page_only(content), "application/pdf")},
+            headers=_correlation_headers(),
             timeout=120.0,
         )
         self._sign_if_required(request)
@@ -71,7 +80,16 @@ class RemoteHtmlExtractor:
         try:
             response = self._client.send(request)
         except httpx.RequestError as exc:
+            logger.warning(
+                "内部変換サービスへの接続に失敗しました",
+                extra={"service": self._service_label, "reason": str(exc)},
+            )
             raise PDFConversionError(f"{self._service_label}への接続に失敗しました: {exc}") from exc
+
+        logger.info(
+            "内部変換サービスを呼び出しました",
+            extra={"service": self._service_label, "upstream_status": response.status_code},
+        )
 
         if response.status_code != 200:
             raise PDFConversionError(
@@ -88,7 +106,9 @@ class RemoteHtmlExtractor:
         例外は送出せず成否をboolで返す。実行環境の起動を待つ必要はないので、変換時（120秒）より
         大幅に短いタイムアウトにして、コールドスタート中でもフロントを待たせ続けない。
         """
-        request = self._client.build_request("GET", f"{self._base_url}/health", timeout=10.0)
+        request = self._client.build_request(
+            "GET", f"{self._base_url}/health", headers=_correlation_headers(), timeout=10.0
+        )
         self._sign_if_required(request)
 
         try:
@@ -139,6 +159,12 @@ def _sign_with_sigv4(request: httpx.Request) -> None:
     for header in ("Authorization", "X-Amz-Date", "X-Amz-Security-Token", "X-Amz-Content-SHA256"):
         if header in aws_request.headers:
             request.headers[header] = aws_request.headers[header]
+
+
+def _correlation_headers() -> dict:
+    """呼び出し元リクエストの相関IDを内部サービスへ引き継ぐ（ADR-013の積み残しを解消。ADR-030）。"""
+    request_id = get_request_id()
+    return {_REQUEST_ID_HEADER: request_id} if request_id else {}
 
 
 def _extract_detail(response: httpx.Response) -> str:

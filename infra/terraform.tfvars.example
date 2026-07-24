@@ -30,3 +30,12 @@ use_mock_ai = "false"
 # API Gatewayステージ全体（全メソッド合算）のスロットリング（IP単位ではない。ADR-027）。
 api_throttle_rate_limit  = 50
 api_throttle_burst_limit = 100
+
+# ログ・可観測性（ADR-030）。保持期間はLambda/API Gateway/CloudFrontのログへ共通で適用される。
+log_retention_in_days            = 30
+enable_xray                      = true
+enable_cloudfront_access_logging = true
+
+# CloudWatchアラームの通知先。空のままならSNSトピックだけを作り、購読は作らない。
+# 設定した場合、AWSから届く購読確認メールのリンクを踏むまで通知は配信されない。
+alarm_email = ""

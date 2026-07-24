@@ -32,6 +32,12 @@ variable "log_retention_in_days" {
   default     = 30
 }
 
+variable "enable_xray" {
+  description = "X-Rayのアクティブトレースを有効にするか（ADR-030）"
+  type        = bool
+  default     = true
+}
+
 variable "ssm_prefix" {
   description = "APIキーのParameter Storeパス接頭辞（SSM_PARAMETER_PREFIX）。APIキーを扱わないLambda（docling/pdf2htmlex）は空文字のまま渡し、環境変数自体を設定しない（ADR-026）"
   type        = string

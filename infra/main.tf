@@ -47,6 +47,9 @@ module "lambda_docling" {
 
   create_function_url            = true
   function_url_invoker_role_arns = [module.lambda.role_arn]
+
+  log_retention_in_days = var.log_retention_in_days
+  enable_xray           = var.enable_xray
 }
 
 # pdf2htmlEXサービス（PDF→HTML変換）のLambda化（ADR-026）。設計はdocling-serviceと同じ。
@@ -65,6 +68,9 @@ module "lambda_pdf2htmlex" {
 
   create_function_url            = true
   function_url_invoker_role_arns = [module.lambda.role_arn]
+
+  log_retention_in_days = var.log_retention_in_days
+  enable_xray           = var.enable_xray
 }
 
 # 入口エンドポイント（backend）のLambda。実行ロールにSSM読み取り＋KMS復号に加え、docling/pdf2htmlexの
@@ -79,6 +85,9 @@ module "lambda" {
   ssm_prefix         = local.ssm_prefix
   ssm_parameter_arns = module.ssm.parameter_arns
   use_mock_ai        = var.use_mock_ai
+
+  log_retention_in_days = var.log_retention_in_days
+  enable_xray           = var.enable_xray
 
   invoke_function_url_arns = [module.lambda_docling.function_arn, module.lambda_pdf2htmlex.function_arn]
   extra_env = merge(
@@ -99,12 +108,14 @@ module "lambda" {
 # 公開エンドポイント。REST API（REGIONAL）でLambdaへプロキシし、ステージ全体のスロットリングで
 # 過度なAPIコールを防ぐ（WAFを使わない代替。ADR-027）。
 module "api" {
-  source               = "./modules/api_gateway"
-  name                 = "${local.name_prefix}-api"
-  lambda_invoke_arn    = module.lambda.invoke_arn
-  lambda_function_name = module.lambda.function_name
-  throttle_rate_limit  = var.api_throttle_rate_limit
-  throttle_burst_limit = var.api_throttle_burst_limit
+  source                = "./modules/api_gateway"
+  name                  = "${local.name_prefix}-api"
+  lambda_invoke_arn     = module.lambda.invoke_arn
+  lambda_function_name  = module.lambda.function_name
+  throttle_rate_limit   = var.api_throttle_rate_limit
+  throttle_burst_limit  = var.api_throttle_burst_limit
+  log_retention_in_days = var.log_retention_in_days
+  enable_xray           = var.enable_xray
 }
 
 # フロントエンド配信（S3非公開＋CloudFront OAC）。/api/* は同じCloudFrontからAPI Gatewayへ
@@ -114,4 +125,25 @@ module "frontend" {
   name                   = local.name_prefix
   api_origin_domain_name = module.api.origin_domain_name
   api_origin_path        = module.api.origin_path
+  enable_access_logging  = var.enable_cloudfront_access_logging
+  log_retention_in_days  = var.log_retention_in_days
+}
+
+# ログを取るだけでは障害に気づけないため、アラームとその通知先までをコード化する（ADR-030）。
+module "monitoring" {
+  source = "./modules/monitoring"
+  name   = local.name_prefix
+
+  alarm_email = var.alarm_email
+
+  lambda_function_names = [
+    module.lambda.function_name,
+    module.lambda_docling.function_name,
+    module.lambda_pdf2htmlex.function_name,
+  ]
+
+  api_name       = "${local.name_prefix}-api"
+  api_stage_name = module.api.stage_name
+
+  backend_log_group_name = module.lambda.log_group_name
 }

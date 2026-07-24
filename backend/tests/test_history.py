@@ -1,7 +1,7 @@
-"""生成履歴の保存・一覧取得（app.services.history、DEVELOPMENT.md ステップ28）のテスト。
+"""生成履歴の保存・一覧取得（app.services.history）のテスト。
 
 実PostgreSQLは起動せず、SQLiteのin-memory DBにapp.models.Baseのメタデータをそのまま
-適用して検証する（app/models.pyが方言固有型を使っていないため成立する。ADR-019）。
+適用して検証する（app/models.pyが方言固有型を使っていないため成立する）。
 """
 
 import time

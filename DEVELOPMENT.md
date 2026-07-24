@@ -3,7 +3,7 @@
 本プロジェクトは、エンジニアが保守しやすいHTML/CSSを生成する機能と、リアルタイムプレビューを見ながらHTML帳票を作成できるサイトの開発手順書です。
 ClaudeCodeを活用し、**テスト駆動開発（TDD）**で最小限の機能から段階的に肉付けしていく「アジャイルアプローチ」で進めます。
 
-また、AWS Lambdaのコールドスタート対策として**「AWS Lambda Web Adapter」**をインフラのコア要件として組み込み、低コストかつ超高速なサーバーレス環境を実現します（当面のLambda化対象は軽量な入口エンドポイント`backend`のみ。ADR-017参照）。
+また、AWS Lambdaのコールドスタート対策として**「AWS Lambda Web Adapter」**をインフラのコア要件として組み込み、低コストかつ超高速なサーバーレス環境を実現します（当面のLambda化対象は軽量な入口エンドポイント`backend`のみ）。
 
 ---
 
@@ -76,7 +76,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] Anthropic Claude APIから無料枠のあるGoogle AI Studio Gemini APIへ全面置換（`AnthropicAIClient`を`GeminiAIClient`に置換）。`AIClient`・`MockAIClient`の契約は不変。関連ドキュメントもGemini前提に更新。
 
 #### ⬛ ステップ 10: ローカル開発用AI経路の追加検証
-- [x] ローカル開発でAI生成のバリエーションを確認する第三の経路を追加検証したが、生成品質が実用水準に届かず、Docker Compose構成（ステップ11）で撤去した。
+- [x] ローカル開発でAI生成のバリエーションを確認する第三の経路を検証したが、生成品質が実用水準に届かず不採用とした。
 
 #### ⬛ ステップ 11: Docker Composeによるローカル開発環境の構成
 - [x] `docker-compose.yml`と各Dockerfileでfrontend/backendをコンテナ化し、`docker compose up --build`で起動できる環境を構築（ADR-009）。非Docker実行のサポートは終了し、README.md/CLAUDE.mdの手順をDocker Compose前提に統一。E2E（Playwright）はMicrosoft公式イメージを使う独立サービス`e2e`（`profiles: [e2e]`）で実行。
@@ -91,10 +91,10 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] エラーレスポンスを`{"error": {code, message, request_id}}`の構造化エンベロープへ統一し、フロントは`message`を優先表示（ADR-012）。
 
 #### ⬛ ステップ 15: バックエンドの「入口エンドポイント」と「Doclingコンテナ」への分離
-- [x] バックエンドを軽量な入口エンドポイント（`backend`）とDocling変換専用の内部サービス（`docling-service`）に分離し、HTTP経由で連携（ADR-013）。
+- [x] バックエンドを軽量な入口エンドポイント（`backend`）とDocling変換専用の内部サービス（`docling-service`）に分離し、HTTP経由で連携。
 
 #### ⬛ ステップ 16: JSON/プロンプト入力エリアの追加（CSS入力エリアは廃止）
-- [x] CSSは常にHTML側`<style>`へ埋め込む前提のため独立のCSS入力欄・`css`リクエストフィールドを廃止し、JSON入力・プロンプト入力の2エディタを追加（ADR-014）。
+- [x] CSSは常にHTML側`<style>`へ埋め込む前提のため独立のCSS入力欄・`css`リクエストフィールドを廃止し、JSON入力・プロンプト入力の2エディタを追加。
 
 #### ⬛ ステップ 17: サイズ選択ボタンの再設計
 - [x] サイズ選択UIを6個の独立ボタンから、実寸比率の紙のイラスト（`PaperSwatch`）付きの1つのSelectへ統合。手動入力時は無印の正方形表示にフォールバック。
@@ -112,16 +112,14 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] ダークモード対応、各コンポーネント（`PdfDropzone`/`PreviewPanel`/`MessageToast`/`HistorySlider`等）の質感向上、履歴クリックで未保存入力が消えるバグの修正、オリジナルファビコン作成。
 
 #### ⬛ ステップ 22: AI生成クオリティ改善＆描画中の経過秒数表示
-- [x] `build_prompt`を「視覚的体裁の維持を最優先し、保守性はGeminiに整理させる」役割分担へ書き換え、`MockAIClient`を用紙の向きで出し分け（ADR-014）。描画ボタンに経過秒数表示（`RenderingProgress`）を追加。
+- [x] `build_prompt`を「視覚的体裁の維持を最優先し、保守性はGeminiに整理させる」役割分担へ書き換え、`MockAIClient`を用紙の向きで出し分け。描画ボタンに経過秒数表示（`RenderingProgress`）を追加。
 
 #### ⬛ ステップ 23: モデル選択機能の追加（生成AI4種＋変換エンジン3種）とPDF直接送信方式への転換
-> DEVELOPMENT.mdの当初計画には無く、ユーザーからの追加要望（「描画ボタンの横で生成エンジンを選べるようにしたい」「生成AIへHTML/JSON/Doclingテキストを送らないようにしたい」）を受けて追記した。ADR-015参照。
-- [x] ⚙️ **設計:** `docs/decisions.md`にADR-015として記録。生成AI4種（Gemini無料/Gemini標準/Claude/OpenAI）と変換エンジン3種（Docling/pdf2htmlEX/PyMuPDF）の役割分担、生成AIへはPDFをマルチモーダル入力として直接添付しHTML/JSON/Doclingテキストは送らない方針、標準プラン（Gemini標準/Claude/OpenAI）はフェーズ5まで自由アクセスのユーザーに提供しないゲート設計を決定。
+- [x] ⚙️ **設計:** 生成AI4種（Gemini無料/Gemini標準/Claude/OpenAI）と変換エンジン3種（Docling/pdf2htmlEX/PyMuPDF）の役割分担、生成AIへはPDFをマルチモーダル入力として直接添付しHTML/JSON/Doclingテキストは送らない方針、標準プラン（Gemini標準/Claude/OpenAI）はフェーズ5まで自由アクセスのユーザーに提供しないゲート設計を決定。
 - [x] 🧪 **テストコード作成:** `build_prompt`がhtml/markdown引数を持たないことを検証する契約テスト、engineごとのゲート403・変換エンジンの直接返却・AIエンジンへのPDFバイト受け渡しを検証するエンドツーエンドテスト（`backend/tests/test_render.py`）、`ClaudeAIClient`/`OpenAIAIClient`の単体テスト、`EngineSelect`のレンダリング・選択・store連動を検証するVitestテストを先に記述。
 - [x] **実装（バック）:** `RenderEngine`型・`GATED_ENGINES`等の集合を`ai_client.py`に追加。`build_prompt`からhtml/markdown引数を削除し`has_pdf`フラグに置き換え。`AIClient.generate(prompt, pdf)`にシグネチャ変更し、`GeminiAIClient`/新設`ClaudeAIClient`/`OpenAIAIClient`がPDFバイト列をマルチモーダル入力として直接添付。`app/main.py`にengineゲート判定（403）を追加。DoclingをMarkdownからHTML出力（`export_to_html`）へ変更し単独の変換エンジン化。pdf2htmlEXを専用コンテナ（`pdf2htmlex-service`）として復活させ変換エンジン化。PyMuPDFのレイアウトHTML生成を単独の変換エンジンとして公開。
 - [x] **実装（フロント）:** `EngineSelect.tsx`を新設し、描画ボタンの隣に7エンジン（アイコン・ラベル・説明文）を選べるSelectを配置。`sheetStore`に`engine`/`setEngine`を追加し`fetchRender`へ反映。`htmlContent`はリクエストに含めないよう変更。
 - [x] 🧪 **ローカルテスト実行:** `pytest`（backend 132件・docling-service 2件・pdf2htmlex-service 5件、全パス）・`ruff`（3サービスとも）・`Vitest`（frontend 96件、全パス）・`ESLint`・`vite build`（tsc型チェック含む）がパスすることを確認。
-- **ステップ番号の対応（リナンバリング注記）**: 本ステップの差し込みに伴い、旧ステップ23〜27はステップ24〜28へ繰り下げた（未着手のフェーズ4・5が対象のため、実施済みステップの記録には影響しない）。
 
 ---
 
@@ -129,11 +127,10 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 アプリがローカルで完璧になった状態で、インフラの構築と同時に、これまで書いたテストを強制する仕組みを作ります。
 
 #### ⬛ ステップ 24: バックエンドのDocker化 ＆ コールドスタート徹底高速化
-> 当初、当面のLambda化対象は軽量な入口エンドポイント（`backend`）のみとし、`docling-service`/`pdf2htmlex-service`のLambda化は後続で対応するとしていた（ADR-017）。その後続対応をADR-026として実施済み（下記）。
 - [x] **AWS Lambda Web Adapter の導入:** 本番用`backend/Dockerfile.lambda`にWeb Adapterのバイナリ（`COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter...`）を追加し、FastAPIをサーバーレス向けに高速起動化（開発用`backend/Dockerfile`とは別ファイル）
-- [x] **APIキーのParameter Store取得（グローバルスコープ・キャッシュ）:** `app/secrets_loader.py`を追加し、Lambdaのコールドスタート時（モジュールimport＝グローバルスコープ）に一度だけParameter StoreからAPIキーを取得して`os.environ`へ展開。ハンドラ内で毎リクエストSSMを叩かず、キーはイメージに焼き込まない（ADR-017）
+- [x] **APIキーのParameter Store取得（グローバルスコープ・キャッシュ）:** `app/secrets_loader.py`を追加し、Lambdaのコールドスタート時（モジュールimport＝グローバルスコープ）に一度だけParameter StoreからAPIキーを取得して`os.environ`へ展開。ハンドラ内で毎リクエストSSMを叩かず、キーはイメージに焼き込まない
 - [x] 🧪 **コンテナ内テスト実行:** Dockerコンテナ内で `pytest` を実行し、環境依存なく高速にテストがパスすることを確認（backend 130件）
-- [x] **docling-service/pdf2htmlex-serviceのLambda化:** 両サービスに本番用`Dockerfile.lambda`（Web Adapter導入のみ、開発用Dockerfileと同じ依存構成）を追加。backendからのみ呼ばれる内部専用サービスのため、API Gatewayではなく**AWS_IAM認証必須のLambda Function URL**として公開し、backend Lambdaの実行ロールのみに呼び出しを許可した。backend側は`app/services/remote_extractor.py`でAWS SigV4署名（環境変数`DOCLING_SERVICE_AUTH`/`PDF2HTMLEX_SERVICE_AUTH=aws_sigv4`で有効化）してから呼び出す（ADR-026）
+- [x] **docling-service/pdf2htmlex-serviceのLambda化:** 両サービスに本番用`Dockerfile.lambda`（Web Adapter導入のみ、開発用Dockerfileと同じ依存構成）を追加。backendからのみ呼ばれる内部専用サービスのため、API Gatewayではなく**AWS_IAM認証必須のLambda Function URL**として公開し、backend Lambdaの実行ロールのみに呼び出しを許可した。backend側は`app/services/remote_extractor.py`でAWS SigV4署名（環境変数`DOCLING_SERVICE_AUTH`/`PDF2HTMLEX_SERVICE_AUTH=aws_sigv4`で有効化）してから呼び出す
 - [x] **Terraformのコード化（`infra/`）:** `infra/modules/lambda`をFunction URL作成・IAM呼び出し許可に対応させ再利用可能にした上で、docling/pdf2htmlex用のECR Private・Lambdaモジュール呼び出しを追加。`terraform fmt`はパス済み。ネットワークポリシーでレジストリへ到達できない開発環境のため`terraform validate`/`plan`は未実施（実AWS環境またはレジストリ到達可能な環境で別途確認が必要）
 - [x] 🧪 **テストコード追加:** SigV4署名の有無・エラー処理を検証する`backend/tests/test_remote_extractor.py`を追加（`docker compose exec backend pytest`相当、168件全パス）
 
@@ -141,7 +138,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 > ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは`mise.toml`で固定する（ADR-023）。Terraformは1.15.8、providerは`.terraform.lock.hcl`（コミット対象）で固定。
 > 本ステップは**コード定義まで**（`terraform validate`・`fmt`まで実施、`terraform apply`＝実AWSリソース作成は未実施）。OIDC・GitHub Actionsからのデプロイ認証はステップ26のCI/CD構築時に定義する。
 - [ ] ⚙️ **AWS認証情報の設定:** Terraformの実行やGitHub Actionsからのデプロイに必要なAWSの認証（OIDCなど安全な方式）を初期設定（ステップ26で対応）
-- [x] TerraformによるCloudFront + S3、AWS Lambda（メモリは余裕を持たせた4GB〜8GB推奨） + API Gateway（ステージ単位のスロットリングで過度なAPIコールを防ぐ。WAFは固定費が高いため不採用。ADR-027）、**ECR Private（Lambdaコンテナは同一リージョンのPrivateからのみ取得可。無料枠500MBの逼迫はライフサイクルで抑制。ADR-017）** をコード定義（`infra/`）。APIキーはSecureStringのSSM Parameter Storeで管理し、Lambdaの実行ロールに`ssm:GetParameters`/`kms:Decrypt`を最小権限で付与。state土台は`infra/bootstrap`（S3+DynamoDB）。`terraform apply`（実AWS作成）は未実施
+- [x] TerraformによるCloudFront + S3、AWS Lambda（メモリは余裕を持たせた4GB〜8GB推奨） + API Gateway（ステージ単位のスロットリングで過度なAPIコールを防ぐ。WAFは固定費が高いため不採用）、**ECR Private（Lambdaコンテナは同一リージョンのPrivateからのみ取得可。無料枠500MBの逼迫はライフサイクルで抑制）** をコード定義（`infra/`）。APIキーはSecureStringのSSM Parameter Storeで管理し、Lambdaの実行ロールに`ssm:GetParameters`/`kms:Decrypt`を最小権限で付与。state土台は`infra/bootstrap`（S3+DynamoDB）。`terraform apply`（実AWS作成）は未実施
 - [ ] 🧪 **ステージングテスト:** デプロイされたクラウド環境のエンドポイントに対して、ローカルからAPIテストを実行して疎通を確認
 
 #### ⬛ ステップ 26: GitHub ActionsによるCI構築 【自動テスト化】
@@ -155,30 +152,30 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 ### 🔒 フェーズ 5: 認証・認可とデータ保存の追加
 最後に、アカウント登録ユーザー向けの機能をアドオンします。ここでもCIが守ってくれる状態で進めます。
 
-- [x] ⚙️ **ローカル検証環境の準備:** Supabase Local CLI（`supabase start`）でAuth・PostgreSQLをローカルに起動し、クラウド環境を作らずに認証・DBを検証できる状態にする（`docs/supabase-local-cli-setup.md`、ADR-020）
+- [x] ⚙️ **ローカル検証環境の準備:** Supabase Local CLI（`supabase start`）でAuth・PostgreSQLをローカルに起動し、クラウド環境を作らずに認証・DBを検証できる状態にする（`docs/supabase-local-cli-setup.md`）
 
 #### ⬛ ステップ 27: Supabase Authによる認証・認可の実装
-- [x] フロントにSupabase Auth SDK組み込み。バックにJWT認証ミドルウェアを実装（`@supabase/supabase-js`によるemail/passwordログイン、`app/services/auth.py`によるJWT検証。ADR-018）
-- [x] ⚙️ **モデル選択機能のゲート解除（ADR-015）:** `app/main.py`の`GATED_ENGINES`判定を、未ログイン時のみ403を返すよう条件を差し替える（Gemini標準/Claude/OpenAIクライアント自体はステップ23で実装済み）
+- [x] フロントにSupabase Auth SDK組み込み。バックにJWT認証ミドルウェアを実装（`@supabase/supabase-js`によるemail/passwordログイン、`app/services/auth.py`によるJWT検証。ADR-020）
+- [x] ⚙️ **モデル選択機能のゲート解除:** `app/main.py`の`GATED_ENGINES`判定を、未ログイン時のみ403を返すよう条件を差し替える（Gemini標準/Claude/OpenAIクライアント自体はステップ23で実装済み）
 - [x] 🧪 **テストコード追加:** 有効なトークンがある場合、ない場合でAPIの挙動が変わることを検証するテストを追加（`backend/tests/test_auth.py`・`backend/tests/test_render.py`・`frontend/src/store/authStore.test.ts`等）。GitHub上のCIで自動実行されることを確認
 
 #### ⬛ ステップ 28: Supabase（PostgreSQL）の統合 ＆ 最終クローズ
-- [x] ⚙️ **ローカルDB環境の構築:** docker-compose.ymlへ`db`サービス（Postgres）を追加し、手元の開発環境を汚さずにマイグレーションやテストができる環境を整備（ADR-019。Supabase Local CLIではなく素のPostgresコンテナを選択）
+- [x] ⚙️ **ローカルDB環境の構築:** docker-compose.ymlへ`db`サービス（Postgres）を追加し、手元の開発環境を汚さずにマイグレーションやテストができる環境を整備（Supabase Local CLIではなく素のPostgresコンテナを選択）
 - [x] SQLAlchemy経由でのSupabase接続設定と、データ保存ロジックの実装（`app/db.py`・`app/models.py`・`app/services/history.py`、Alembicマイグレーション`backend/migrations/`。`POST /api/render`成功時にログイン中のユーザーの履歴を自動保存し、`GET /api/history`で一覧取得できる）
 - [ ] 🧪 **最終結合テスト:** 認証・DB保存・AI生成が絡む全シナリオのテストをPlaywright等で追加（バックエンドのpytest統合テストは追加済み。フロントの保存済み履歴閲覧UI（`HistorySlider`のセッション切れ後の再取得・`HistoryArchive`）はVitest/Testing Libraryで実装・検証済み。Playwright E2Eは未実装、残課題）
 - [ ] 🚀 **本番デプロイ:** 全テストが自動でパスし、安全にデプロイされることを確認してプロジェクト完了（実Supabaseプロジェクト・AWS本番環境への適用は別途対応）
 
 #### ⬛ ステップ 29: ログイン専用化とセキュリティ強化
 - [x] ⚙️ **ローカル検証環境の整備:** Supabase Local CLIを導入し、JWT検証をJWKS/ES256へ対応（`supabase/config.toml`・`app/services/auth.py`。ADR-020、`docs/supabase-local-cli-setup.md`）
-- [x] **新規登録の廃止:** 画面から新規登録導線を削除し、GoTrue側も`enable_signup = false`で自己登録を拒否。アカウント発行は`scripts/create_user.sh`（Admin API）に一本化（ADR-021）
-- [x] **Googleアカウントでのログイン:** `signInWithOAuth`と`[auth.external.google]`を追加。未登録アカウントは`enable_signup = false`により弾かれる（ADR-021）
-- [x] **セッション管理の改善:** PKCEフロー採用、`onAuthStateChange`の購読解除、復元完了までUIを保留して「チラつき」を防止（ADR-021）
-- [x] **XSS対策:** プレビューiframeの`sandbox=""`化（同一オリジン実行によるトークン窃取経路を遮断）、セッション保管を`sessionStorage`へ変更、ビルド成果物へCSPを注入（ADR-021）
-- [x] **RLS（行レベルセキュリティ）:** 生成履歴をSupabaseのPostgresへ統合し、`auth.uid()`ベースのポリシーを定義。アプリは`authenticator`→`authenticated`ロールで接続する（ADR-021）
+- [x] **新規登録の廃止:** 画面から新規登録導線を削除し、GoTrue側も`enable_signup = false`で自己登録を拒否。アカウント発行は`scripts/create_user.sh`（Admin API）に一本化（ADR-020）
+- [x] **Googleアカウントでのログイン:** `signInWithOAuth`と`[auth.external.google]`を追加。未登録アカウントは`enable_signup = false`により弾かれる（ADR-020）
+- [x] **セッション管理の改善:** PKCEフロー採用、`onAuthStateChange`の購読解除、復元完了までUIを保留して「チラつき」を防止（ADR-020）
+- [x] **XSS対策:** プレビューiframeの`sandbox=""`化（同一オリジン実行によるトークン窃取経路を遮断）、セッション保管を`sessionStorage`へ変更、ビルド成果物へCSPを注入（ADR-020）
+- [x] **RLS（行レベルセキュリティ）:** 生成履歴をSupabaseのPostgresへ統合し、`auth.uid()`ベースのポリシーを定義。アプリは`authenticator`→`authenticated`ロールで接続する（ADR-020）
 - [x] 🧪 **テストコード追加:** `backend/tests/test_db_rls.py`、`frontend/src/store/authStore.test.ts`・`AuthPanel.test.tsx`の更新（新規登録の非提供・Googleログイン・チラつき防止・購読解除）
 
 #### ⬛ ステップ 30: ログイン手段のGoogleアカウント限定
-- [x] **パスワードログインの廃止:** `[auth.email] enable_signup = false`でGoTrueのメール認証を無効化し、`authStore.signInWithPassword`と`AuthPanel`の入力欄を削除。UIは「Googleでログイン」のみ（ADR-022）
-- [x] **アカウント作成のガード:** `scripts/create_user.sh`はGoogle OAuth未設定・`env(...)`未展開・GoTrue側でgoogle無効のいずれでも作成を拒否する。パスワードは設定しない（ADR-022）
+- [x] **パスワードログインの廃止:** `[auth.email] enable_signup = false`でGoTrueのメール認証を無効化し、`authStore.signInWithPassword`と`AuthPanel`の入力欄を削除。UIは「Googleでログイン」のみ（ADR-020）
+- [x] **アカウント作成のガード:** `scripts/create_user.sh`はGoogle OAuth未設定・`env(...)`未展開・GoTrue側でgoogle無効のいずれでも作成を拒否する。パスワードは設定しない（ADR-020）
 - [x] **ローカル検証手順の整備:** `.env`読み込み後に`supabase start`する順序を明示（`env(...)`展開のため必須）、Google Cloudでのクライアント発行手順を追加（`docs/supabase-local-cli-setup.md`）
-- [x] 🧪 **Googleログインの実動作確認:** 実際のGoogle Cloud OAuthクライアントでログインに成功。既存アカウント（`email` identity）へ`google` identityが自動連携されることも`auth.identities`で確認済み（ADR-022の前提が実機で裏付けられた）
+- [x] 🧪 **Googleログインの実動作確認:** 実際のGoogle Cloud OAuthクライアントでログインに成功。既存アカウント（`email` identity）へ`google` identityが自動連携されることも`auth.identities`で確認済み

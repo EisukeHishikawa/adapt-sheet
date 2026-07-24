@@ -16,7 +16,7 @@ resource "aws_s3_bucket_public_access_block" "frontend" {
 }
 
 # CloudFrontのアクセスログ置き場。公開の入口であるCloudFrontのログが無いと、
-# 「誰がどのパスを叩いたか」がAPI Gatewayへ到達したリクエストの分しか残らない（ADR-030）。
+# 「誰がどのパスを叩いたか」がAPI Gatewayへ到達したリクエストの分しか残らない。
 resource "aws_s3_bucket" "logs" {
   count  = var.enable_access_logging ? 1 : 0
   bucket = "${var.name}-cf-logs-${data.aws_caller_identity.current.account_id}"
@@ -85,7 +85,7 @@ resource "aws_cloudfront_origin_access_control" "this" {
 
 # SPAのフォールバック。distribution全体に効く custom_error_response ではなくビューワーリクエストの
 # URI書き換えで行う。前者は /api/* のレスポンスにも適用され、バックエンドが返す403（未ログインの
-# ゲート判定）や404がHTML（index.html）へ差し替わってしまうため（ADR-012の構造化エラーが壊れる）。
+# ゲート判定）や404がHTML（index.html）へ差し替わり、構造化エラーが壊れてしまうため。
 resource "aws_cloudfront_function" "spa_rewrite" {
   name    = "${var.name}-spa-rewrite"
   runtime = "cloudfront-js-2.0"

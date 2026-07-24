@@ -1,6 +1,6 @@
 # adapt-sheet
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA（ADR-015）。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 
 詳細な構想・要件は [`planning/brainstorm.md`](./planning/brainstorm.md)、開発の進め方は [`DEVELOPMENT.md`](./DEVELOPMENT.md) を参照。
 
@@ -15,8 +15,6 @@
 - **認証・DB**: Supabase（Auth + PostgreSQL）
 
 ## クイックスタート
-
-> 各セットアップ手順はフェーズ2・3の実装が進み次第、随時追記する。
 
 開発環境はDocker Composeのみを対象とする。ローカル（非Docker）での直接実行はサポートしない（[docs/decisions.md](./docs/decisions.md) ADR-009参照）。
 
@@ -40,7 +38,7 @@ mise ls        # 適用中のバージョンを確認
 |---|---|
 | terraform | `infra/` のAWSインフラ定義（stateを壊さないためパッチまで固定） |
 | node / python | ホストで補助コマンドを動かす場合の実行環境（コンテナと同バージョン） |
-| awscli | デプロイ・SSM Parameter Storeへのキー投入（ADR-017） |
+| awscli | デプロイ・SSM Parameter Storeへのキー投入 |
 | supabase | ローカルのAuth/Postgres検証スタック（ADR-020） |
 | gh | リポジトリ操作・PR作成・Branch Protection設定。初回は `gh auth login` で認証 |
 
@@ -57,7 +55,7 @@ docker compose up --build
 
 backend/frontend/docling/pdf2htmlexはそれぞれ`./backend`・`./frontend`・`./docling-service`・`./pdf2htmlex-service`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`GEMINI_API_KEY`に上書きする。
 
-描画ボタンの隣（`EngineSelect`）で、7つの生成エンジンを選べる（[docs/decisions.md](./docs/decisions.md) ADR-015参照）。
+描画ボタンの隣（`EngineSelect`）で、7つの生成エンジンを選べる。
 
 | エンジン | 種別 | 説明 |
 |---|---|---|
@@ -69,7 +67,7 @@ backend/frontend/docling/pdf2htmlexはそれぞれ`./backend`・`./frontend`・`
 | pdf2htmlEX | 変換エンジン（AIなし） | PDFの見た目をフォント・画像埋め込みでそのままHTML化する |
 | PyMuPDF | 変換エンジン（AIなし） | PDFのレイアウト（座標・罫線・背景）を絶対座標のdivで再現する |
 
-生成AI（Gemini/Claude/OpenAI）はPDFをファイルとしてそのままマルチモーダル入力に添付する。PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない（ADR-015。ADR-013/015で採用していた「レイアウトHTML＋Docling Markdownの両方をGeminiへ渡す」方式は本ADRで置き換えられた）。Docling/pdf2htmlEX/PyMuPDFを選んだ場合はAIを一切呼ばず、各エンジンの変換結果をそのまま描画結果として返す。
+生成AI（Gemini/Claude/OpenAI）はPDFをファイルとしてそのままマルチモーダル入力に添付する。PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない。Docling/pdf2htmlEX/PyMuPDFを選んだ場合はAIを一切呼ばず、各エンジンの変換結果をそのまま描画結果として返す。
 
 実際にGeminiへ渡したプロンプト全文と、Geminiが返した出力全文はバックエンドのログで確認できる（`docker-compose.yml`で`LOG_AI_PAYLOAD=true`を設定済み）。ログは1行1レコードのJSONのため、`jq`で該当フィールドだけを取り出すと読みやすい。
 
@@ -88,13 +86,13 @@ docker compose restart backend
 docker compose restart frontend
 ```
 
-### ログイン機能をローカルで検証する（Supabase Local CLI、ADR-020/021）
+### ログイン機能をローカルで検証する（Supabase Local CLI）
 
-`docker compose up --build`だけではAuth関連の環境変数（`VITE_SUPABASE_URL`等）が未設定のため、ヘッダーのログインUI自体が表示されない（Supabaseプロジェクト未作成のローカル開発を壊さないための既定挙動）。実際にログインしてゲート対象エンジン（Gemini標準/Claude/OpenAI）や生成履歴（`GET /api/history`）を検証したい場合は、[`docs/supabase-local-cli-setup.md`](./docs/supabase-local-cli-setup.md)の手順でSupabase Local CLIのローカルスタックを起動し、`.env`にキーを設定する。生成履歴もこのSupabase Postgresへ保存され、行レベルセキュリティ（RLS）で他人の履歴には到達できない（ADR-021）。
+`docker compose up --build`だけではAuth関連の環境変数（`VITE_SUPABASE_URL`等）が未設定のため、ヘッダーのログインUI自体が表示されない（Supabaseプロジェクト未作成のローカル開発を壊さないための既定挙動）。実際にログインしてゲート対象エンジン（Gemini標準/Claude/OpenAI）や生成履歴（`GET /api/history`）を検証したい場合は、[`docs/supabase-local-cli-setup.md`](./docs/supabase-local-cli-setup.md)の手順でSupabase Local CLIのローカルスタックを起動し、`.env`にキーを設定する。生成履歴もこのSupabase Postgresへ保存され、行レベルセキュリティ（RLS）で他人の履歴には到達できない（ADR-020）。
 
-**ログイン手段はGoogleアカウントのみ**で、メール＋パスワードでのログインは無効（ADR-022）。そのため、ローカル検証でもGoogle CloudのOAuthクライアント（client_id / secret）が必須になる。
+**ログイン手段はGoogleアカウントのみ**で、メール＋パスワードでのログインは無効（ADR-020）。そのため、ローカル検証でもGoogle CloudのOAuthクライアント（client_id / secret）が必須になる。
 
-**アカウントの作成は次のコマンドのみ**で行う（画面からの新規登録は提供せず、Supabase側でも自己登録を拒否する。ADR-021）。ログインさせたいGoogleアカウントのメールアドレスを指定する。
+**アカウントの作成は次のコマンドのみ**で行う（画面からの新規登録は提供せず、Supabase側でも自己登録を拒否する。ADR-020）。ログインさせたいGoogleアカウントのメールアドレスを指定する。
 
 ```bash
 set -a; source .env; set +a          # SERVICE_ROLE_KEY と Google の認証情報を読み込む
@@ -118,8 +116,8 @@ docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http:/
 docker compose exec pdf2htmlex pytest                     # pdf2htmlex-service（PDF→HTML変換専用）の全テスト実行
 docker compose exec pdf2htmlex ruff check .                # pdf2htmlex-serviceの静的解析
 docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8200/convert # /convertを直接叩いて動作確認
-docker compose exec backend pytest tests/test_pdf_layout.py -v # レイアウトHTML生成（PyMuPDF、backend内モジュール・ADR-014）のテスト
-docker compose exec backend alembic upgrade head          # 生成履歴用DBマイグレーションの適用（backend/migrations、ADR-019）
+docker compose exec backend pytest tests/test_pdf_layout.py -v # レイアウトHTML生成（PyMuPDF、backend内モジュール）のテスト
+docker compose exec backend alembic upgrade head          # 生成履歴用DBマイグレーションの適用（backend/migrations）
 docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
 docker compose exec frontend npm run lint                # ESLint
 ```
@@ -152,7 +150,7 @@ docker compose exec -T pdf2htmlex curl -sf -F "file=@/tmp/input.pdf" http://loca
   | python3 -c "import json,sys; sys.stdout.write(json.load(sys.stdin)['html'])" > "/path/to/pdf2htmlex-output.html"
 ```
 
-### エディタ（Zed）でリンター/フォーマッターを使う（ADR-024）
+### エディタ（Zed）でリンター/フォーマッターを使う（ADR-009）
 
 ホストにPython・Node・ruff・ESLintを入れずに、エディタ上でも開発コンテナと同じリンター/フォーマッターを動かすための設定を`.zed/`に用意している。Zedでこのリポジトリを開くと、`scripts/zed-lsp.sh`経由でLSPサーバーがDocker内に起動する。
 
@@ -190,5 +188,5 @@ docker compose exec frontend npm run generate-types
 | [docs/architecture.md](./docs/architecture.md) | アーキテクチャ図 |
 | [docs/decisions.md](./docs/decisions.md) | アーキテクチャ決定記録 (ADR) |
 | [docs/deployment.md](./docs/deployment.md) | デプロイ手順・運用の手引き |
-| [docs/observability.md](./docs/observability.md) | ログの見方・相関のたどり方・アラーム対応（ADR-030） |
+| [docs/observability.md](./docs/observability.md) | ログの見方・相関のたどり方・アラーム対応（ADR-011） |
 | [docs/supabase-local-cli-setup.md](./docs/supabase-local-cli-setup.md) | Supabase Local CLIによるログイン機能のローカル検証手順 |

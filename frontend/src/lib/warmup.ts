@@ -1,10 +1,10 @@
 import { supabase } from '@/lib/supabaseClient'
 
-// 画面を開いた時点で、コールドスタートしがちな依存先を起こしておくための処理（ADR-028）。
+// 画面を開いた時点で、コールドスタートしがちな依存先を起こしておくための処理。
 // いずれも成功可否は画面の挙動に影響させず、失敗しても黙って諦める（描画操作を妨げないため）。
 
 // backendが署名付きでdocling/pdf2htmlexのLambdaを代理ピングする。両サービスはIAM認証必須の
-// Function URL（ADR-026）で、フロントから直接は叩けない。
+// Function URLで、フロントから直接は叩けない。
 export async function warmupBackendServices(): Promise<void> {
   try {
     await fetch('/api/warmup', { method: 'POST' })

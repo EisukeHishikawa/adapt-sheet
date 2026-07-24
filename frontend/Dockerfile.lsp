@@ -1,4 +1,4 @@
-# Zed等のエディタからESLintをDocker内で動かすためのLSPイメージ（ADR-024）。
+# Zed等のエディタからESLintをDocker内で動かすためのLSPイメージ。
 # 開発用のfrontendイメージと同じベース・同じ依存導入手順にすることで、エディタが見る
 # ESLintの挙動を`docker compose exec frontend npm run lint`と一致させる。
 FROM node:20-alpine

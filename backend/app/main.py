@@ -40,20 +40,20 @@ from app.services.pdf_common import PDFConversionError
 logger = logging.getLogger("app.history")
 warmup_logger = logging.getLogger("app.warmup")
 
-# アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする（ADR-011）。
+# アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする。
 configure_logging()
 
 # Lambdaのコールドスタート時（このモジュールのimport）に一度だけParameter StoreからAPIキーを
-# os.environへ展開する（ADR-017）。ハンドラ内で毎リクエストSSMを叩かないための鉄則。
+# os.environへ展開する。ハンドラ内で毎リクエストSSMを叩かないための鉄則。
 # SSM_PARAMETER_PREFIX未設定のローカル/pytestでは no-op。
 load_secrets_into_env()
 
 app = FastAPI()
 
-# リクエスト相関ID採番・アクセスログ・想定外例外の500化（ADR-011/013）。
+# リクエスト相関ID採番・アクセスログ・想定外例外の500化を行うミドルウェア。
 app.add_middleware(RequestContextMiddleware)
 
-# 例外→構造化エラーレスポンスの整形はハンドラへ集約する（ADR-012）。StarletteHTTPExceptionで
+# 例外→構造化エラーレスポンスの整形はハンドラへ集約する。StarletteHTTPExceptionで
 # 登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -61,7 +61,7 @@ app.add_exception_handler(PDFConversionError, pdf_conversion_error_handler)
 app.add_exception_handler(AIGenerationError, ai_generation_error_handler)
 
 
-# response_modelを明示しないと、FastAPIが型を推論できずopenapi.json（フロントの型生成元。ADR-005）の
+# response_modelを明示しないと、FastAPIが型を推論できずopenapi.json（フロントの型生成元）の
 # レスポンススキーマがobject止まりになる。
 class RenderResponse(BaseModel):
     # Python予約語と衝突する`json`キー名をエイリアスとして公開する（docs/spec.md 3.1のレスポンス例）。
@@ -80,12 +80,12 @@ async def render(
     prompt: str = Form("", max_length=100),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
-    # フロント（EngineSelect）が選択した生成エンジン（ADR-015）。7値のいずれか。
+    # フロント（EngineSelect）が選択した生成エンジン。7値のいずれか。
     engine: str = Form("gemini_free"),
     pdf: Optional[UploadFile] = File(None),
     # Dependsで注入することで、テスト側がdependency_overridesにより成功/失敗や高速なフェイクへ
-    # 差し替えられるようにする（ADR-006）。ai_client_factoryはengineがリクエスト時にしか
-    # 決まらないため、AIClientインスタンスではなく関数を注入する（ADR-015）。
+    # 差し替えられるようにする。ai_client_factoryはengineがリクエスト時にしか
+    # 決まらないため、AIClientインスタンスではなく関数を注入する。
     ai_client_factory: Callable[[str], AIClient] = Depends(get_ai_client_factory),
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
     html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
@@ -93,14 +93,13 @@ async def render(
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Optional[Session] = Depends(get_db_session_or_none),
 ) -> RenderResponse:
-    # 標準プランの生成AI（Gemini標準/Claude/OpenAI）はログイン済みユーザーのみに提供する
-    # （ADR-015のゲート判定を、DEVELOPMENT.md ステップ27でSupabase Authのログイン状態へ差し替え）。
+    # 標準プランの生成AI（Gemini標準/Claude/OpenAI）はログイン済みユーザーのみに提供する。
     # PDF処理・AI呼び出しより前に判定し、無駄な処理を避ける。
     if engine in GATED_ENGINES and current_user is None:
         raise HTTPException(status_code=403)
 
     if engine in CONVERTER_ENGINES:
-        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする（ADR-015）。
+        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。
         if pdf is None:
             raise HTTPException(status_code=400)
         content = await pdf.read()
@@ -121,9 +120,8 @@ async def render(
         return RenderResponse(html=html, css="", json_={})
 
     # 生成AI（gemini_free。gemini/claude/openaiは上記ゲートにより現状ここへは到達しない）。
-    # PDFがある場合はマルチモーダル入力として直接添付し、PyMuPDF/Docling経由の事前変換は
-    # 行わない（ADR-015）。PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う
-    # （ADR-012）。
+    # PDFがある場合はマルチモーダル入力として直接添付し、PyMuPDF/Docling経由の事前変換は行わない。
+    # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う。
     pdf_bytes: Optional[bytes] = None
     if pdf is not None:
         pdf_bytes = await pdf.read()
@@ -311,9 +309,9 @@ async def warmup(
     pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
     db_pinger: Callable[[], bool] = Depends(get_db_pinger),
 ) -> WarmupResponse:
-    """フロント表示時に呼ばれるホットスタンバイ用エンドポイント（ADR-028）。
+    """フロント表示時に呼ばれるホットスタンバイ用エンドポイント。
 
-    docling/pdf2htmlexはIAM認証必須のLambda Function URL（ADR-026）でフロントから直接
+    docling/pdf2htmlexはIAM認証必須のLambda Function URLでフロントから直接
     叩けないため、backendが署名付きで代理ピングする。あわせてSupabaseのDBへも最小クエリを
     投げ、無操作による一時停止を避ける。認証は要求しない（画面を開いた時点で投げるため）。
 
@@ -351,7 +349,7 @@ async def _convert_with_engine(
     filename: str,
     content: bytes,
 ) -> str:
-    """変換エンジン（docling/pdf2htmlex/pymupdf）ごとにPDF→HTML変換を行う（ADR-015）。
+    """変換エンジン（docling/pdf2htmlex/pymupdf）ごとにPDF→HTML変換を行う。
 
     いずれもAIを介さず、変換結果をそのまま描画結果として返す単独のエンジン。
     """

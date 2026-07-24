@@ -1,4 +1,4 @@
-"""内部サービスの構造化ログ（1レコード=1行のJSON）と相関ID引き継ぎ（ADR-011/030）。
+"""内部サービスの構造化ログ（1レコード=1行のJSON）と相関ID引き継ぎ。
 
 backendと同形式のJSONを標準出力へ出し、backendが`X-Request-ID`で渡してきた相関IDを
 そのまま使うことで、CloudWatch Logs Insightsで1つのrequest_idからbackend側とこちら側の
@@ -62,7 +62,7 @@ def configure_logging(level: int = logging.INFO) -> None:
 class RequestContextMiddleware:
     """backendから渡された相関IDでアクセスログを出す素のASGIミドルウェア。
 
-    PDFバイト列・ファイル名は業務データを含みうるためログに出さない（ADR-011）。
+    PDFバイト列・ファイル名は業務データを含みうるためログに出さない。
     """
 
     def __init__(self, app: ASGIApp) -> None:

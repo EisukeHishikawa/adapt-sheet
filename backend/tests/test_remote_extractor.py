@@ -1,4 +1,4 @@
-"""RemoteHtmlExtractorのAWS SigV4署名（Lambda Function URL・AWS_IAM認証、ADR-026）のテスト。
+"""RemoteHtmlExtractorのAWS SigV4署名（Lambda Function URL・AWS_IAM認証）のテスト。
 
 docling_client/pdf2htmlex_clientのどちらも同じRemoteHtmlExtractorを継承するため、
 署名ロジック自体はRemoteDoclingHtmlExtractor（_auth_env_var="DOCLING_SERVICE_AUTH"）を
@@ -128,7 +128,7 @@ def test_warmup_returns_false_on_non_200_status():
 
 def test_request_id_is_propagated_to_internal_service():
     # backendが採番した相関IDを内部サービスへ引き継ぎ、CloudWatch上で1つのrequest_idから
-    # 両サービスのログを追えるようにする（ADR-013の積み残しを解消。ADR-030）。
+    # 両サービスのログを追えるようにする。
     from app.request_context import reset_request_id, set_request_id
 
     captured_headers = {}

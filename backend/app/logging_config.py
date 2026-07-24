@@ -1,4 +1,4 @@
-"""構造化ログ（1レコード=1行のJSON）の設定（ADR-011）。
+"""構造化ログ（1レコード=1行のJSON）の設定。
 
 コンテナ・AWS Lambdaは標準出力のログを収集する運用のため、追加依存（structlog等）を入れず
 標準の`logging`のみで、標準出力へ1行1レコードのJSONを出す。
@@ -27,7 +27,7 @@ class JsonLogFormatter(logging.Formatter):
         "duration_ms",
         "detail",
         # 監査証跡。Supabase Auth側のログは保持期間がプラン依存のため、誰の操作かはアプリ側の
-        # ログにも残してCloudWatch上で完結して追えるようにする（ADR-030）。
+        # ログにも残してCloudWatch上で完結して追えるようにする。
         "user_id",
         # 失敗の原因（JWT検証エラー等）。安全な要約のみを載せ、トークン本体は決して載せない。
         "reason",

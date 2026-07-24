@@ -15,22 +15,22 @@ resource "aws_iam_role" "this" {
   assume_role_policy = data.aws_iam_policy_document.assume.json
 }
 
-# CloudWatch Logsへの書き込み（構造化ログの収集先。ADR-011）。
+# CloudWatch Logsへの書き込み（構造化ログの収集先）。
 resource "aws_iam_role_policy_attachment" "logs" {
   role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 # X-Rayへのセグメント送信。backend→docling/pdf2htmlexのFunction URL呼び出しが1本のトレースに
-# つながり、どのサービスで時間を使ったかを追える（ADR-030）。
+# つながり、どのサービスで時間を使ったかを追える。
 resource "aws_iam_role_policy_attachment" "xray" {
   count      = var.enable_xray ? 1 : 0
   role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
-# APIキー取得のための最小権限。対象パラメータのGetと、SSM経由のKMS復号だけを許可する（ADR-017）。
-# docling/pdf2htmlex Lambda（ssm_parameter_arns未指定）はAPIキーを扱わないため、この権限自体を持たない（ADR-026）。
+# APIキー取得のための最小権限。対象パラメータのGetと、SSM経由のKMS復号だけを許可する。
+# docling/pdf2htmlex Lambda（ssm_parameter_arns未指定）はAPIキーを扱わないため、この権限自体を持たない。
 data "aws_iam_policy_document" "ssm_read" {
   count = length(var.ssm_parameter_arns) > 0 ? 1 : 0
 
@@ -62,7 +62,7 @@ resource "aws_iam_role_policy" "ssm_read" {
 }
 
 # 内部専用サービス（docling/pdf2htmlex）のFunction URLをSigV4署名で呼び出すための呼び出し元権限
-# （identity-based）。呼び出し先Lambdaの resource-based policy（下のfunction_url_invoke）と対になる（ADR-026）。
+# （identity-based）。呼び出し先Lambdaの resource-based policy（下のfunction_url_invoke）と対になる。
 data "aws_iam_policy_document" "invoke_function_url" {
   count = length(var.invoke_function_url_arns) > 0 ? 1 : 0
 
@@ -90,11 +90,11 @@ resource "aws_lambda_function" "this" {
   function_name = var.name
   role          = aws_iam_role.this.arn
 
-  # コンテナイメージ（Dockerfile.lambda）で動かす。runtime/handlerは指定しない（ADR-017）。
+  # コンテナイメージ（Dockerfile.lambda）で動かす。runtime/handlerは指定しない。
   package_type = "Image"
   image_uri    = var.image_uri
 
-  # pdf2htmlEXのベースイメージがx86_64のみの提供のため、3関数ともx86_64へ揃える（ADR-026）。
+  # pdf2htmlEXのベースイメージがx86_64のみの提供のため、3関数ともx86_64へ揃える。
   # 開発機（Apple Silicon）でビルドする場合は`docker build --platform linux/amd64`が必須。
   architectures = ["x86_64"]
 
@@ -114,7 +114,7 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = merge(
-      # secrets_loaderがコールドスタート時にこの接頭辞でParameter Storeを引く（ADR-017）。
+      # secrets_loaderがコールドスタート時にこの接頭辞でParameter Storeを引く。
       # APIキーを扱わないdocling/pdf2htmlex Lambdaはssm_prefix未指定のため、この変数自体を設定しない。
       var.ssm_prefix != "" ? { SSM_PARAMETER_PREFIX = var.ssm_prefix } : {},
       var.use_mock_ai != "" ? { USE_MOCK_AI = var.use_mock_ai } : {},
@@ -125,7 +125,7 @@ resource "aws_lambda_function" "this" {
 
 # 内部専用サービス（docling/pdf2htmlex）をAPI Gatewayを介さず直接HTTPで公開するためのFunction URL。
 # AWS_IAM認証を必須にし、呼び出し元をfunction_url_invoker_role_arnsで指定したロールのみに限定する
-# （backend Lambdaがhttpxリクエストへの手動SigV4署名で呼び出す。ADR-026）。
+# （backend Lambdaがhttpxリクエストへの手動SigV4署名で呼び出す）。
 resource "aws_lambda_function_url" "this" {
   count              = var.create_function_url ? 1 : 0
   function_name      = aws_lambda_function.this.function_name

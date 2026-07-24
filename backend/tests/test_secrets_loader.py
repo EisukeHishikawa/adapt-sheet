@@ -1,4 +1,4 @@
-"""Parameter Store からのAPIキー読み込み（app.secrets_loader、ADR-017）のテスト。
+"""Parameter Store からのAPIキー読み込み（app.secrets_loader）のテスト。
 
 実SSMを叩かず、注入したフェイククライアントで挙動を検証する。ローカル/pytestでは
 SSM_PARAMETER_PREFIX未設定のため常に no-op になることも合わせて確認する。

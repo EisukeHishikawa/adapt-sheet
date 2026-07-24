@@ -1,10 +1,10 @@
-"""SQLAlchemyのエンジン・セッション管理（DEVELOPMENT.md ステップ28、ADR-019/021）。
+"""SQLAlchemyのエンジン・セッション管理。
 
 エンジンはコネクションプールを持つため、他のget_*ファクトリ（app/services/*.py）と異なり
 リクエストごとに作り直さず、モジュールスコープで1つだけ生成してキャッシュする（Sessionのみ
 リクエストごとに新規発行する）。
 
-接続先はSupabaseのPostgresで、render_historyにはRLSが有効化されている（ADR-021）。アプリは
+接続先はSupabaseのPostgresで、render_historyにはRLSが有効化されている。アプリは
 RLSを迂回しない`authenticator`ロールで接続し、リクエストごとにログイン中ユーザーのJWT `sub`を
 トランザクションローカルなGUCへ設定してから`authenticated`ロールへ切り替える（PostgRESTと同じ
 方式）。これによりWHERE句の書き忘れやSQLインジェクションがあっても他人の行へ到達できない。
@@ -58,7 +58,7 @@ def apply_rls_context(session: Session, user_id: str) -> None:
 
 
 def ping_database() -> bool:
-    """SupabaseのPostgresへ最小のクエリを投げる（ADR-028）。
+    """SupabaseのPostgresへ最小のクエリを投げる。
 
     無料プランのSupabaseプロジェクトは一定期間アクセスが無いと一時停止されるため、
     フロントを開くたびにここを通して「使われている」状態を保つ。DATABASE_URL未設定の

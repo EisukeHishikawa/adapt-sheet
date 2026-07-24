@@ -1,6 +1,6 @@
 import type { components } from '@/types/api'
 
-// バックエンドのopenapi.jsonから自動生成した型（ADR-005）。フロント側でキー名を手書きしないため、
+// バックエンドのopenapi.jsonから自動生成した型。フロント側でキー名を手書きしないため、
 // /api/renderのレスポンスはこの型を経由してのみ扱う。
 export type RenderResponse = components['schemas']['RenderResponse']
 
@@ -10,20 +10,20 @@ export type HistoryEditRequest = components['schemas']['HistoryEditRequest']
 export type HistoryItemResponse = components['schemas']['HistoryItemResponse']
 
 // docs/spec.md 3.1の契約に沿ったリクエスト項目。
-// cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提。ADR-014）。
+// cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提）。
 // jsonも持たない（業務データはAIへの入力として不要で、レスポンス側でのみ返る）。
-// htmlも持たない（ADR-015：生成AIへの入力はPDFファイルの直接添付のみ。変換エンジンもpdfのみを見る）。
+// htmlも持たない（生成AIへの入力はPDFファイルの直接添付のみ。変換エンジンもpdfのみを見る）。
 export type RenderRequestFields = {
   prompt?: string
   pdf?: File
   width_mm?: number
   height_mm?: number
-  // EngineSelectで選択した生成エンジン（ADR-015）。gemini_free/gemini/claude/openai/
+  // EngineSelectで選択した生成エンジン。gemini_free/gemini/claude/openai/
   // docling/pdf2htmlex/pymupdfのいずれか。
   engine?: string
 }
 
-// バックエンドの構造化エラーボディ（ADR-012）から取り出した情報。
+// バックエンドの構造化エラーボディから取り出した情報。
 export type RenderErrorInfo = {
   code: string | null
   // ユーザーへ表示する安全な日本語文言。
@@ -115,7 +115,7 @@ export async function saveEditHistory(
   return requestEditHistory('/api/history/edit', 'POST', fields, accessToken)
 }
 
-// 既存の編集中スナップショットを上書きする。編集を続けても履歴を増やさないため（ADR-025）。
+// 既存の編集中スナップショットを上書きする。編集を続けても履歴を増やさないため。
 export async function updateEditHistory(
   entryId: string,
   fields: HistoryEditRequest,

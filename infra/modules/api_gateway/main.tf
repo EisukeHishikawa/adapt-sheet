@@ -104,7 +104,7 @@ resource "aws_api_gateway_account" "this" {
   depends_on          = [aws_iam_role_policy_attachment.cloudwatch]
 }
 
-# アクセスログの保存先。Lambdaのロググループ（ADR-011）と同様にTerraform管理下へ置き、
+# アクセスログの保存先。Lambdaのロググループと同様にTerraform管理下へ置き、
 # 保持期間を明示する。暗黙作成に任せると無期限保持になる。
 resource "aws_cloudwatch_log_group" "access" {
   name              = "/aws/apigateway/${var.name}/access"
@@ -116,8 +116,8 @@ resource "aws_api_gateway_stage" "this" {
   deployment_id = aws_api_gateway_deployment.this.id
   stage_name    = var.stage_name
 
-  # backend側のLambdaログ（ADR-011）と同じくJSON1行で出す。429のようにLambdaへ到達せず
-  # API Gatewayで打ち切られたリクエスト（ADR-027のスロットリング）は、ここにしか記録が残らない。
+  # backend側のLambdaログと同じくJSON1行で出す。429のようにLambdaへ到達せず
+  # API Gatewayで打ち切られたリクエストは、ここにしか記録が残らない。
   # backendのログとの突き合わせはxrayTraceId（LambdaへX-Amzn-Trace-Idとして渡る）で行う。
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.access.arn
@@ -146,7 +146,7 @@ resource "aws_api_gateway_stage" "this" {
   depends_on = [aws_api_gateway_account.this]
 }
 
-# ステージ全体（全メソッド合算）のリクエスト数を制限する（WAFを使わない代替。ADR-027）。
+# ステージ全体（全メソッド合算）のリクエスト数を制限する（WAFを使わない代替）。
 # API Gatewayのスロットリングはクライアント（IP等）を区別せず合算でカウントするため、
 # WAFのレートベースルールと異なり1クライアントの連打が他の利用者にも影響しうる。
 resource "aws_api_gateway_method_settings" "default" {
@@ -163,7 +163,7 @@ resource "aws_api_gateway_method_settings" "default" {
     metrics_enabled = true
 
     # 実行ログはエラー時のみ。data_trace_enabledはリクエスト/レスポンスの本文まで
-    # ロググループへ書き出すため、業務データ・PDFが漏れる。本番では絶対に有効化しない（ADR-030）。
+    # ロググループへ書き出すため、業務データ・PDFが漏れる。本番では絶対に有効化しない。
     logging_level      = var.execution_logging_level
     data_trace_enabled = false
   }

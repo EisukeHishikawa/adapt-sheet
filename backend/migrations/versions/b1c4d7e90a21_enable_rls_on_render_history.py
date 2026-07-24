@@ -5,7 +5,7 @@ Revises: 9efb14568497
 Create Date: 2026-07-21 13:20:00.000000
 
 生成履歴をSupabaseのPostgresへ置き、行レベルセキュリティで「自分の行しか読み書きできない」
-状態をDB側で保証する（ADR-021）。アプリはauthenticatorロールで接続し、リクエストごとに
+状態をDB側で保証する。アプリはauthenticatorロールで接続し、リクエストごとに
 authenticatedロールへ切り替えるため、そのロールにだけ権限とポリシーを与える。
 """
 from typing import Sequence, Union

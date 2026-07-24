@@ -2,12 +2,12 @@ import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/authStore'
 
-// EngineSelectのgated engine（gemini/claude/openai）を使うにはログインが必要（DEVELOPMENT.md
-// ステップ27）。VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY未設定の環境ではisAuthAvailableがfalseに
+// EngineSelectのgated engine（gemini/claude/openai）を使うにはログインが必要。
+// VITE_SUPABASE_URL/VITE_SUPABASE_ANON_KEY未設定の環境ではisAuthAvailableがfalseに
 // なり、ヘッダーには何も表示しない（Supabaseプロジェクト未作成のローカル開発を壊さないため）。
 // アカウント作成はscripts/create_user.shによる管理者操作のみのため、新規登録の導線は持たず、
-// その旨を未ログイン表示に注記して利用者に明示する（ADR-021）。
-// ログイン手段はGoogleアカウントのみで、メールアドレス・パスワードの入力欄は持たない（ADR-022）。
+// その旨を未ログイン表示に注記して利用者に明示する。
+// ログイン手段はGoogleアカウントのみで、メールアドレス・パスワードの入力欄は持たない。
 
 export function AuthPanel() {
   const isAuthAvailable = useAuthStore((state) => state.isAuthAvailable)
@@ -21,7 +21,7 @@ export function AuthPanel() {
   if (!isAuthAvailable) return null
 
   // セッション復元が終わるまでは「ログイン」ボタンを出さない。先に未ログイン表示を描くと、
-  // 復元完了時にログイン済み表示へ入れ替わってチラつくため（ADR-021）。
+  // 復元完了時にログイン済み表示へ入れ替わってチラつくため。
   // 高さだけ確保してヘッダーのレイアウトシフトも防ぐ。
   if (isInitializing) return <div className="h-8" aria-hidden="true" />
 

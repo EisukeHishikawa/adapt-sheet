@@ -1,7 +1,6 @@
-# 開発用の入口エンドポイントイメージ（docker-compose.yml参照）。開発環境はDocker Composeのみを
-# 対象とする（ADR-009）。ADR-013によりDocling本体は別コンテナ（docling-service）へ分離したため、
-# このイメージはtorch/opencv-python等の重量級ML依存を含まず、Python 3.9系は他サービスとの
-# バージョン統一のため踏襲する。
+# 開発用の入口エンドポイントイメージ（docker-compose.yml参照）。開発環境はDocker Composeのみを対象とする。
+# Docling本体は別コンテナ（docling-service）へ分離しているため、このイメージはtorch/opencv-python等の
+# 重量級ML依存を含まない。Python 3.9系は他サービスとのバージョン統一のため踏襲する。
 FROM python:3.9-slim
 
 WORKDIR /app
@@ -10,9 +9,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ADR-013によりopencv-python/torch（libgl1/libglib2.0-0/libgomp1を要求）を含まなくなったため、
-# それらのapt依存は削除した。requirements.txtの全依存はmanylinux/aarch64のバイナリwheelで
-# 導入でき、ソースビルドが発生しないため、build-essential（gcc/g++等で約280MB）も含めない（ADR-016）。
+# opencv-python/torch（libgl1/libglib2.0-0/libgomp1を要求）を含まないため、それらのapt依存は不要。
+# requirements.txtの全依存はmanylinux/aarch64のバイナリwheelで導入でき、ソースビルドが発生しないため、
+# build-essential（gcc/g++等で約280MB）も含めない。
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*

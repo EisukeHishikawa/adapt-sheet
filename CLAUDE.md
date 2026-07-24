@@ -8,6 +8,7 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 - **インクリメンタル**: 一気に作らず、最小機能から段階的に肉付けする。フェーズ/ステップは `DEVELOPMENT.md` の順序に従う。
 - **インフラ・認証は後回し**: コア体験（AI生成・リアルタイムプレビュー）のローカル完成度を最優先し、インフラ構築・認証・DBはアドオンとして最後に疎結合で組み込む。
 - **ドキュメント駆動**: 設計判断や規約変更は口頭で終わらせず、該当するMarkdown（本ファイル、`docs/decisions.md` 等）に反映する。
+- **ドキュメントも徹底的にシンプルに**: ドキュメントは「今の状態」を書く場であり、変更履歴・検討の経緯（「以前は〜だったが」「〜を修正した」等）は書かない。理由が要る箇所も一言の「なぜ」に留め、重要度の低い情報は書かない。経緯はGitログ・PR説明・ADR（`docs/decisions.md`、ただしADRに記載しないものは同ファイル冒頭のルールに従う）に任せる。
 
 ## 作業時の確認ルール
 
@@ -29,21 +30,21 @@ mise ls         # 適用中のバージョンを確認
 
 ### バックエンド (Python / FastAPI、入口エンドポイント)
 
-> Python 3.9系で動作確認済み（`backend/Dockerfile`）。ADR-013によりDocling本体は含まない軽量コンテナ。
+> Python 3.9系で動作確認済み（`backend/Dockerfile`）。Docling本体は含まない軽量コンテナ。
 
 ```bash
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
 docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-005）
-docker compose exec backend alembic upgrade head          # 生成履歴用DB（backend/migrations）のマイグレーション適用。RLSも有効化される（ADR-019/021）
+docker compose exec backend alembic upgrade head          # 生成履歴用DB（backend/migrations）のマイグレーション適用。RLSも有効化される（ADR-020）
 docker compose exec backend alembic revision --autogenerate -m "説明" # app/models.py変更時のマイグレーション作成
-scripts/create_user.sh user@example.com 'password123'      # アカウント作成（唯一の手段。画面からの新規登録は提供しない。ADR-021）
+scripts/create_user.sh user@example.com 'password123'      # アカウント作成（唯一の手段。画面からの新規登録は提供しない。ADR-020）
 ```
 
-### Doclingサービス (Python / FastAPI、テキスト抽出専用・ADR-013/016)
+### Doclingサービス (Python / FastAPI、テキスト抽出専用)
 
-> Python 3.9系で動作確認済み（`docling-service/Dockerfile`）。Docling 2.x系も同バージョンで動作する。backendからHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。ADR-015により、DoclingはMarkdownではなく**HTML**を返す単独の変換エンジン（`engine=docling`）になった（AIへのテキスト入力としては使わない）。
+> Python 3.9系で動作確認済み（`docling-service/Dockerfile`）。Docling 2.x系も同バージョンで動作する。backendからHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。DoclingはMarkdownではなく**HTML**を返す単独の変換エンジン（`engine=docling`）になった（AIへのテキスト入力としては使わない）。
 
 ```bash
 docker compose exec docling pytest                     # 全テスト実行（実PDF変換の結合テストを含む）
@@ -53,7 +54,7 @@ docker compose exec docling python scripts/verify_docling.py # Docling単体動�
 docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8100/convert # /convertエンドポイントを直接叩いて動作確認（backend/frontendを介さない）
 ```
 
-### pdf2htmlex-service (Python / FastAPI、PDF→HTML変換専用・ADR-015)
+### pdf2htmlex-service (Python / FastAPI、PDF→HTML変換専用)
 
 > Python 3.9系（`pdf2htmlex-service/Dockerfile`）。ベースイメージ`pdf2htmlex/pdf2htmlex`（Ubuntu 20.04/focal、x86_64のみ）にpython3.9を追加導入している。Apple Silicon等のarm64ホストではQEMUエミュレーション下で動作するため、ビルド・実行とも遅い。backendからHTTPで呼び出される内部サービスのため、ホストへポートは公開しない。`engine=pdf2htmlex`選択時に、AIを介さずpdf2htmlEXバイナリの変換結果（フォント・画像・CSSを埋め込んだ自己完結HTML）をそのまま返す単独の変換エンジン。
 
@@ -64,9 +65,9 @@ docker compose exec pdf2htmlex ruff check .                 # 静的解析
 docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8200/convert # /convertエンドポイントを直接叩いて動作確認（backend/frontendを介さない）
 ```
 
-### レイアウトHTML生成 (PyMuPDF、backend内モジュール・ADR-014/016)
+### レイアウトHTML生成 (PyMuPDF、backend内モジュール)
 
-> レイアウトHTML生成はbackend内の純Pythonモジュール（`backend/app/services/pdf_layout.py`、PyMuPDF）が担う（ADR-014）。PDFの1ページ目を、テキスト・罫線・背景を絶対座標のdivへ写した1枚のHTMLに変換する。ADR-015により、この変換結果は単独の変換エンジン（`engine=pymupdf`）としても選択できる（AIを介さない）。専用のテスト・起動コマンドは無く、上記のbackend側コマンド（`docker compose exec backend pytest tests/test_pdf_layout.py -v` 等）で検証する。PyMuPDFはAGPL/商用ライセンスである点に留意（ADR-014のトレードオフ参照）。
+> レイアウトHTML生成はbackend内の純Pythonモジュール（`backend/app/services/pdf_layout.py`、PyMuPDF）が担う。PDFの1ページ目を、テキスト・罫線・背景を絶対座標のdivへ写した1枚のHTMLに変換する。この変換結果は単独の変換エンジン（`engine=pymupdf`）としても選択できる（AIを介さない）。専用のテスト・起動コマンドは無く、上記のbackend側コマンド（`docker compose exec backend pytest tests/test_pdf_layout.py -v` 等）で検証する。PyMuPDFはAGPL/商用ライセンスである点に留意。
 
 ### フロントエンド (React / TypeScript)
 
@@ -77,7 +78,7 @@ docker compose exec frontend npm run generate-types  # backend/openapi.json → 
 docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス。ADR-009参照）
 ```
 
-### エディタ（Zed）向けLSP (ADR-024)
+### エディタ（Zed）向けLSP (ADR-009)
 
 エディタ上の診断・整形もDocker内のruff / ESLintで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント規則の一次ソースは`backend/requirements.txt`と`frontend/eslint.config.js`のままである。ホストにruff/ESLintを追加導入しないこと。
 
@@ -90,14 +91,14 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 
 - **型安全**: FastAPIの `openapi.json` から自動生成したTypeScript型を使用する。フロント・バック間でキー名を手書きで一致させない。
 - **AI呼び出しのモック**: pytest実行時・ローカル開発時に生成AI（Gemini/Claude/OpenAI）を実際に叩かない。プロンプトに応じた疑似レスポンスを返すモック層を必ず経由する。pytestの既定は常に`MockAIClient`（`USE_MOCK_AI`未設定時）であり、この既定は`engine`等の他のパラメータの値に関わらず変更しない。
-- **モデル選択機能（ADR-015）**: 描画エンジンはフロントの`EngineSelect`で選び、`gemini_free`/`gemini`/`claude`/`openai`（生成AI）と`docling`/`pdf2htmlex`/`pymupdf`（AIを介さない変換エンジン）の7種類がある。`gemini`/`claude`/`openai`（標準プラン）はフェーズ5（Supabase Auth導入）まで自由アクセスのユーザーに提供せず、`app/main.py`が最初に403 `FREE_ACCESS_FORBIDDEN`で弾く。生成AIへのリクエストにHTML・JSON・Docling抽出テキストは一切含めず、PDFファイルをマルチモーダル入力として直接添付する（PyMuPDF/Docling経由の事前変換は行わない）。
+- **モデル選択機能**: 描画エンジンはフロントの`EngineSelect`で選び、`gemini_free`/`gemini`/`claude`/`openai`（生成AI）と`docling`/`pdf2htmlex`/`pymupdf`（AIを介さない変換エンジン）の7種類がある。`gemini`/`claude`/`openai`（標準プラン）はフェーズ5（Supabase Auth導入）まで自由アクセスのユーザーに提供せず、`app/main.py`が最初に403 `FREE_ACCESS_FORBIDDEN`で弾く。生成AIへのリクエストにHTML・JSON・Docling抽出テキストは一切含めず、PDFファイルをマルチモーダル入力として直接添付する（PyMuPDF/Docling経由の事前変換は行わない）。
 - **固定情報と業務データの分離**: 生成するHTMLにおいて、タイトル等の固定テキストはHTMLへ直書き、明細等の業務データのみテンプレート変数としてJSONと連動させる。
 - **エラーハンドリング**: バリデーションエラー・AI生成エラー・Docling解析エラーは、例外種別に応じたHTTPステータスコードを厳格に返す。
 - **既存設計の尊重**: 既存コードの設計意図や命名規則を尊重し、必要以上の書き換えを行わない。
-- **コードコメント（簡潔・「なぜ」のみ）**: コメントは「コードを読んでも分からないこと」だけを書く。次の3原則を守る。
+- **コードコメント（徹底的にシンプルに・「なぜ」のみ）**: コメントは「コードを読んでも分からないこと」だけを、一言で書く。次の3原則を守る。
   1. **コードそのものに語らせる**: コードを読めば分かることはコメントにしない。命名・関数分割で意図が伝わるなら、コメントは書かずにコードを直す。
-  2. **How を書かない**: 処理手順の逐語的な説明は書かない。書くのは「なぜその選択をしたか（Why）」と、コードから読み取れない制約・前提だけ。
-  3. **修正の経緯を書かない**: 「〜のため修正した」「以前は〜だったが」「ステップ18で〜」といった変更履歴・検討経緯はコメントに残さない。長い背景・検討の経緯は `docs/decisions.md`（ADR）に書き、コード側は `（ADR-0XX）` の参照に留める。Gitログと ADR が一次ソース。
+  2. **How を書かない**: 処理手順の逐語的な説明は書かない。書くのは「なぜその選択をしたか（Why）」と、コードから読み取れない制約・前提だけ。長くても2行以内に収める。
+  3. **経緯・参照を書かない**: 変更履歴・検討の経緯（「〜のため修正した」「以前は〜だったが」「ステップ18で〜」）や `ADR-0XX` 等のドキュメント参照はコード上に残さない。背景が必要な場合はコミットメッセージ・PR説明に書く。コードは常に「今の状態」だけを語る。
 
 ## セキュリティ
 
@@ -107,7 +108,7 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 ## 環境依存の注意点
 
 - **Docling**: OS依存のバイナリ/MLモデルを含むため、導入時は単体検証スクリプトで早期に動作確認する。
-- **AWS Lambda**: コールドスタート対策としてAWS Lambda Web Adapterを利用する（本番用は`backend`/`docling-service`/`pdf2htmlex-service`それぞれの`Dockerfile.lambda`）。APIキーはイメージに焼き込まず、コールドスタート時にParameter Storeから取得して`os.environ`へ展開する（`app/secrets_loader.py`。ハンドラ内で毎回SSMを叩かない。ADR-017）。`docling-service`/`pdf2htmlex-service`はbackendからのみ呼ばれる内部専用サービスのため、API Gatewayを介さずAWS_IAM認証必須のLambda Function URLとして公開し、backendはAWS SigV4署名（`app/services/remote_extractor.py`）で呼び出す（ADR-026）。
+- **AWS Lambda**: コールドスタート対策としてAWS Lambda Web Adapterを利用する（本番用は`backend`/`docling-service`/`pdf2htmlex-service`それぞれの`Dockerfile.lambda`）。APIキーはイメージに焼き込まず、コールドスタート時にParameter Storeから取得して`os.environ`へ展開する（`app/secrets_loader.py`。ハンドラ内で毎回SSMを叩かない）。`docling-service`/`pdf2htmlex-service`はbackendからのみ呼ばれる内部専用サービスのため、API Gatewayを介さずAWS_IAM認証必須のLambda Function URLとして公開し、backendはAWS SigV4署名（`app/services/remote_extractor.py`）で呼び出す。
 - **ローカルDB**: Supabase統合時は `Supabase Local CLI` / Docker を使い、クラウド環境を汚さずにマイグレーション・テストを行う。
 
 ## Git / CI運用

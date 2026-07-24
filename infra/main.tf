@@ -1,7 +1,7 @@
 locals {
   name_prefix = "${var.project}-${var.environment}"
   # APIキーのParameter Storeパス接頭辞。backend（app/secrets_loader.py）がSSM_PARAMETER_PREFIXとして
-  # 受け取り、コールドスタート時に "{prefix}/GEMINI_API_KEY" 等を復号取得する（ADR-017）。
+  # 受け取り、コールドスタート時に "{prefix}/GEMINI_API_KEY" 等を復号取得する。
   ssm_prefix = "/${var.project}/${var.environment}"
 
   tags = merge({
@@ -12,21 +12,21 @@ locals {
 }
 
 # Lambdaのコンテナイメージ置き場。Lambdaは同一リージョンのECR Privateからのみイメージを取得できる
-# ため、ECR Publicではなく Private を用いる（ADR-017）。
+# ため、ECR Publicではなく Private を用いる。
 module "ecr" {
   source           = "./modules/ecr"
   repository_name  = "${local.name_prefix}-backend"
   keep_last_images = var.ecr_keep_last_images
 }
 
-# APIキーの入れ物（SecureString）。値はTerraform管理外で投入し、コミットしない（ADR-017）。
+# APIキーの入れ物（SecureString）。値はTerraform管理外で投入し、コミットしない。
 module "ssm" {
   source       = "./modules/ssm"
   prefix       = local.ssm_prefix
   secret_names = var.secret_parameter_names
 }
 
-# Doclingサービス（テキスト抽出）のLambda化（ADR-026）。backend以外からは呼ばれない内部専用サービス
+# Doclingサービス（テキスト抽出）のLambda化。backend以外からは呼ばれない内部専用サービス
 # のため、API Gatewayではなく AWS_IAM 認証必須の Function URL を直接公開し、backend Lambdaの実行ロール
 # のみに呼び出しを許可する。APIキーを扱わないため ssm_prefix/ssm_parameter_arns は渡さない。
 module "ecr_docling" {
@@ -52,7 +52,7 @@ module "lambda_docling" {
   enable_xray           = var.enable_xray
 }
 
-# pdf2htmlEXサービス（PDF→HTML変換）のLambda化（ADR-026）。設計はdocling-serviceと同じ。
+# pdf2htmlEXサービス（PDF→HTML変換）のLambda化。設計はdocling-serviceと同じ。
 module "ecr_pdf2htmlex" {
   source           = "./modules/ecr"
   repository_name  = "${local.name_prefix}-pdf2htmlex"
@@ -75,7 +75,7 @@ module "lambda_pdf2htmlex" {
 
 # 入口エンドポイント（backend）のLambda。実行ロールにSSM読み取り＋KMS復号に加え、docling/pdf2htmlexの
 # Function URL呼び出し権限（identity-based）を最小権限で付与する。resource-based側の許可は上記
-# function_url_invoker_role_arnsが担う（ADR-026）。
+# function_url_invoker_role_arnsが担う。
 module "lambda" {
   source             = "./modules/lambda"
   name               = "${local.name_prefix}-backend"
@@ -92,7 +92,7 @@ module "lambda" {
   invoke_function_url_arns = [module.lambda_docling.function_arn, module.lambda_pdf2htmlex.function_arn]
   extra_env = merge(
     {
-      # remote_extractor.pyがこのURL宛にPOSTし、*_AUTH=aws_sigv4でSigV4署名を有効化する（ADR-026）。
+      # remote_extractor.pyがこのURL宛にPOSTし、*_AUTH=aws_sigv4でSigV4署名を有効化する。
       DOCLING_SERVICE_URL     = module.lambda_docling.function_url
       DOCLING_SERVICE_AUTH    = "aws_sigv4"
       PDF2HTMLEX_SERVICE_URL  = module.lambda_pdf2htmlex.function_url
@@ -100,13 +100,13 @@ module "lambda" {
     },
     # SupabaseがJWT Signing Keys（ES256）を使う場合の公開鍵配布URL。公開情報のため
     # SecureStringではなく環境変数で渡す。HS256共有シークレット方式なら未設定のままでよく、
-    # その場合はSUPABASE_JWT_SECRET（Parameter Store）側が使われる（ADR-018/020）。
+    # その場合はSUPABASE_JWT_SECRET（Parameter Store）側が使われる。
     var.supabase_jwt_jwks_url != "" ? { SUPABASE_JWT_JWKS_URL = var.supabase_jwt_jwks_url } : {},
   )
 }
 
 # 公開エンドポイント。REST API（REGIONAL）でLambdaへプロキシし、ステージ全体のスロットリングで
-# 過度なAPIコールを防ぐ（WAFを使わない代替。ADR-027）。
+# 過度なAPIコールを防ぐ（WAFを使わない代替）。
 module "api" {
   source                = "./modules/api_gateway"
   name                  = "${local.name_prefix}-api"
@@ -129,7 +129,7 @@ module "frontend" {
   log_retention_in_days  = var.log_retention_in_days
 }
 
-# ログを取るだけでは障害に気づけないため、アラームとその通知先までをコード化する（ADR-030）。
+# ログを取るだけでは障害に気づけないため、アラームとその通知先までをコード化する。
 module "monitoring" {
   source = "./modules/monitoring"
   name   = local.name_prefix

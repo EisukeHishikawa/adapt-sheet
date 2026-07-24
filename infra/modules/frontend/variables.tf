@@ -14,7 +14,7 @@ variable "api_origin_path" {
 }
 
 variable "enable_access_logging" {
-  description = "CloudFrontの標準アクセスログをS3へ出力するか（ADR-030）"
+  description = "CloudFrontの標準アクセスログをS3へ出力するか"
   type        = bool
   default     = true
 }

@@ -31,7 +31,7 @@ function App() {
   }, [])
 
   // 画面を開いた時点で、コールドスタートしがちなdocling/pdf2htmlexのLambdaとSupabaseを
-  // 起こしておく（ADR-028）。結果は画面へ反映しないため、完了を待たず投げっぱなしにする。
+  // 起こしておく。結果は画面へ反映しないため、完了を待たず投げっぱなしにする。
   useEffect(() => {
     void runWarmup()
   }, [])
@@ -167,7 +167,7 @@ function RenderButton() {
 }
 
 // PDFアップロード時のDocling解析は十数秒かかることがあり、進捗が見えないと「固まっている」と
-// 誤解されるため経過秒数を出す（ADR-014）。isLoadingの間だけマウントされる設計により、
+// 誤解されるため経過秒数を出す。isLoadingの間だけマウントされる設計により、
 // 秒数のリセットをuseEffect内のsetStateで行う必要がない（アンマウントで自然に0へ戻る）。
 function RenderingProgress() {
   const [seconds, setSeconds] = useState(0)

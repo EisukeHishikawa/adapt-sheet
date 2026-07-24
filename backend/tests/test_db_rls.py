@@ -1,4 +1,4 @@
-"""RLSコンテキスト設定（app.db.apply_rls_context、ADR-021）のテスト。
+"""RLSコンテキスト設定（app.db.apply_rls_context）のテスト。
 
 実PostgreSQLは起動せず、発行されるSQLと、SQLite（RLS非対応）では何も発行しないことを検証する。
 """

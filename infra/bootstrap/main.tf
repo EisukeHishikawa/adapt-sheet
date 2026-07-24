@@ -1,8 +1,7 @@
-# Terraform state を置くS3バケットとロック用DynamoDBテーブルを作成する（ADR-005）。
 # 本体（infra/）のS3バックエンドが依存する土台のため、chicken-egg回避として本ディレクトリだけは
 # ローカルstateで先に apply する。作成後、本体を -backend-config でこのバケット/テーブルに向ける。
 terraform {
-  # 実際のバージョン固定はmise.tomlが持つ（ADR-023）。ここはmise外で実行された場合のガード。
+  # 実際のバージョン固定はmise.tomlが持つ。ここはmise外で実行された場合のガード。
   required_version = "~> 1.15"
 
   required_providers {

@@ -447,27 +447,17 @@ def test_render_returns_422_when_pymupdf_engine_conversion_fails():
 
 
 # hybridエンジン（PyMuPDF×Docling×Gemini VLM）の分岐検証。
+# gemini_free同様に無料枠モデルを使うため、ログインなしで利用できる（GATED_ENGINES対象外）。
 
 
-def test_render_returns_403_for_hybrid_engine_without_login():
-    # hybridは重い処理を伴うため他の標準プラン同様にゲートする。
+def test_render_hybrid_engine_requires_pdf_but_not_login():
+    # ゲート対象ではないため未ログインでも403にはならず、PDF未添付のみが400になる。
     response = client.post("/api/render", data={"engine": "hybrid"})
-    assert response.status_code == 403
-
-
-def test_render_hybrid_engine_requires_pdf(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
-    response = client.post(
-        "/api/render",
-        data={"engine": "hybrid"},
-        headers={"Authorization": _make_bearer_token("test-secret")},
-    )
     assert response.status_code == 400
 
 
-def test_render_hybrid_engine_combines_pymupdf_docling_and_ai(monkeypatch):
+def test_render_hybrid_engine_combines_pymupdf_docling_and_ai():
     # hybridはPyMuPDF/Doclingの両方を変換し、その結果をAIクライアントへ渡した上でPDFも添付する。
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
 
     class _FakeLayoutConverter:
         def convert_to_html(self, filename, content):
@@ -494,7 +484,6 @@ def test_render_hybrid_engine_combines_pymupdf_docling_and_ai(monkeypatch):
             "/api/render",
             data={"engine": "hybrid"},
             files={"pdf": ("sample.pdf", pdf_bytes, "application/pdf")},
-            headers={"Authorization": _make_bearer_token("test-secret")},
         )
         assert response.status_code == 200
         assert "pymupdf-marker" in captured["prompt"]
@@ -506,9 +495,7 @@ def test_render_hybrid_engine_combines_pymupdf_docling_and_ai(monkeypatch):
         app.dependency_overrides.pop(get_html_extractor, None)
 
 
-def test_render_returns_422_when_hybrid_pymupdf_conversion_fails(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
-
+def test_render_returns_422_when_hybrid_pymupdf_conversion_fails():
     class _FailingConverter:
         def convert_to_html(self, filename, content):
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
@@ -519,16 +506,13 @@ def test_render_returns_422_when_hybrid_pymupdf_conversion_fails(monkeypatch):
             "/api/render",
             data={"engine": "hybrid"},
             files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
-            headers={"Authorization": _make_bearer_token("test-secret")},
         )
         assert response.status_code == 422
     finally:
         app.dependency_overrides.pop(get_layout_converter, None)
 
 
-def test_render_returns_422_when_hybrid_docling_conversion_fails(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
-
+def test_render_returns_422_when_hybrid_docling_conversion_fails():
     class _FailingExtractor:
         def convert_to_html(self, filename, content):
             raise PDFConversionError("PDFの解析に失敗しました（テスト用）")
@@ -539,7 +523,6 @@ def test_render_returns_422_when_hybrid_docling_conversion_fails(monkeypatch):
             "/api/render",
             data={"engine": "hybrid"},
             files={"pdf": ("broken.pdf", b"not a real pdf", "application/pdf")},
-            headers={"Authorization": _make_bearer_token("test-secret")},
         )
         assert response.status_code == 422
     finally:

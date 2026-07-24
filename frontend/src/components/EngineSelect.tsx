@@ -49,9 +49,9 @@ const ENGINES: readonly EngineDefinition[] = [
   {
     id: 'hybrid',
     label: 'ハイブリッド',
-    description: 'PyMuPDF・Docling・Geminiを組み合わせて精密に復元します（PDF添付必須）',
+    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（PDF添付必須）',
     icon: Layers,
-    gated: true,
+    gated: false,
   },
   {
     id: 'docling',

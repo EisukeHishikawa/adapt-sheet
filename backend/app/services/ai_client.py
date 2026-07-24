@@ -42,14 +42,15 @@ logger = logging.getLogger("app.ai")
 # gemini_free/gemini/claude/openai/hybridは生成AI（LLMがHTML/CSS/JSONを作る）、
 # docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン（変換結果をそのまま描画結果にする）。
 # hybridはPyMuPDF・Docling・Gemini（VLM）の3役を組み合わせる生成AIで、PDF添付必須（main.py参照）。
+# gemini_free同様に無料枠モデルを使うため自由アクセスのユーザーにも提供する（GATED_ENGINES対象外）。
 RenderEngine = Literal[
     "gemini_free", "gemini", "claude", "openai", "hybrid", "docling", "pdf2htmlex", "pymupdf"
 ]
 
 # フェーズ5（Supabase Auth導入）でアカウント登録ユーザーのみに解禁するまで、
 # 標準プラン（無料枠を超えるAPI利用）の生成AIは自由アクセスのユーザーに提供しない。
-# hybridはPDF変換2回＋Gemini標準モデル呼び出しを伴う重い処理のため、他の標準プランと同様にゲートする。
-GATED_ENGINES: frozenset = frozenset({"gemini", "claude", "openai", "hybrid"})
+# hybridはgemini_freeと同じ無料枠モデルを使うため、gemini_free同様ゲート対象に含めない。
+GATED_ENGINES: frozenset = frozenset({"gemini", "claude", "openai"})
 AI_ENGINES: frozenset = frozenset({"gemini_free", "gemini", "claude", "openai", "hybrid"})
 CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
 
@@ -542,8 +543,8 @@ def get_ai_client(engine: str = "gemini_free") -> AIClient:
         return OpenAIAIClient(api_key=_require_env("OPENAI_API_KEY"))
 
     if engine == "hybrid":
-        # PyMuPDF/Docling由来の構造化情報を渡した上でGeminiに統合させるため、標準プランのモデルを使う。
-        return GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=True)
+        # gemini_free同様、無料枠モデルで自由アクセスのユーザーにも提供する。
+        return GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=False)
 
     raise AIGenerationError(f"未知のAIエンジンです: {engine}")
 

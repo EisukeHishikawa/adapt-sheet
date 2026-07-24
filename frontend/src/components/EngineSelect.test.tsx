@@ -39,13 +39,13 @@ describe('EngineSelect（描画エンジン選択）', () => {
     expect(screen.getByText('PDFのレイアウトを座標付きで再現します（AIなし）')).toBeInTheDocument()
   })
 
-  it('標準プラン・Claude・OpenAI・ハイブリッドには要アカウント登録のロックアイコンが表示される', async () => {
+  it('標準プラン・Claude・OpenAIには要アカウント登録のロックアイコンが表示される（ハイブリッドは無料枠のため対象外）', async () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 
     await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料）' }))
 
-    expect(screen.getAllByLabelText('要アカウント登録（フェーズ5で利用可能予定）')).toHaveLength(4)
+    expect(screen.getAllByLabelText('要アカウント登録（フェーズ5で利用可能予定）')).toHaveLength(3)
   })
 
   it('Doclingを選択すると、ストアのengineがdoclingに更新されトリガー表示も切り替わる', async () => {

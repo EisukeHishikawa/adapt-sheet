@@ -18,14 +18,16 @@ export type SizePresetName = keyof typeof SIZE_PRESETS
 export type Orientation = 'tate' | 'yoko'
 export type Dimensions = { widthMm: number; heightMm: number }
 
-// モデル選択（EngineSelect）の7エンジン。gemini_free/gemini/claude/openaiは
+// モデル選択（EngineSelect）の8エンジン。gemini_free/gemini/claude/openai/hybridは
 // 生成AI（LLMがHTML/CSS/JSONを作る）、docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン
-// （変換結果をそのまま描画結果にする）。アイコン・説明文などの表示情報はEngineSelect.tsx側が持つ。
+// （変換結果をそのまま描画結果にする）。hybridはPyMuPDF・Docling・Gemini（VLM）を組み合わせる
+// 生成AIで、PDF添付必須。アイコン・説明文などの表示情報はEngineSelect.tsx側が持つ。
 export type RenderEngineId =
   | 'gemini_free'
   | 'gemini'
   | 'claude'
   | 'openai'
+  | 'hybrid'
   | 'docling'
   | 'pdf2htmlex'
   | 'pymupdf'

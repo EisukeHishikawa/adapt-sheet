@@ -144,7 +144,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 #### ⬛ ステップ 26: GitHub ActionsによるCI構築 【自動テスト化】
 > CI/CDのワークフロー定義とOIDCのコード定義まで完了。`terraform apply`（実AWSリソース作成）と初回の本番デプロイは、AWSアカウントでの手動実行が前提のため未実施。
 - [x] ⚙️ **GitHub Actions設定:** `.github/workflows/ci.yml` を新設。プルリクエスト（PR）作成時、およびmainブランチへのマージ時に、**「フロントのテスト（Vitest/ESLint/vite build）」「バックのテスト（pytest/ruff）」「docling/pdf2htmlexのテスト（pytest/ruff）」が自動で走るワークフロー**を構築。ローカル開発と同じ`docker-compose.yml`のサービス定義をそのまま使い、ローカル/CIの実行結果が乖離しないようにする（backend/frontendは`--no-deps`で単体起動。backendのテストはDocling/pdf2htmlexクライアントをhttpxモックで検証しており実サービス起動は不要）
-- [ ] ⚙️ **GitHub設定変更:** 「自動テスト（CI）が100%成功しなければマージできない」という制限をGitHubのブランチ保護ルールに追加（強制自動テスト化）。CIワークフローが実際にGitHub上で走った実績ができてから設定する
+- [x] ⚙️ **GitHub設定変更:** mainのブランチ保護ルールに必須ステータスチェック（`backend`/`docling`/`pdf2htmlex`/`frontend`）を追加。`strict`（mainに追従していないブランチはマージ不可）と管理者への強制適用も有効
 - [x] ⚙️ **CD構築:** `.github/workflows/cd.yml`を新設。mainへのpushでOIDCによるAWS認証→3イメージのビルド・ECR Privateへのpush（コミットSHAタグ）→`terraform apply`→フロントのS3同期・CloudFront無効化→`POST /api/warmup`によるスモークテストまでを自動化。初回のみ土台をローカルから手動applyする必要がある（`infra/README.md`）
 
 ---

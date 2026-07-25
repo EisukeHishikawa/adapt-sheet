@@ -103,7 +103,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 | Variables | `CREATE_GITHUB_OIDC_PROVIDER` | OIDCプロバイダが既にアカウントにある場合のみ`false` |
 | Secrets | `VITE_SUPABASE_ANON_KEY` | フロントのビルド時に埋め込むanon key |
 
-初回だけは、CDが動く前提（state土台・ECR・Lambda・デプロイロール）をローカルから手動で作る必要がある（[infra/README.md](../infra/README.md) の手順1〜6）。
+初回だけは、CDが動く前提（state土台・ECR・Lambda・デプロイロール）をローカルから手動で作る必要がある（[infra/README.md](../infra/README.md) の手順1〜6）。それまでの間、CDは`AWS_DEPLOY_ROLE_ARN`が未設定であることを検知してジョブごとスキップする。
 
 ---
 

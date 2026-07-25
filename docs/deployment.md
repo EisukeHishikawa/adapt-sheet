@@ -72,7 +72,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
   - `monitoring`: CloudWatchアラーム（Lambdaのエラー/スロットル、API Gatewayの4XX/5XX、アプリログのERRORメトリクスフィルタ）と通知先のSNSトピック（ADR-011）
 - state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
-- AWS認証はOIDC等の安全な方式でGitHub Actionsから利用する（長期の静的アクセスキーは発行しない）。OIDCプロバイダ/デプロイロールはステップ26で定義する。
+  - `github_oidc`: GitHub ActionsのOIDCプロバイダとCD用デプロイロール。長期の静的アクセスキーは発行せず、許可したリポジトリ・ブランチのワークフローだけがロールを引き受けられる
 - デプロイ後、ステージング環境のエンドポイントに対してローカルからAPIテストを実行し疎通を確認する。
 
 ---
@@ -80,8 +80,30 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 ## 5. CI/CDの構築（フェーズ4 ステップ26）
 
 - **CI（構築済み）**: `.github/workflows/ci.yml` が、PR作成時・mainマージ時にフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）・docling/pdf2htmlex（pytest/ruff）をジョブ分割で自動実行する。ローカル開発と同じ`docker-compose.yml`のサービス定義を使い、ローカル/CIの実行結果を乖離させない。
-- 「CIが100%成功しなければマージ不可」をBranch Protection Ruleに設定する（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。CIワークフローが実際にGitHub上で走った実績ができてから設定する（別途対応）。
-- **CD（未構築）**: OIDCによるAWS認証設定・`terraform apply`・テスト成功後のAWS（S3 / Lambda）への自動デプロイは別途構築する。
+- 「CIが100%成功しなければマージ不可」はBranch Protection Ruleに設定済み（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。必須チェックは`backend` / `docling` / `pdf2htmlex` / `frontend` の4ジョブ。
+- **CD**: `.github/workflows/cd.yml` が、mainへのpush（＝マージ）と手動実行で本番へデプロイする。AWSの長期アクセスキーは持たず、OIDC（`infra/modules/github_oidc`）で発行される短期認証情報でデプロイロールを引き受ける。
+
+### CDの流れ
+
+1. OIDCでデプロイロールを引き受け、ECRへログイン。
+2. `backend` / `docling` / `pdf2htmlex` の3イメージを`Dockerfile.lambda`からビルドし、コミットSHAのタグでECR Privateへpush。
+3. `terraform apply`（`image_tag`等にコミットSHAを渡す）でインフラを適用し、Lambdaを新しいイメージへ更新。
+4. フロントをビルドしてS3へ同期し、CloudFrontのキャッシュを無効化。`index.html`だけキャッシュさせず、ハッシュ付きアセットは長期キャッシュする。
+5. `POST /api/warmup` でbackend→docling/pdf2htmlex/DBの疎通をスモークテストする。
+
+### CDに必要なGitHubリポジトリ設定
+
+| 種別 | 名前 | 内容 |
+|---|---|---|
+| Variables | `AWS_DEPLOY_ROLE_ARN` | `terraform output github_actions_role_arn` の値 |
+| Variables | `TF_STATE_BUCKET` / `TF_STATE_LOCK_TABLE` | `infra/bootstrap` の出力値 |
+| Variables | `VITE_SUPABASE_URL` | フロントのビルド時に埋め込むSupabase URL |
+| Variables | `SUPABASE_JWT_JWKS_URL` | ES256（JWT Signing Keys）方式の場合のみ設定。HS256なら未設定でよい |
+| Variables | `ALARM_EMAIL` | CloudWatchアラームの通知先。未設定ならSNSトピックのみ作成 |
+| Variables | `CREATE_GITHUB_OIDC_PROVIDER` | OIDCプロバイダが既にアカウントにある場合のみ`false` |
+| Secrets | `VITE_SUPABASE_ANON_KEY` | フロントのビルド時に埋め込むanon key |
+
+初回だけは、CDが動く前提（state土台・ECR・Lambda・デプロイロール）をローカルから手動で作る必要がある（[infra/README.md](../infra/README.md) の手順1〜6）。
 
 ---
 

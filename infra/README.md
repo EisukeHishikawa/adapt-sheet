@@ -15,6 +15,7 @@ infra/
 │   ├── lambda/       # Lambda関数の共通モジュール。backend（SSM読み取り＋SSM経由KMS復号の最小権限）と、docling/pdf2htmlex（AWS_IAM認証Function URL、backendのみ呼び出し許可）で共用
 │   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ。ステージ全体のスロットリングで過度なAPIコールを防ぐ（WAFは使わない）。アクセスログ（JSON）をCloudWatch Logsへ出す
 │   ├── monitoring/   # CloudWatchアラーム（Lambda・API Gateway・アプリログのERROR）と通知先SNSトピック
+│   ├── github_oidc/  # GitHub ActionsのOIDCプロバイダ＋CD用デプロイロール（長期アクセスキーを発行しない）
 │   └── frontend/     # 非公開S3 ＋ CloudFront（OAC）。SPAフォールバック付き。標準アクセスログを専用S3バケットへ出す
 ├── versions.tf / providers.tf / backend.tf
 ├── variables.tf / main.tf / outputs.tf
@@ -53,7 +54,19 @@ infra/
    terraform plan   # 承認後に apply
    ```
 
-4. **秘密情報の投入（Terraform管理外）**
+   `terraform.tfvars.example` を `terraform.tfvars` へ複製し、`state_bucket_name` を手順1の値へ差し替えてから実行する（未設定だと変数のバリデーションで停止する）。
+
+4. **初回applyはECRを先に作る**
+
+   Lambdaはイメージが存在しないと作成に失敗するため、初回だけECRリポジトリを先に作り、イメージをpushしてから全体をapplyする（2回目以降は`terraform apply`のみでよい）。
+
+   ```bash
+   terraform apply -target=module.ecr -target=module.ecr_docling -target=module.ecr_pdf2htmlex
+   # 手順6でイメージをpushしてから
+   terraform apply
+   ```
+
+5. **秘密情報の投入（Terraform管理外）**
 
    `ssm` モジュールはSecureStringの**枠だけ**をダミー値（`PLACEHOLDER_SET_OUT_OF_BAND`）で作る。実値は次のように投入する（コミットしない）。ダミーのままの項目は`app/secrets_loader.py`が「未投入」とみなして展開しないため、`DATABASE_URL`を投入するまで履歴保存は静かにスキップされる。
 
@@ -64,7 +77,7 @@ infra/
    done
    ```
 
-5. **コンテナイメージのビルドとpush**
+6. **コンテナイメージのビルドとpush**
 
    Lambdaは`x86_64`固定（pdf2htmlEXのベースイメージがx86_64限定のため）。**開発機がApple Siliconの場合、`--platform linux/amd64`を付けないとarm64イメージができ、`terraform apply`または関数更新時に失敗する**。
 
@@ -80,7 +93,7 @@ infra/
 
    同一タグへpushしただけではLambdaは新しいイメージを引き直さないため、`aws lambda update-function-code --function-name adapt-sheet-prod-backend --image-uri ...` を実行する（またはタグを世代ごとに変えて`image_tag`変数を更新し`terraform apply`する）。
 
-6. **フロントエンドの配置**
+7. **フロントエンドの配置**
 
    ```bash
    docker compose exec frontend npm run build     # VITE_SUPABASE_* はビルド時に埋め込まれる
@@ -94,6 +107,7 @@ infra/
 ## 前提・注意
 
 - **ECR Private**: Lambdaのコンテナイメージは同一アカウント・同一リージョンのECR Privateからのみ取得できる（ECR Public不可）。無料枠500MBの逼迫はライフサイクル（最新数世代のみ保持）で抑える。
-- **AWS認証**: GitHub ActionsからのデプロイはOIDCで行う（長期アクセスキーは発行しない）。OIDCプロバイダ/デプロイロールはステップ26のCI/CD構築時に定義する。
+- **AWS認証**: GitHub ActionsからのデプロイはOIDCで行う（長期アクセスキーは発行しない）。`github_oidc`モジュールがOIDCプロバイダとデプロイロールを作り、`github_allowed_refs`（既定は`main`のみ）以外のブランチからは引き受けられない。`terraform output github_actions_role_arn` の値をリポジトリ変数`AWS_DEPLOY_ROLE_ARN`へ設定する。
+- **デプロイロールの権限**: `terraform apply`を代行するため対象サービスは広く許可せざるを得ないが、IAMだけは権限昇格を防ぐため`adapt-sheet-*`のロールに限定している。
 - **秘密情報**: APIキーはstateにもイメージにも残さない。`aws_ssm_parameter` は `ignore_changes = [value]` で実値を追跡しない。
 - **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（`aws_api_gateway_method_settings`）で代替する。IPアドレスごとの個別制限ではなく全メソッド合算のカウントのため、1クライアントの連打が他の利用者にも影響しうる点に留意する。

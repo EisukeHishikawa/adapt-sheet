@@ -28,6 +28,8 @@ env:
 
 jobs:
   deploy:
+    # AWS側の土台（infra/README.mdの手順1〜6）が未完了のうちは、認証で必ず落ちるだけなので走らせない。
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
     runs-on: ubuntu-latest
     environment: prod
     steps:

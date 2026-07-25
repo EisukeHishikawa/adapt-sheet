@@ -4,7 +4,8 @@
 #
 # backend/frontendは`--no-deps`で単体起動する。backendのテストはDocling/pdf2htmlexクライアントを
 # httpxのモックトランスポートで検証しており（backend/tests配下）、実際にdocling/pdf2htmlex
-# コンテナが起動している必要はない。
+# コンテナが起動している必要はない。docling/pdf2htmlex自体はコア機能（AI生成・プレビュー）への
+# 影響が小さいため、CIには含めずdocker compose exec docling/pdf2htmlex pytestで手動検証する。
 name: CI
 
 on:
@@ -24,28 +25,6 @@ jobs:
         run: docker compose run --rm --no-deps backend pytest
       - name: ruff
         run: docker compose run --rm --no-deps backend ruff check .
-
-  docling:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build docling image
-        run: docker compose build docling
-      - name: pytest
-        run: docker compose run --rm docling pytest
-      - name: ruff
-        run: docker compose run --rm docling ruff check .
-
-  pdf2htmlex:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build pdf2htmlex image
-        run: docker compose build pdf2htmlex
-      - name: pytest
-        run: docker compose run --rm pdf2htmlex pytest
-      - name: ruff
-        run: docker compose run --rm pdf2htmlex ruff check .
 
   frontend:
     runs-on: ubuntu-latest

@@ -59,7 +59,7 @@ data "aws_iam_policy_document" "assume" {
 
 resource "aws_iam_role" "deploy" {
   name                 = "${var.name}-github-actions"
-  description          = "GitHub Actions（CD）がOIDCで引き受けるデプロイロール"
+  description          = "Deploy role assumed by GitHub Actions (CD) via OIDC"
   assume_role_policy   = data.aws_iam_policy_document.assume.json
   max_session_duration = 3600
 }

@@ -114,7 +114,7 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 ## Git / CI運用
 
 - mainブランチへの直接pushは禁止（Branch Protection）。
-- PR作成時・main merge時に`.github/workflows/ci.yml`がフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）・docling/pdf2htmlex（pytest/ruff）を自動実行する（DEVELOPMENT.md ステップ26）。この4ジョブはBranch Protectionの必須チェックであり、100%成功しなければマージできない。ブランチがmainより古い場合もマージ不可のため、`git fetch origin && git rebase origin/main` で追従させる。
+- PR作成時・main merge時に`.github/workflows/ci.yml`がフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）を自動実行する（DEVELOPMENT.md ステップ26）。この2ジョブはBranch Protectionの必須チェックであり、100%成功しなければマージできない。ブランチがmainより古い場合もマージ不可のため、`git fetch origin && git rebase origin/main` で追従させる。docling/pdf2htmlexはコア機能（AI生成・リアルタイムプレビュー）への影響が小さくCIには含めないため、変更時は`docker compose exec docling/pdf2htmlex pytest`で手動検証する。
 - レビュー承認必須（Require approvals）は、ソロ開発期間中は無効化している（PR作成者本人は自分のPRを承認できないGitHub仕様のため）。共同開発者が加わった時点で再度有効化を検討する。
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
 - **ブランチの切り方**: プライマリの作業ディレクトリで `main` を**チェックアウトしない**。`docs-space`（後述、ADR-010）が `main` を保持しており、Gitは同一ブランチを複数のワークツリーで同時にチェックアウトできないため、`git checkout main` は `fatal: 'main' is already used by worktree at ...` で失敗する。最新の`main`から直接ブランチを切ること。

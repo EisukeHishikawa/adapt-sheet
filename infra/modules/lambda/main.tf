@@ -63,11 +63,13 @@ resource "aws_iam_role_policy" "ssm_read" {
 
 # 内部専用サービス（docling/pdf2htmlex）のFunction URLをSigV4署名で呼び出すための呼び出し元権限
 # （identity-based）。呼び出し先Lambdaの resource-based policy（下のfunction_url_invoke）と対になる。
+# AWS_IAM認証のFunction URL呼び出しはlambda:InvokeFunctionUrlに加えlambda:InvokeFunctionも
+# 許可されていないと403になるため、両方を付与する。
 data "aws_iam_policy_document" "invoke_function_url" {
   count = length(var.invoke_function_url_arns) > 0 ? 1 : 0
 
   statement {
-    actions   = ["lambda:InvokeFunctionUrl"]
+    actions   = ["lambda:InvokeFunctionUrl", "lambda:InvokeFunction"]
     resources = var.invoke_function_url_arns
   }
 }

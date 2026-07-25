@@ -129,6 +129,20 @@ module "frontend" {
   log_retention_in_days  = var.log_retention_in_days
 }
 
+# GitHub ActionsのCDが使う短期認証。長期アクセスキーを発行しないためにOIDCを使い、
+# 許可したリポジトリ・ブランチのワークフローだけがこのロールを引き受けられる。
+module "github_oidc" {
+  count  = var.enable_github_oidc ? 1 : 0
+  source = "./modules/github_oidc"
+
+  name                 = local.name_prefix
+  github_repository    = var.github_repository
+  allowed_refs         = var.github_allowed_refs
+  create_oidc_provider = var.create_github_oidc_provider
+  state_bucket_name    = var.state_bucket_name
+  lock_table_name      = var.state_lock_table_name
+}
+
 # ログを取るだけでは障害に気づけないため、アラームとその通知先までをコード化する。
 module "monitoring" {
   source = "./modules/monitoring"

@@ -144,6 +144,42 @@ variable "enable_cloudfront_access_logging" {
   default     = true
 }
 
+variable "enable_github_oidc" {
+  description = "GitHub ActionsのCD用OIDCプロバイダ・デプロイロールを作成するか"
+  type        = bool
+  default     = true
+}
+
+variable "github_repository" {
+  description = "CDからのデプロイを許可するGitHubリポジトリ（owner/repo形式）"
+  type        = string
+  default     = "EisukeHishikawa/adapt-sheet"
+}
+
+variable "github_allowed_refs" {
+  description = "CDからのデプロイを許可するref。ここに無いブランチのワークフローはデプロイロールを引き受けられない"
+  type        = list(string)
+  default     = ["refs/heads/main"]
+}
+
+variable "create_github_oidc_provider" {
+  description = "GitHubのOIDCプロバイダをTerraformで作成するか。アカウントに既存のものがあればfalse（IAM OIDCプロバイダはアカウントに1つのみ）"
+  type        = bool
+  default     = true
+}
+
+variable "state_bucket_name" {
+  description = "Terraform stateのS3バケット名（infra/bootstrapの出力）。デプロイロールにstateへのアクセス権を与えるために必要"
+  type        = string
+  default     = ""
+}
+
+variable "state_lock_table_name" {
+  description = "stateロック用DynamoDBテーブル名（infra/bootstrapの出力）"
+  type        = string
+  default     = "adapt-sheet-tflock"
+}
+
 variable "alarm_email" {
   description = "CloudWatchアラームの通知先メールアドレス。空文字ならSNSトピックのみ作成し購読は作らない"
   type        = string

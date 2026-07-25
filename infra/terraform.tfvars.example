@@ -36,6 +36,15 @@ log_retention_in_days            = 30
 enable_xray                      = true
 enable_cloudfront_access_logging = true
 
+# GitHub ActionsのCD用OIDC。state_bucket_nameはinfra/bootstrapの出力値（アカウントIDを含む）へ差し替える。
+enable_github_oidc    = true
+github_repository     = "EisukeHishikawa/adapt-sheet"
+github_allowed_refs   = ["refs/heads/main"]
+state_bucket_name     = "adapt-sheet-tfstate-<account_id>"
+state_lock_table_name = "adapt-sheet-tflock"
+# IAM OIDCプロバイダはアカウントに1つしか作れない。既にGitHub用のものがあればfalseにする。
+create_github_oidc_provider = true
+
 # CloudWatchアラームの通知先。空のままならSNSトピックだけを作り、購読は作らない。
 # 設定した場合、AWSから届く購読確認メールのリンクを踏むまで通知は配信されない。
 alarm_email = ""

@@ -137,15 +137,15 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 #### ⬛ ステップ 25: TerraformによるAWSインフラのコード化
 > ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは`mise.toml`で固定する（ADR-023）。Terraformは1.15.8、providerは`.terraform.lock.hcl`（コミット対象）で固定。
 > 本ステップは**コード定義まで**（`terraform validate`・`fmt`まで実施、`terraform apply`＝実AWSリソース作成は未実施）。OIDC・GitHub Actionsからのデプロイ認証はステップ26のCI/CD構築時に定義する。
-- [ ] ⚙️ **AWS認証情報の設定:** Terraformの実行やGitHub Actionsからのデプロイに必要なAWSの認証（OIDCなど安全な方式）を初期設定（ステップ26で対応）
+- [x] ⚙️ **AWS認証情報の設定:** GitHub ActionsからのデプロイをOIDCで行うためのプロバイダとデプロイロールを`infra/modules/github_oidc`で定義（長期アクセスキーは発行しない。許可refは`main`のみ、IAM権限は`adapt-sheet-*`のロールに限定）
 - [x] TerraformによるCloudFront + S3、AWS Lambda（メモリは余裕を持たせた4GB〜8GB推奨） + API Gateway（ステージ単位のスロットリングで過度なAPIコールを防ぐ。WAFは固定費が高いため不採用）、**ECR Private（Lambdaコンテナは同一リージョンのPrivateからのみ取得可。無料枠500MBの逼迫はライフサイクルで抑制）** をコード定義（`infra/`）。APIキーはSecureStringのSSM Parameter Storeで管理し、Lambdaの実行ロールに`ssm:GetParameters`/`kms:Decrypt`を最小権限で付与。state土台は`infra/bootstrap`（S3+DynamoDB）。`terraform apply`（実AWS作成）は未実施
 - [ ] 🧪 **ステージングテスト:** デプロイされたクラウド環境のエンドポイントに対して、ローカルからAPIテストを実行して疎通を確認
 
 #### ⬛ ステップ 26: GitHub ActionsによるCI構築 【自動テスト化】
-> 本ステップは**CIワークフローの定義まで**。OIDC設定・Branch Protectionへの反映・CD（実デプロイ）は別ステップ／別途対応とする。
+> CI/CDのワークフロー定義とOIDCのコード定義まで完了。`terraform apply`（実AWSリソース作成）と初回の本番デプロイは、AWSアカウントでの手動実行が前提のため未実施。
 - [x] ⚙️ **GitHub Actions設定:** `.github/workflows/ci.yml` を新設。プルリクエスト（PR）作成時、およびmainブランチへのマージ時に、**「フロントのテスト（Vitest/ESLint/vite build）」「バックのテスト（pytest/ruff）」「docling/pdf2htmlexのテスト（pytest/ruff）」が自動で走るワークフロー**を構築。ローカル開発と同じ`docker-compose.yml`のサービス定義をそのまま使い、ローカル/CIの実行結果が乖離しないようにする（backend/frontendは`--no-deps`で単体起動。backendのテストはDocling/pdf2htmlexクライアントをhttpxモックで検証しており実サービス起動は不要）
 - [ ] ⚙️ **GitHub設定変更:** 「自動テスト（CI）が100%成功しなければマージできない」という制限をGitHubのブランチ保護ルールに追加（強制自動テスト化）。CIワークフローが実際にGitHub上で走った実績ができてから設定する
-- [ ] ⚙️ **CD構築:** OIDCによるAWS認証・`terraform apply`・AWS（S3 / Lambda）への自動デプロイの仕組みを構築（別途対応）
+- [x] ⚙️ **CD構築:** `.github/workflows/cd.yml`を新設。mainへのpushでOIDCによるAWS認証→3イメージのビルド・ECR Privateへのpush（コミットSHAタグ）→`terraform apply`→フロントのS3同期・CloudFront無効化→`POST /api/warmup`によるスモークテストまでを自動化。初回のみ土台をローカルから手動applyする必要がある（`infra/README.md`）
 
 ---
 

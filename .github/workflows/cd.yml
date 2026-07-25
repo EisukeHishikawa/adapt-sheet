@@ -1,0 +1,140 @@
+# mainマージ後の本番デプロイ（DEVELOPMENT.md ステップ26）。
+# AWSの長期アクセスキーは持たず、OIDCで発行される短期認証情報でデプロイロール
+# （infra/modules/github_oidc）を引き受ける。
+#
+# 前提: infra/bootstrap と infra/ の初回 apply はローカルから手動で実施済みであること
+# （ECRリポジトリとLambdaが存在しない状態ではイメージのpushもLambda更新もできないため）。
+# 手順は docs/deployment.md を参照。
+name: CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 同時に走らせるとTerraformのstateロックで後発が失敗するため、直列化する。
+# 進行中のデプロイを途中で止める方が危険なのでcancel-in-progressはしない。
+concurrency:
+  group: cd-prod
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDCトークンの発行に必須
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-1
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      # Lambdaのイメージは同一リージョンのECR Privateからのみ取得できる。タグはコミットSHAに
+      # 固定し、どのコミットが動いているかをLambdaのイメージURIから追えるようにする。
+      - name: Build and push images
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for svc in backend docling pdf2htmlex; do
+            case "$svc" in
+              backend) ctx=backend ;;
+              docling) ctx=docling-service ;;
+              pdf2htmlex) ctx=pdf2htmlex-service ;;
+            esac
+            image="${REGISTRY}/adapt-sheet-prod-${svc}:${TAG}"
+            docker build -f "${ctx}/Dockerfile.lambda" -t "$image" "$ctx"
+            docker push "$image"
+          done
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      # stateの置き場は環境ごとに差し替えられるよう、コードへ直書きせずinit時に渡す。
+      - name: Terraform init
+        working-directory: infra
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=prod/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=${{ vars.TF_STATE_LOCK_TABLE }}" \
+            -backend-config="encrypt=true"
+
+      # 実tfvarsはコミットしないため、既定値と異なる値だけをTF_VAR_で渡す。
+      - name: Terraform apply
+        working-directory: infra
+        env:
+          TF_VAR_image_tag: ${{ github.sha }}
+          TF_VAR_docling_image_tag: ${{ github.sha }}
+          TF_VAR_pdf2htmlex_image_tag: ${{ github.sha }}
+          TF_VAR_state_bucket_name: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_state_lock_table_name: ${{ vars.TF_STATE_LOCK_TABLE }}
+          TF_VAR_github_repository: ${{ github.repository }}
+          TF_VAR_supabase_jwt_jwks_url: ${{ vars.SUPABASE_JWT_JWKS_URL }}
+          TF_VAR_alarm_email: ${{ vars.ALARM_EMAIL }}
+          # OIDCプロバイダはアカウントに1つしか作れない。既存を流用する場合はfalseを設定する。
+          TF_VAR_create_github_oidc_provider: ${{ vars.CREATE_GITHUB_OIDC_PROVIDER || 'true' }}
+        run: terraform apply -auto-approve -input=false
+
+      - name: Read terraform outputs
+        id: tf
+        working-directory: infra
+        run: |
+          set -euo pipefail
+          {
+            echo "bucket=$(terraform output -raw frontend_bucket_name)"
+            echo "distribution_id=$(terraform output -raw cloudfront_distribution_id)"
+            echo "app_url=$(terraform output -raw app_url)"
+          } >> "$GITHUB_OUTPUT"
+
+      # VITE_SUPABASE_*はビルド時に埋め込まれるため、配信前のここで注入する。
+      # ローカル/CIと同じdocker-compose.ymlのfrontendサービスでビルドし、成果物を揃える。
+      - name: Build frontend
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          docker compose build frontend
+          docker compose run --rm --no-deps frontend npm run build
+
+      # index.htmlは常に最新を配りたいのでキャッシュさせず、ハッシュ付きの静的アセットは長期キャッシュする。
+      - name: Upload frontend to S3
+        env:
+          BUCKET: ${{ steps.tf.outputs.bucket }}
+        run: |
+          set -euo pipefail
+          aws s3 sync frontend/dist "s3://${BUCKET}/" --delete \
+            --exclude "index.html" --cache-control "public,max-age=31536000,immutable"
+          aws s3 cp frontend/dist/index.html "s3://${BUCKET}/index.html" \
+            --cache-control "no-cache,no-store,must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        env:
+          DISTRIBUTION_ID: ${{ steps.tf.outputs.distribution_id }}
+        run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths '/*'
+
+      # SPAが配信され、backendからdocling/pdf2htmlex/DBまで到達できることを1往復で確認する。
+      # /api/warmupは各サービスの状態をJSONで返し、認証を要求しない。
+      - name: Smoke test
+        env:
+          APP_URL: ${{ steps.tf.outputs.app_url }}
+        run: |
+          set -euo pipefail
+          curl -sSf -o /dev/null "$APP_URL/"
+          curl -sSf -X POST "$APP_URL/api/warmup" | tee /dev/stderr | grep -q '"docling"'

@@ -58,6 +58,11 @@ output "ssm_parameter_prefix" {
   value       = local.ssm_prefix
 }
 
+output "github_actions_role_arn" {
+  description = "GitHub ActionsのCDが引き受けるデプロイロールARN（リポジトリ変数AWS_DEPLOY_ROLE_ARNへ設定する）"
+  value       = var.enable_github_oidc ? module.github_oidc[0].role_arn : ""
+}
+
 output "alarm_topic_arn" {
   description = "CloudWatchアラームの通知先SNSトピックARN（購読を後から追加する際に使う）"
   value       = module.monitoring.alarm_topic_arn

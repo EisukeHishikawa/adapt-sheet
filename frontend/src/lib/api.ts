@@ -76,9 +76,9 @@ async function parseErrorBody(response: Response): Promise<RenderErrorInfo | und
   return info
 }
 
-// docs/spec.md 3.1が`multipart/form-data`を要求するため、pdfも同じ関数で扱えるようFormDataを使う。
-// accessTokenはauthStoreのsession.access_token（DEVELOPMENT.md ステップ27）。未ログイン時は
-// undefinedのままAuthorizationヘッダーを付けず、ゲート対象engineはバックエンドが403を返す。
+// multipart/form-dataが要求されるため、pdfも同じ関数で扱えるようFormDataを使う。
+// accessTokenはauthStoreのsession.access_token。未ログイン時はundefinedのままAuthorization
+// ヘッダーを付けず、ゲート対象engineはバックエンドが403を返す。
 export async function renderSheet(
   fields: RenderRequestFields,
   accessToken?: string,

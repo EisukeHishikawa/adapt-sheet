@@ -65,7 +65,7 @@ app.add_exception_handler(AIGenerationError, ai_generation_error_handler)
 # response_modelを明示しないと、FastAPIが型を推論できずopenapi.json（フロントの型生成元）の
 # レスポンススキーマがobject止まりになる。
 class RenderResponse(BaseModel):
-    # Python予約語と衝突する`json`キー名をエイリアスとして公開する（docs/spec.md 3.1のレスポンス例）。
+    # Python予約語と衝突する`json`キー名をエイリアスとして公開する。
     model_config = ConfigDict(populate_by_name=True)
 
     html: str
@@ -203,7 +203,7 @@ def _save_history(
     width_mm: Optional[float],
     height_mm: Optional[float],
 ) -> None:
-    """描画成功時に生成履歴を自動保存する（DEVELOPMENT.md ステップ28）。
+    """描画成功時に生成履歴を自動保存する。
 
     未ログイン・DB未設定（db_session is None）では何もしない。DB保存の失敗は描画結果の
     レスポンスへ波及させない（描画自体は成功しているため、ユーザーへは成功として返す）。
@@ -226,7 +226,7 @@ def _save_history(
 
 
 class HistoryItemResponse(BaseModel):
-    """GET /api/historyの1件分（docs/spec.md 3.x、DEVELOPMENT.md ステップ28）。"""
+    """GET /api/historyの1件分。"""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -274,7 +274,7 @@ def get_history(
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Session = Depends(get_db_session),
 ) -> list[HistoryItemResponse]:
-    # /api/renderのGATED_ENGINESと同じ判定（未ログインは403 FREE_ACCESS_FORBIDDEN。docs/spec.md 4章）。
+    # /api/renderのGATED_ENGINESと同じ判定（未ログインは403 FREE_ACCESS_FORBIDDEN）。
     if current_user is None:
         raise HTTPException(status_code=403)
 

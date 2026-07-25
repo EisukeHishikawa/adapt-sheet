@@ -3,8 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { PdfDropzone } from './PdfDropzone'
 import { useSheetStore } from '@/store/sheetStore'
 
-// DEVELOPMENT.md ステップ7のTDD要件: PDFドラッグ＆ドロップエリア（docs/spec.md 2.1）の
-// 実装前に、「PDFをドロップ/選択したらストアにpdfFileが格納される」という期待値を先に定義する。
 describe('PdfDropzone（PDFドラッグ＆ドロップエリア）', () => {
   beforeEach(() => {
     useSheetStore.setState({ pdfFile: null, pdfFileName: null })

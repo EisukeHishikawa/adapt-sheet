@@ -2,10 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RenderApiError, renderSheet } from './api'
 import { dummyRenderResponse } from '@/mocks/handlers'
 
-// DEVELOPMENT.md ステップ7のTDD要件: PDFがrenderSheet経由でリクエストに正しく
-// 含まれることを検証する。MSW（Node環境）でFile入りのFormDataをHTTPボディへ
-// エンコードする際、jsdomのFileとundiciのFile実装がかみ合わず例外になる既知の制約があるため
-// （App.test.tsx参照）、ここではfetch自体をモックしてFormDataの中身を直接検証する。
+// MSW（Node環境）でFile入りのFormDataをHTTPボディへエンコードする際、jsdomのFileと
+// undiciのFile実装がかみ合わず例外になる既知の制約があるため（App.test.tsx参照）、
+// ここではfetch自体をモックしてFormDataの中身を直接検証する。
 describe('renderSheet', () => {
   afterEach(() => {
     vi.restoreAllMocks()

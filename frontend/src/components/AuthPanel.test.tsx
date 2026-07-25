@@ -31,7 +31,7 @@ function setStoreState(overrides: Partial<ReturnType<typeof useAuthStore>>) {
   mockedUseAuthStore.mockImplementation((selector) => selector(state as never))
 }
 
-describe('AuthPanel（DEVELOPMENT.md ステップ27）', () => {
+describe('AuthPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })

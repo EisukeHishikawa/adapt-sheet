@@ -10,14 +10,9 @@ from app.services.pdf2htmlex_client import get_pdf2htmlex_extractor
 from app.services.pdf_layout import get_layout_converter
 from app.services.pdf_common import PDFConversionError
 
-# DEVELOPMENT.md ステップ7で追加するPDFアップロードテスト用フィクスチャ。
 # scripts/verify_docling.pyやtest_docling_client.pyと同じ実PDFを使い回す。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 
-# DEVELOPMENT.md ステップ2のTDD要件: 実装前に「POSTしたらダミーデータが返る」という
-# 期待値のみを先に定義する（Red状態）。app/main.py側は本テストを通すための最小実装。
-# ステップ6でAI生成に差し替えた後も、レスポンス契約（docs/spec.md 3.1）自体は変わらないため
-# このテストは維持し、AI生成特有の挙動（エラー時502等）をテストを追加する形で検証する。
 client = TestClient(app)
 
 
@@ -273,9 +268,6 @@ def _make_bearer_token(secret: str, **claims) -> str:
 
     payload = {"sub": "user-123", "aud": "authenticated", "exp": int(time.time()) + 3600, **claims}
     return f"Bearer {jwt.encode(payload, secret, algorithm='HS256')}"
-
-
-# DEVELOPMENT.md ステップ27: ログイン済み（有効なSupabase JWT）ならゲート対象engineを許可する。
 
 
 def test_render_allows_gated_engine_with_valid_token(monkeypatch):

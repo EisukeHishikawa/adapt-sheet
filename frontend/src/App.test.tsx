@@ -17,8 +17,7 @@ const initialSheetState = {
   promptContent: '',
   pdfFile: null,
   pdfFileName: null,
-  // ステップ8で追加したフィールド。setStateは浅いマージのため、ここに列挙しないと
-  // history等が前テストの値のまま残る（テスト間の状態漏れ防止）。
+  // setStateは浅いマージのため、ここに列挙しないとhistory等が前テストの値のまま残る。
   widthMm: null,
   heightMm: null,
   // リセット漏れ防止のため初期値を明示する。
@@ -31,10 +30,6 @@ const initialSheetState = {
   successMessage: null,
 }
 
-// DEVELOPMENT.md ステップ4のTDD要件：
-// 「Zustandのストア値を更新したら、プレビュー要素（iframe等）のテキストが切り替わる」を検証する。
-// 実装（sheetStore/EditorPanel/PreviewPanel）が存在しない状態でこのテストを先に書き、
-// Red状態を確認してからGreenにする。
 describe('App（2カラム最小画面）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
@@ -90,10 +85,8 @@ describe('App（2カラム最小画面）', () => {
   })
 })
 
-// DEVELOPMENT.md ステップ5のTDD要件：
-// 「ボタン押下時にAPIをフェッチし、ストアにデータが格納される」ことを、
 // MSW（frontend/src/mocks）でバックエンドの/api/renderをモックして検証する。
-describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
+describe('描画ボタン押下時のAPI疎通', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })
@@ -115,8 +108,8 @@ describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
       expect(preview.srcdoc).toContain(dummyRenderResponse.css)
     })
     expect(useSheetStore.getState().cssContent).toBe(dummyRenderResponse.css)
-    // ステップ16: jsonContentはJSON入力エディタへ戻せる整形済みテキスト（htmlContentと同様、
-    // 次の編集の起点になる）として保持するため、レスポンスのオブジェクトを文字列化して比較する。
+    // jsonContentはJSON入力エディタへ戻せる整形済みテキスト（htmlContentと同様、次の編集の
+    // 起点になる）として保持するため、レスポンスのオブジェクトを文字列化して比較する。
     expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify(dummyRenderResponse.json, null, 2))
     expect(useSheetStore.getState().error).toBeNull()
   })
@@ -130,20 +123,18 @@ describe('描画ボタン押下時のAPI疎通（ステップ5）', () => {
 
     await user.click(screen.getByRole('button', { name: '描画' }))
 
-    // ステップ8: エラー文言はステータスコードに対応するユーザー向けメッセージに丸められる
-    // （500は想定外エラー扱い。docs/spec.md 4章 / sheetStore.messageForStatus参照）。
+    // エラー文言はステータスコードに対応するユーザー向けメッセージに丸められる
+    // （500は想定外エラー扱い。sheetStore.messageForStatus参照）。
     expect(await screen.findByRole('alert')).toHaveTextContent('サーバーで想定外のエラーが発生しました。')
     expect(useSheetStore.getState().htmlContent).toBe('')
   })
 })
 
-// DEVELOPMENT.md ステップ7のTDD要件：
-// 「PDFドラッグ＆ドロップエリアにファイルを渡してから描画すると、正常にレンダリングされる」ことを検証する。
 // リクエストにpdfフィールドが正しく含まれることの検証は、MSW（Node環境）がFile入りの
 // FormDataをHTTPボディへエンコードする際にjsdomのFileとundiciのFile実装がかみ合わず
 // 例外になる既知の制約があるため、ここでは行わずlib/api.test.tsのfetch呼び出し引数の
 // 直接検証に委ねる。本テストではUIの一連の流れ（ドロップ→描画→反映）のみを確認する。
-describe('PDFアップロード時のAPI疎通（ステップ7）', () => {
+describe('PDFアップロード時のAPI疎通', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })
@@ -170,11 +161,9 @@ describe('PDFアップロード時のAPI疎通（ステップ7）', () => {
   })
 })
 
-// ステップ22のTDD要件: Doclingの解析に時間がかかることがあるため、描画中は
-// 「固まっていない」ことが伝わるよう経過秒数を1秒ごとに表示することを検証する。
 // ネットワーク（msw）のタイミングに依存させず、ストアのisLoadingを直接操作して
 // RenderButton（useElapsedSeconds）の表示ロジックのみを検証する。
-describe('描画中の経過秒数表示（ステップ22）', () => {
+describe('描画中の経過秒数表示', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
     vi.useFakeTimers()

@@ -3,8 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { MessageToast } from './MessageToast'
 import { useSheetStore } from '@/store/sheetStore'
 
-// ステップ8: docs/spec.md 2.2「インテリジェントメッセージ表示」のUI。
-// ストアのerror/successMessageをトーストとして表示し、閉じられることを検証する。
 describe('MessageToast（メッセージ表示）', () => {
   beforeEach(() => {
     useSheetStore.setState({ error: null, successMessage: null })

@@ -2,7 +2,6 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { CodeEditor } from './CodeEditor'
 
-// ステップ18: コードエディタ風UI（CodeEditor）の検証。
 // 見出しは非表示のため、aria-labelでの参照・行番号表示・入力連動・シンタックスハイライト・
 // コピーボタンという「モダンなコードエディタらしさ」の中核を固定する。
 // Tabキー挿入・実クリップボード書き込みはjsdomの制約で不安定なため単体テストでは扱わない。

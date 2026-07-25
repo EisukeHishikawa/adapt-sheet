@@ -356,8 +356,6 @@ class GeminiAIClient:
     標準プランはフェーズ5まで自由アクセスのユーザーには提供しない（main.pyのゲート判定）。
     """
 
-    # 2026-07-08時点、gemini-2.0-flashは無料枠クォータが0（429 RESOURCE_EXHAUSTED）だった。
-    # 2026-07-25時点、gemini-2.5-flashは新規ユーザーに提供終了（404 NOT_FOUND）していたため、
     # Google側のモデル廃止に追従して既定が古くならないよう、常に最新安定版を指すエイリアスにしている。
     _DEFAULT_MODEL_FREE = "gemini-flash-latest"
     # 標準プラン（有料枠）の既定モデル。実装時点の最新Pro系モデルを想定し、環境変数で上書き可能にする。

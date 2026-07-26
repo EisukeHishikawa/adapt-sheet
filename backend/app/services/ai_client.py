@@ -364,11 +364,18 @@ class GeminiAIClient:
     # 帳票のHTML+CSS+JSONは長くなりやすい。出力が途中で切れると不正JSONになるため上限を広く取る。
     _MAX_OUTPUT_TOKENS = 16384
 
+    # 未指定だとSDK/httpxの既定（実質無制限）のまま無応答でハングしうる。Lambda自体の
+    # タイムアウト（29秒、API Gatewayの統合タイムアウト上限に合わせている）より短く切り、
+    # ハング時もLambdaの強制終了ではなくAIGenerationErrorとして明確に失敗させる。
+    _HTTP_TIMEOUT_MS = 20_000
+
     def __init__(
         self, api_key: str, client: Optional[object] = None, standard: bool = False
     ) -> None:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
-        self._client = client or genai.Client(api_key=api_key)
+        self._client = client or genai.Client(
+            api_key=api_key, http_options=genai_types.HttpOptions(timeout=self._HTTP_TIMEOUT_MS)
+        )
         # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
         # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる。
         if standard:

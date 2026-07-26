@@ -483,6 +483,25 @@ def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
     assert models.call_count == 1
 
 
+def test_gemini_client_sets_http_timeout_on_default_client(monkeypatch):
+    # 未指定だとSDK/httpxの既定（実質無制限）のまま無応答でハングしうるため、明示的に
+    # タイムアウトを設定する契約を検証する。clientを注入せず、実際にGeminiAIClientが
+    # 内部で構築するgenai.Clientへの引数を確認する。
+    captured = {}
+
+    class _FakeClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.models = None
+
+    monkeypatch.setattr("app.services.ai_client.genai.Client", _FakeClient)
+
+    GeminiAIClient(api_key="dummy-key")
+
+    assert captured["api_key"] == "dummy-key"
+    assert captured["http_options"].timeout == GeminiAIClient._HTTP_TIMEOUT_MS
+
+
 def test_gemini_client_uses_default_free_model(monkeypatch):
     monkeypatch.delenv("GEMINI_MODEL", raising=False)
     models = _StubGeminiModels(failures=0, response_text=_VALID_RESPONSE)

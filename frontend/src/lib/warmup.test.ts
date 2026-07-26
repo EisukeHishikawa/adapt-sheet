@@ -11,7 +11,7 @@ vi.mock('@/lib/supabaseClient', () => ({
   supabase: { from: mockFrom },
 }))
 
-const { pingSupabase, warmupBackendServices, runWarmup } = await import('./warmup')
+const { pingSupabase, warmupBackendServices } = await import('./warmup')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -19,7 +19,7 @@ beforeEach(() => {
 })
 
 describe('warmupBackendServices', () => {
-  it('POST /api/warmup を1回だけ呼ぶ', async () => {
+  it('POST /api/warmup を1回だけ呼び、レスポンスをそのまま返す', async () => {
     const calls: string[] = []
     server.use(
       http.post('/api/warmup', () => {
@@ -28,15 +28,18 @@ describe('warmupBackendServices', () => {
       }),
     )
 
-    await warmupBackendServices()
-
+    await expect(warmupBackendServices()).resolves.toEqual({
+      docling: 'ok',
+      pdf2htmlex: 'ok',
+      database: 'ok',
+    })
     expect(calls).toEqual(['warmup'])
   })
 
-  it('バックエンドが失敗しても例外を投げない（画面表示を妨げない）', async () => {
+  it('バックエンドが失敗しても例外を投げずnullを返す（画面表示を妨げない）', async () => {
     server.use(http.post('/api/warmup', () => HttpResponse.error()))
 
-    await expect(warmupBackendServices()).resolves.toBeUndefined()
+    await expect(warmupBackendServices()).resolves.toBeNull()
   })
 })
 
@@ -53,22 +56,5 @@ describe('pingSupabase', () => {
     mockLimit.mockRejectedValue(new Error('network down'))
 
     await expect(pingSupabase()).resolves.toBeUndefined()
-  })
-})
-
-describe('runWarmup', () => {
-  it('バックエンドとSupabaseの両方へ投げる', async () => {
-    const calls: string[] = []
-    server.use(
-      http.post('/api/warmup', () => {
-        calls.push('warmup')
-        return HttpResponse.json({ docling: 'ok', pdf2htmlex: 'ok', database: 'ok' })
-      }),
-    )
-
-    await runWarmup()
-
-    expect(calls).toEqual(['warmup'])
-    expect(mockFrom).toHaveBeenCalledWith('render_history')
   })
 })

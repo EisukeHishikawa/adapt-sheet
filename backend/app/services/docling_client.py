@@ -18,6 +18,18 @@ __all__ = [
     "get_html_extractor",
 ]
 
+# 変換すら通れば十分なため中身は空でよい、1ページだけの最小構成のPDF（MediaBoxのみ）。
+# docling-serviceのDocumentConverterはOCR/レイアウト/表構造のモデルパイプラインを
+# 初回convert時に構築する（数秒〜十数秒）ため、GET /healthだけでは温まらない。
+_WARMUP_PDF = (
+    b"%PDF-1.1\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 100 100]/Resources<<>>>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n"
+    b"%%EOF\n"
+)
+
 
 class RemoteDoclingHtmlExtractor(RemoteHtmlExtractor):
     """docling-serviceへHTTPでテキスト抽出を委譲する本番実装。"""
@@ -29,6 +41,21 @@ class RemoteDoclingHtmlExtractor(RemoteHtmlExtractor):
     # Lambda本番はIAM認証必須のFunction URLとして公開するため、terraformがこの環境変数に
     # "aws_sigv4"を設定してSigV4署名を有効化する。
     _auth_env_var = "DOCLING_SERVICE_AUTH"
+
+    def warmup(self) -> bool:
+        """最小PDFを実際に`POST /convert`へ送り、モデルパイプラインまで温める。
+
+        基底クラスのGET /healthはLambda実行環境（プロセス）を起こすだけで、
+        DocumentConverterのモデルパイプライン構築（初回convert時、数秒〜十数秒）には
+        触れない。ここを素通りすると、ユーザーの実際のPDFアップロードが初回convertを
+        兼ねてしまい、後続のAI生成に残せる時間がAPI Gatewayの統合タイムアウト
+        （29秒）内で不足する。
+        """
+        try:
+            self.convert_to_html("warmup.pdf", _WARMUP_PDF)
+            return True
+        except PDFConversionError:
+            return False
 
 
 def get_html_extractor() -> PDFHtmlExtractor:

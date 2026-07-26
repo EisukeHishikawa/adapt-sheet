@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 from app.services.docling_client import PDFConversionError, RemoteDoclingHtmlExtractor
+from app.services.pdf2htmlex_client import RemotePdf2HtmlExExtractor
 from tests._pdf_test_helpers import client_with as _client_with
 
 _FAKE_FROZEN_CREDENTIALS = SimpleNamespace(
@@ -76,6 +77,8 @@ def test_remote_extractor_raises_when_aws_sigv4_requested_without_credentials(mo
 
 
 def test_warmup_pings_health_endpoint_and_returns_true():
+    # 基底クラスの既定warmup（GET /health）はpdf2htmlexで検証する。
+    # docling固有の上書き挙動（POST /convert）はtest_docling_client.pyで別途検証する。
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -83,15 +86,15 @@ def test_warmup_pings_health_endpoint_and_returns_true():
         captured["url"] = str(request.url)
         return httpx.Response(200, json={"status": "ok"})
 
-    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+    extractor = RemotePdf2HtmlExExtractor(base_url="http://pdf2htmlex:8200", client=_client_with(handler))
 
     assert extractor.warmup() is True
     assert captured["method"] == "GET"
-    assert captured["url"] == "http://docling:8100/health"
+    assert captured["url"] == "http://pdf2htmlex:8200/health"
 
 
 def test_warmup_signs_with_sigv4_when_auth_env_is_aws_sigv4(monkeypatch):
-    monkeypatch.setenv("DOCLING_SERVICE_AUTH", "aws_sigv4")
+    monkeypatch.setenv("PDF2HTMLEX_SERVICE_AUTH", "aws_sigv4")
     monkeypatch.setenv("AWS_REGION", "ap-northeast-1")
     monkeypatch.setattr("boto3.Session.get_credentials", lambda self: _FakeCredentials())
 
@@ -101,7 +104,7 @@ def test_warmup_signs_with_sigv4_when_auth_env_is_aws_sigv4(monkeypatch):
         captured_headers.update(request.headers)
         return httpx.Response(200, json={"status": "ok"})
 
-    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+    extractor = RemotePdf2HtmlExExtractor(base_url="http://pdf2htmlex:8200", client=_client_with(handler))
 
     assert extractor.warmup() is True
     assert captured_headers["authorization"].startswith("AWS4-HMAC-SHA256 ")

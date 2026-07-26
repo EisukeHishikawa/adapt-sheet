@@ -94,3 +94,30 @@ def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
 
     # 1ページ目（幅200）のみが送信され、2・3ページ目（幅300/400）は破棄されていること。
     assert sent_page_widths == [200.0]
+
+
+def test_warmup_posts_minimal_pdf_to_convert_endpoint():
+    # 基底クラスの既定warmup（GET /health）はLambda実行環境のプロセスを起こすだけで、
+    # DocumentConverterのモデルパイプライン構築（初回convert時）には触れない。doclingは
+    # そのコストが無視できないため、POST /convertまで実際に叩いて温める上書きになっている。
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        return httpx.Response(200, json={"html": "<html>warmup</html>"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is True
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/convert"
+
+
+def test_warmup_returns_false_when_convert_fails():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"detail": "PDFの解析に失敗しました（テスト用）"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is False

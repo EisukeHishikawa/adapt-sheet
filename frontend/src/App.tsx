@@ -12,8 +12,8 @@ import { MessageToast } from '@/components/MessageToast'
 import { Button } from '@/components/ui/button'
 import { useSheetStore } from '@/store/sheetStore'
 import { useAuthStore } from '@/store/authStore'
+import { useWarmupStore } from '@/store/warmupStore'
 import { useTheme } from '@/lib/useTheme'
-import { runWarmup } from '@/lib/warmup'
 
 // 2カラム構成。左：サイズ操作・描画ボタン・PDF・プロンプト・プレビュー / 右：HTML/JSONのコード入力。
 // 各パネルはpropsで繋がず、それぞれがZustandストア（sheetStore）を参照して連動する。
@@ -31,9 +31,9 @@ function App() {
   }, [])
 
   // 画面を開いた時点で、コールドスタートしがちなdocling/pdf2htmlexのLambdaとSupabaseを
-  // 起こしておく。結果は画面へ反映しないため、完了を待たず投げっぱなしにする。
+  // 起こしておく。docling側は準備完了までRenderButtonを無効化するため、状態をストアで追跡する。
   useEffect(() => {
-    void runWarmup()
+    void useWarmupStore.getState().run()
   }, [])
 
   // ログインが確定した時点でhistoryが空なら、DB保存済みの履歴を取り直して表示する。sheetStoreは
@@ -152,10 +152,18 @@ function ThemeToggle() {
 function RenderButton() {
   const isLoading = useSheetStore((state) => state.isLoading)
   const fetchRender = useSheetStore((state) => state.fetchRender)
+  // doclingのモデルパイプライン初期化（warmupStore）が終わるまで、初回アップロードが
+  // コールドスタート＋初期化を兼ねてタイムアウトしやすい状態を避けるため描画を待たせる。
+  const isWarmingUp = useWarmupStore((state) => state.status === 'pending')
   return (
-    <Button onClick={() => fetchRender()} disabled={isLoading}>
+    <Button onClick={() => fetchRender()} disabled={isLoading || isWarmingUp}>
       {isLoading ? (
         <RenderingProgress />
+      ) : isWarmingUp ? (
+        <>
+          <Loader2 className="animate-spin" />
+          準備中…
+        </>
       ) : (
         <>
           <Sparkles />

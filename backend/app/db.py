@@ -29,13 +29,20 @@ _engine: Optional[Engine] = None
 _session_factory: Optional[sessionmaker] = None
 
 
+_DB_CONNECT_TIMEOUT_SECONDS = 5
+
+
 def _get_session_factory() -> sessionmaker:
     global _engine, _session_factory
     if _session_factory is None:
         url = os.getenv("DATABASE_URL", "").strip()
         if not url:
             raise RuntimeError("DATABASE_URL is not set")
-        _engine = create_engine(url, pool_pre_ping=True)
+        # connect_timeout未指定だと接続先が詰まった場合にLambdaのタイムアウトまで
+        # /api/renderごとブロックしてしまうため、短めに切って早期に失敗させる。
+        _engine = create_engine(
+            url, pool_pre_ping=True, connect_args={"connect_timeout": _DB_CONNECT_TIMEOUT_SECONDS}
+        )
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
     return _session_factory
 
@@ -112,16 +119,25 @@ def get_db_session_or_none(
 ) -> Iterator[Optional[Session]]:
     """DATABASE_URL未設定（ローカル/pytestの既定）ではNoneを返し、呼び出し側にDB保存を
     スキップさせる（app/main.pyの/api/render、履歴の自動保存）。
+
+    DATABASE_URLが設定されていても、接続先が到達不能・認証失敗等で使えない場合は
+    例外を送出せずNoneを返す。DB保存の失敗程度で本体機能（/api/render）を落としたくない。
     """
     url = os.getenv("DATABASE_URL", "").strip()
     if not url:
         yield None
         return
 
-    session = _get_session_factory()()
     try:
+        session = _get_session_factory()()
         if current_user is not None:
             apply_rls_context(session, current_user.sub)
+    except Exception:
+        logger.warning("DB接続に失敗したため、この描画では履歴保存をスキップします", exc_info=True)
+        yield None
+        return
+
+    try:
         yield session
     finally:
         session.close()

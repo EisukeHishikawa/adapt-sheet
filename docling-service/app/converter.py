@@ -15,11 +15,14 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.exceptions import ConversionError
 from docling_core.types.io import DocumentStream
 
-# OCRモデル（レイアウト・表構造に比べ最も重い）の初期化コストがLambdaの限られたCPUで
-# 60秒を超え、API Gatewayの統合タイムアウト（29秒）は元よりdocling自身のLambdaタイムアウト
-# にも収まらなくなったため無効化する。ほとんどのPDFは埋め込みテキストを持ちOCR不要で、
-# スキャンPDF・画像内文字のみ影響を受ける。
-_PDF_FORMAT_OPTION = PdfFormatOption(pipeline_options=PdfPipelineOptions(do_ocr=False))
+# OCR・表構造認識（TableFormer）モデルの初期化・推論コストがLambdaの限られたCPUで
+# 合計40秒超（実測）になり、API Gatewayの統合タイムアウト（29秒）は元よりdocling自身の
+# Lambdaタイムアウトにも収まらなくなったため両方無効化する。レイアウト解析は維持する。
+# ほとんどのPDFは埋め込みテキストを持ちOCR不要で、表は罫線を含むレイアウトとしては
+# 抽出されるが列/行の構造化はされなくなる。
+_PDF_FORMAT_OPTION = PdfFormatOption(
+    pipeline_options=PdfPipelineOptions(do_ocr=False, do_table_structure=False)
+)
 
 
 class PDFConversionError(Exception):

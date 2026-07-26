@@ -33,7 +33,11 @@ class SupabaseUser(NamedTuple):
 
 @lru_cache(maxsize=1)
 def _get_jwks_client(jwks_url: str) -> PyJWKClient:
-    return PyJWKClient(jwks_url)
+    # PyJWKClientは既定でcache_keys=False（鍵セットを毎回ネットワーク取得）・timeout=30秒
+    # （Lambda自体の統合タイムアウト29秒より長い）のため、キャッシュを有効化しタイムアウトを
+    # 短く切る。未指定だとログイン済みユーザーのリクエストのたびにJWKS取得が発生し、
+    # 応答が遅い/失敗すると/api/render全体がLambdaのタイムアウトまでブロックされる。
+    return PyJWKClient(jwks_url, cache_keys=True, timeout=5)
 
 
 def get_current_user(

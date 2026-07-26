@@ -4,6 +4,7 @@
 """
 
 import json
+import time
 
 import pytest
 from sqlalchemy import create_engine
@@ -72,6 +73,37 @@ def test_real_sqlite_session_is_unaffected():
     engine = create_engine("sqlite://")
     with Session(engine) as session:
         apply_rls_context(session, "user-1")
+
+
+def test_close_session_calls_close_on_the_underlying_session():
+    class _RecordingCloseSession:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    session = _RecordingCloseSession()
+    db_module._close_session(session)
+
+    assert session.closed is True
+
+
+def test_close_session_gives_up_after_timeout_instead_of_blocking(monkeypatch):
+    """session.close()がコネクションプーラー側の事情でハングしても、
+    呼び出し元（/api/renderのリクエスト処理）を巻き込んでブロックし続けない。
+    """
+    monkeypatch.setattr(db_module, "_DB_CLOSE_TIMEOUT_SECONDS", 0.2)
+
+    class _HangingCloseSession:
+        def close(self) -> None:
+            time.sleep(5)
+
+    start = time.monotonic()
+    db_module._close_session(_HangingCloseSession())
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0
 
 
 def test_get_db_session_or_none_yields_none_when_connection_fails(monkeypatch):

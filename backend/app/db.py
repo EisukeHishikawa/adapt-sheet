@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from typing import Callable, Iterator, Optional
 
 from fastapi import Depends
@@ -30,6 +31,21 @@ _session_factory: Optional[sessionmaker] = None
 
 
 _DB_CONNECT_TIMEOUT_SECONDS = 5
+_DB_CLOSE_TIMEOUT_SECONDS = 3
+# session.close()はネットワーク越しの切断処理（ROLLBACK送信等）を伴い、コネクション
+# プーラー（Supabase Transaction Pooler等）側の事情でクライアントの読み取りが返らず
+# ハングすることがある。connect_timeoutは接続確立にしか効かないため別途保護する。
+# クローズがハングしても該当スレッドは残り続けるが、Lambda 1台あたりの同時実行数は
+# 小さいため実害は限定的という前提で妥協している。
+_close_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-session-close")
+
+
+def _close_session(session: Session) -> None:
+    future = _close_executor.submit(session.close)
+    try:
+        future.result(timeout=_DB_CLOSE_TIMEOUT_SECONDS)
+    except FutureTimeoutError:
+        logger.warning("DBセッションのクローズがタイムアウトしました")
 
 
 def _get_session_factory() -> sessionmaker:
@@ -88,7 +104,7 @@ def ping_database() -> bool:
         logger.warning("DBキープアライブのクエリに失敗しました", exc_info=True)
         return False
     finally:
-        session.close()
+        _close_session(session)
 
 
 def get_db_pinger() -> Callable[[], bool]:
@@ -111,7 +127,7 @@ def get_db_session(
             apply_rls_context(session, current_user.sub)
         yield session
     finally:
-        session.close()
+        _close_session(session)
 
 
 def get_db_session_or_none(
@@ -140,4 +156,4 @@ def get_db_session_or_none(
     try:
         yield session
     finally:
-        session.close()
+        _close_session(session)

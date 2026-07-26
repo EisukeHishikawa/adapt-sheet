@@ -44,19 +44,15 @@ ENV HF_HOME=/tmp/hf \
     MPLCONFIGDIR=/tmp/mpl \
     DOCLING_ARTIFACTS_PATH=/opt/docling-models
 
-# レイアウト解析・表構造認識のモデルをビルド時に焼き込む。実行時ダウンロード（実測60秒超）は
-# コールドスタートのたびに発生し、API Gatewayの統合タイムアウト（29秒）に間に合わない。
-# DOCLING_ARTIFACTS_PATHはdoclingのAppSettings（env_prefix=DOCLING_）が読む。
+# レイアウト解析・表構造認識・OCR（rapidocr）のモデルをビルド時に焼き込む。実行時ダウンロード
+# （実測60秒超）はコールドスタートのたびに発生し、API Gatewayの統合タイムアウト（29秒）に間に合わない。
+# DOCLING_ARTIFACTS_PATHはdoclingのAppSettings（env_prefix=DOCLING_）が読み、OCRは既定で有効
+# （OcrAutoOptions）のためrapidocrのonnxモデルも同じartifacts_path配下に揃えておく必要がある
+# （rapidocr単体のRUN python -c "from rapidocr import RapidOCR; RapidOCR()"はsite-packages配下の
+# 別モデルをダウンロードするだけでDOCLING_ARTIFACTS_PATH配下には置かれず、読み取り専用の
+# Lambdaコンテナで実行時にFileNotFoundErrorになるため使えない）。
 RUN docling-tools models download -o "${DOCLING_ARTIFACTS_PATH}" \
-    layout tableformer code_formula picture_classifier
-
-# OCRは既定で有効（OcrAutoOptions）で、requirements.txtにあるrapidocrが選択される。rapidocrは
-# 自前のモデルをsite-packages配下へ実行時ダウンロードする実装のため、読み取り専用の
-# Lambdaコンテナでは初回変換時にOSError（Read-only file system）で落ちる。インスタンス化を
-# 一度走らせて、書き込み可能なビルド時にモデルを取得させておく。
-# doclingのartifactsに含まれるrapidocrモデルはONNX形式で、rapidocrのPyTorchエンジンが読む
-# arch_config.yamlと名前が合わないため、上のdownloadでは意図的に取得しない。
-RUN python -c "from rapidocr import RapidOCR; RapidOCR()"
+    layout tableformer code_formula picture_classifier rapidocr
 
 COPY . .
 

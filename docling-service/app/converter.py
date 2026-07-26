@@ -9,10 +9,17 @@ from __future__ import annotations
 import io
 from typing import Optional, Protocol
 
-from docling.datamodel.base_models import ConversionStatus
-from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import ConversionStatus, InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.exceptions import ConversionError
 from docling_core.types.io import DocumentStream
+
+# OCRモデル（レイアウト・表構造に比べ最も重い）の初期化コストがLambdaの限られたCPUで
+# 60秒を超え、API Gatewayの統合タイムアウト（29秒）は元よりdocling自身のLambdaタイムアウト
+# にも収まらなくなったため無効化する。ほとんどのPDFは埋め込みテキストを持ちOCR不要で、
+# スキャンPDF・画像内文字のみ影響を受ける。
+_PDF_FORMAT_OPTION = PdfFormatOption(pipeline_options=PdfPipelineOptions(do_ocr=False))
 
 
 class PDFConversionError(Exception):
@@ -30,7 +37,9 @@ class DoclingPDFConverter:
         # モデルのロードは初回convert時に行われるため、ここは軽量なインスタンス生成のみ。
         # converterはテスト側がDocumentConverter.convertの戻り値（status等）をフェイクへ
         # 差し替えられるようにするための注入口（ai_client.py等と同じDI方針）。
-        self._converter = converter or DocumentConverter()
+        self._converter = converter or DocumentConverter(
+            format_options={InputFormat.PDF: _PDF_FORMAT_OPTION}
+        )
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
         # ディスクへの一時ファイル書き出しを避け、メモリ上のbytesを直接渡す。

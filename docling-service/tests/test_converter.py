@@ -5,7 +5,8 @@ import pytest
 from docling.datamodel.base_models import ConversionStatus
 from docling.exceptions import ConversionError
 
-from app.converter import DoclingPDFConverter, PDFConversionError
+import app.converter as converter_module
+from app.converter import DoclingPDFConverter, PDFConversionError, get_pdf_converter
 
 # scripts/verify_docling.pyと同じ既知の埋め込みテキストを含むサンプルPDFを使い回す。
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
@@ -73,3 +74,15 @@ def test_docling_converter_accepts_partial_success_status():
     html = converter.convert_to_html("sample.pdf", b"dummy")
 
     assert html == "<html>partial</html>"
+
+
+def test_get_pdf_converter_returns_same_instance_across_calls(monkeypatch):
+    """OCR/レイアウトモデルのパイプライン構築コストは初回convert時にかかるため、
+    温まったLambda実行環境で使い回せるよう、リクエストをまたいで同一インスタンスを返す必要がある。
+    """
+    monkeypatch.setattr(converter_module, "_converter", None)
+
+    first = get_pdf_converter()
+    second = get_pdf_converter()
+
+    assert first is second

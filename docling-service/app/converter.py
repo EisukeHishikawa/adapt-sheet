@@ -7,7 +7,7 @@ AIを介さない単独の変換結果として直接プレビューされるた
 from __future__ import annotations
 
 import io
-from typing import Protocol
+from typing import Optional, Protocol
 
 from docling.datamodel.base_models import ConversionStatus
 from docling.document_converter import DocumentConverter
@@ -48,6 +48,18 @@ class DoclingPDFConverter:
         return result.document.export_to_html()
 
 
+_converter: Optional[DoclingPDFConverter] = None
+
+
 def get_pdf_converter() -> PDFConverter:
-    """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。"""
-    return DoclingPDFConverter()
+    """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。
+
+    DocumentConverterはOCR/レイアウト/表構造のモデルパイプラインを初回convert時に構築し、
+    そのコストは数秒〜十数秒かかる。リクエストごとに新規生成すると温まったLambda実行環境上でも
+    毎回このコストを払うことになり、API Gatewayの統合タイムアウト（29秒）に収まらなくなるため、
+    モジュールスコープで1つだけ生成してプロセス内で使い回す。
+    """
+    global _converter
+    if _converter is None:
+        _converter = DoclingPDFConverter()
+    return _converter

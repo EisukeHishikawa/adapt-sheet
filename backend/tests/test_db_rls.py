@@ -5,10 +5,12 @@
 
 import json
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.db import apply_rls_context
+import app.db as db_module
+from app.db import apply_rls_context, get_db_session_or_none
 
 
 class _FakeDialect:
@@ -70,3 +72,22 @@ def test_real_sqlite_session_is_unaffected():
     engine = create_engine("sqlite://")
     with Session(engine) as session:
         apply_rls_context(session, "user-1")
+
+
+def test_get_db_session_or_none_yields_none_when_connection_fails(monkeypatch):
+    """DATABASE_URLは設定済みだが接続自体に失敗する場合、例外を送出せずNoneを返す。
+
+    /api/renderはこの関数の戻り値がNoneなら履歴保存をスキップするだけで、本体の
+    PDF描画は継続する（DB障害で描画自体が落ちてはならない）。
+    """
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://unreachable-host/db")
+
+    def _raise_session_factory():
+        raise RuntimeError("could not connect")
+
+    monkeypatch.setattr(db_module, "_get_session_factory", _raise_session_factory)
+
+    gen = get_db_session_or_none(current_user=None)
+    assert next(gen) is None
+    with pytest.raises(StopIteration):
+        next(gen)

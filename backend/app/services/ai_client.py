@@ -430,7 +430,19 @@ class GeminiAIClient:
             # パース失敗の原因調査が主目的のため、parse_ai_responseの例外より前に出力全文を残す。
             _log_ai_payload("Geminiからレスポンスを受信", ai_model=self._model, ai_response=text)
             _raise_if_truncated(response)
-            return parse_ai_response(text)
+            try:
+                return parse_ai_response(text)
+            except AIGenerationError:
+                # response_mime_type="application/json"はヒントに過ぎず、Geminiがまれに
+                # 文字列値中のダブルクォート等を正しくエスケープせず不正なJSONを返すことがある
+                # （出力トークン上限到達によるものではなく、生成ノイズ）。同じ入力でも
+                # 再試行すれば正しいJSONが返ることが多いため、503同様に再試行する。
+                if attempt == _RETRY_MAX_ATTEMPTS:
+                    raise
+                time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
+                continue
+
+        raise AIGenerationError("Gemini API呼び出しに失敗しました: リトライ上限に達しました")
 
         raise AIGenerationError("Gemini API呼び出しに失敗しました")
 

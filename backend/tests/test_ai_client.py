@@ -462,6 +462,43 @@ def test_gemini_client_raises_after_exhausting_retries(monkeypatch):
     assert models.call_count == 3
 
 
+def test_gemini_client_retries_on_malformed_json_and_succeeds(monkeypatch):
+    # response_mime_type="application/json"はヒントに過ぎず、まれに不正なJSON（文字列値中の
+    # ダブルクォート未エスケープ等）を返すことがある。出力トークン上限到達（MAX_TOKENS、
+    # test_gemini_client_raises_clear_error_when_output_truncated）とは別の生成ノイズのため、
+    # 503同様に再試行すれば成功しうることを検証する。
+    monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
+
+    class _MalformedThenValidModels:
+        def __init__(self, texts):
+            self._texts = list(texts)
+            self.call_count = 0
+
+        def generate_content(self, model, contents, config=None):
+            self.call_count += 1
+            text = self._texts[self.call_count - 1]
+            return SimpleNamespace(text=text, candidates=None)
+
+    models = _MalformedThenValidModels(['{"html": "<p>broken', _VALID_RESPONSE])
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    result = client.generate("prompt")
+
+    assert result.html == "<p>{{x}}</p>"
+    assert models.call_count == 2
+
+
+def test_gemini_client_raises_after_exhausting_retries_on_malformed_json(monkeypatch):
+    monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
+    models = _StubGeminiModels(failures=0, response_text="not a json")
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with pytest.raises(AIGenerationError):
+        client.generate("prompt")
+
+    assert models.call_count == 3
+
+
 def test_gemini_client_does_not_retry_on_client_error(monkeypatch):
     # 429（クォータ超過）等のクライアントエラーは再試行しても無駄なため、即座に失敗させる。
     monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)

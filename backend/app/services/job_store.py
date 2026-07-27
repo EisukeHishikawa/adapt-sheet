@@ -83,7 +83,12 @@ class S3JobStore:
     def _client(self):
         import boto3  # 遅延import: 本番のみ必要（secrets_loader.py等と同じ方針）
 
-        return boto3.client("s3")
+        # region_nameのみ指定するとgenerate_presigned_urlは既定でグローバルエンドポイント
+        # （s3.amazonaws.com）のURLを生成し、実際のアクセス時にリージョナルエンドポイントへの
+        # 307リダイレクトが発生する。ブラウザのfetchはこのクロスオリジンリダイレクトを
+        # 正しく扱えずCORSエラーになるため、endpoint_urlを明示してリダイレクト自体を無くす。
+        region = os.environ.get("AWS_REGION", "ap-northeast-1")
+        return boto3.client("s3", region_name=region, endpoint_url=f"https://s3.{region}.amazonaws.com")
 
     @staticmethod
     def _upload_key(job_id: str) -> str:

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from contextlib import contextmanager
 from typing import Callable, Iterator, Optional
 
 from fastapi import Depends
@@ -130,14 +131,17 @@ def get_db_session(
         _close_session(session)
 
 
-def get_db_session_or_none(
-    current_user: Optional[SupabaseUser] = Depends(get_current_user),
-) -> Iterator[Optional[Session]]:
+@contextmanager
+def db_session_for_user(user_id: Optional[str]) -> Iterator[Optional[Session]]:
     """DATABASE_URL未設定（ローカル/pytestの既定）ではNoneを返し、呼び出し側にDB保存を
     スキップさせる（app/main.pyの/api/render、履歴の自動保存）。
 
     DATABASE_URLが設定されていても、接続先が到達不能・認証失敗等で使えない場合は
     例外を送出せずNoneを返す。DB保存の失敗程度で本体機能（/api/render）を落としたくない。
+
+    get_db_session_or_noneのFastAPI Depends非依存版。render-worker（POST
+    /internal/render-jobs/process）はJWTを持たず、同期エンドポイントが検証済みの
+    user_idを直接受け取るため、Depends(get_current_user)を経由しないこちらを使う。
     """
     url = os.getenv("DATABASE_URL", "").strip()
     if not url:
@@ -146,8 +150,8 @@ def get_db_session_or_none(
 
     try:
         session = _get_session_factory()()
-        if current_user is not None:
-            apply_rls_context(session, current_user.sub)
+        if user_id is not None:
+            apply_rls_context(session, user_id)
     except Exception:
         logger.warning("DB接続に失敗したため、この描画では履歴保存をスキップします", exc_info=True)
         yield None
@@ -157,3 +161,10 @@ def get_db_session_or_none(
         yield session
     finally:
         _close_session(session)
+
+
+def get_db_session_or_none(
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+) -> Iterator[Optional[Session]]:
+    with db_session_for_user(current_user.sub if current_user is not None else None) as session:
+        yield session

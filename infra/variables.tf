@@ -23,9 +23,9 @@ variable "image_tag" {
 }
 
 variable "lambda_memory_size" {
-  description = "Lambdaのメモリ割り当て（MB）。PDF処理に余裕を持たせる"
+  description = "Lambdaのメモリ割り当て（MB）。新規AWSアカウントのデフォルトクォータ上限（3008MB）を超えられない"
   type        = number
-  default     = 4096
+  default     = 3008
 }
 
 variable "lambda_timeout" {
@@ -41,9 +41,9 @@ variable "docling_image_tag" {
 }
 
 variable "docling_lambda_memory_size" {
-  description = "docling-service Lambdaのメモリ割り当て（MB）。torch等のML推論に余裕を持たせる"
+  description = "docling-service Lambdaのメモリ割り当て（MB）。新規AWSアカウントのデフォルトクォータ上限（3008MB）を超えられない"
   type        = number
-  default     = 6144
+  default     = 3008
 }
 
 variable "docling_lambda_timeout" {

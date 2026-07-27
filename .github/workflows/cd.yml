@@ -130,12 +130,20 @@ jobs:
           DISTRIBUTION_ID: ${{ steps.tf.outputs.distribution_id }}
         run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths '/*'
 
-      # SPAが配信され、backendからdocling/pdf2htmlex/DBまで到達できることを1往復で確認する。
+      # SPAが配信され、backendからdocling/pdf2htmlex/DBまで到達できることを確認する。
       # /api/warmupは各サービスの状態をJSONで返し、認証を要求しない。
+      # デプロイ直後はbackend/docling/pdf2htmlexが同時にコールドスタートし、
+      # docling（ML推論の初期化）だけでAPI Gatewayの29秒統合タイムアウトを超えることがあるためリトライする。
       - name: Smoke test
         env:
           APP_URL: ${{ steps.tf.outputs.app_url }}
         run: |
           set -euo pipefail
           curl -sSf -o /dev/null "$APP_URL/"
-          curl -sSf -X POST "$APP_URL/api/warmup" | tee /dev/stderr | grep -q '"docling"'
+          for i in 1 2 3 4 5; do
+            if curl -sSf -X POST "$APP_URL/api/warmup" | tee /dev/stderr | grep -q '"docling"'; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1

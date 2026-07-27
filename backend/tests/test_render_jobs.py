@@ -219,6 +219,24 @@ def test_process_render_job_writes_error_status_on_ai_generation_error():
         _clear_overrides()
 
 
+def test_process_render_job_writes_localized_message_on_http_exception():
+    """hybridエンジンでPDF未添付の場合、HTTPExceptionのdetail未指定分がStarletteの
+    英語フレーズ（"Bad Request"）のまま漏れず、日本語カタログの文言になること。"""
+    job_store = _override_job_store()
+    try:
+        response = client.post(
+            "/internal/render-jobs/process",
+            json={"job_id": "job-1", "engine": "hybrid", "has_pdf": False},
+        )
+        assert response.status_code == 202
+        assert job_store.statuses["job-1"]["status"] == "error"
+        message = job_store.statuses["job-1"]["message"]
+        assert message == "リクエスト内容に誤りがあります。入力値をご確認ください。"
+        assert "Bad Request" not in message
+    finally:
+        _clear_overrides()
+
+
 def test_process_render_job_fetches_uploaded_pdf_when_has_pdf_true():
     job_store = _override_job_store()
     job_store.uploaded["job-1"] = b"%PDF-1.4 dummy"

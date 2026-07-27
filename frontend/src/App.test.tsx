@@ -115,8 +115,9 @@ describe('描画ボタン押下時のAPI疎通', () => {
   })
 
   it('APIがエラーを返した場合はエラーメッセージが表示され、ストアの内容は変更されない', async () => {
-    // このテストのみ/api/renderを500エラーに差し替える（既定のダミーレスポンスは他テストに影響させない）。
-    server.use(http.post('/api/render', () => new HttpResponse(null, { status: 500 })))
+    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ起動側を500エラーに差し替える
+    // （既定のダミーレスポンスは他テストに影響させない）。
+    server.use(http.post('/api/render/jobs', () => new HttpResponse(null, { status: 500 })))
 
     const user = userEvent.setup()
     render(<App />)

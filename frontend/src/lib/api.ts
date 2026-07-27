@@ -4,6 +4,13 @@ import type { components } from '@/types/api'
 // /api/renderのレスポンスはこの型を経由してのみ扱う。
 export type RenderResponse = components['schemas']['RenderResponse']
 
+// 生成AI系エンジンの非同期ジョブ（POST /api/render/upload-url・POST /api/render/jobs・
+// GET /api/render/jobs/{job_id}）用の型。API Gatewayの29秒タイムアウトを避けるため、
+// PDFはS3へ直接アップロードし、描画本体はジョブとして起動してポーリングで結果を取る。
+export type UploadUrlResponse = components['schemas']['UploadUrlResponse']
+export type RenderJobResponse = components['schemas']['RenderJobResponse']
+export type RenderJobStatusResponse = components['schemas']['RenderJobStatusResponse']
+
 // 編集中スナップショットの保存リクエスト（POST /api/history/edit）。ログイン済みユーザーのみ
 // 呼び出せる（未ログインはバックエンドが403）。
 export type HistoryEditRequest = components['schemas']['HistoryEditRequest']
@@ -105,6 +112,78 @@ export async function renderSheet(
     // 200応答でも本文が空/不正な場合に、SyntaxErrorをそのまま伝播させず意味の伝わる文言にする。
     throw new Error('/api/render のレスポンスがJSONとして解釈できませんでした')
   }
+}
+
+// POST /api/render/jobsのリクエストボディ。RenderRequestFieldsと異なりPDFファイルそのものは
+// 含まない（先にrequestUploadUrl→PUTでS3へ直接アップロード済みの前提）。
+export type RenderJobRequestFields = {
+  prompt?: string
+  width_mm?: number
+  height_mm?: number
+  engine?: string
+  current_html?: string
+  current_json?: string
+  job_id?: string
+  has_pdf?: boolean
+}
+
+// S3へPDFを直接アップロードするための署名付きURLを発行する。job_idは後続の
+// startRenderJob/PUTアップロードで同一ジョブを指すために使い回す。
+export async function requestUploadUrl(): Promise<UploadUrlResponse> {
+  const response = await fetch('/api/render/upload-url', { method: 'POST' })
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
+
+  return (await response.json()) as UploadUrlResponse
+}
+
+// requestUploadUrlで得たupload_urlへPDFを直接PUTする（backendを経由しない）。
+export async function uploadPdfToPresignedUrl(uploadUrl: string, pdf: File): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/pdf' },
+    body: pdf,
+  })
+
+  if (!response.ok) {
+    throw new Error(`PDFのアップロードに失敗しました (status: ${response.status})`)
+  }
+}
+
+// 生成AI系エンジンの描画ジョブを起動する。API Gatewayの29秒制約を受けないよう、
+// backendは受理してjob_idを返すだけで、実処理は非同期起動したworker Lambda側で行う。
+export async function startRenderJob(
+  fields: RenderJobRequestFields,
+  accessToken?: string,
+): Promise<RenderJobResponse> {
+  const response = await fetch('/api/render/jobs', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify(fields),
+  })
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
+
+  return (await response.json()) as RenderJobResponse
+}
+
+// ジョブの状態を1回分取得する。呼び出し側（sheetStore）がstatus: "pending"の間、
+// 一定間隔でこの関数を呼び直す。
+export async function getRenderJobStatus(jobId: string): Promise<RenderJobStatusResponse> {
+  const response = await fetch(`/api/render/jobs/${encodeURIComponent(jobId)}`)
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
+
+  return (await response.json()) as RenderJobStatusResponse
 }
 
 // 編集中スナップショットをサーバーの履歴へ保存する。描画と違い画面の主目的ではないため、

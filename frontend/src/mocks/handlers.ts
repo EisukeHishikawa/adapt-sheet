@@ -9,12 +9,24 @@ export const dummyRenderResponse: components['schemas']['RenderResponse'] = {
   json: { dummy: 'sample' },
 }
 
+// 生成AIエンジンの非同期ジョブ用の既定モック。job_idは固定で、GET /api/render/jobs/:id は
+// 即座にstatus=doneを返す（ポーリングの遅延自体を検証したいテストのみserver.useで上書きする）。
+const DUMMY_UPLOAD_URL = 'https://example.com/uploads/job-1.pdf'
+
 // 結合テストの共通ハンドラ。個別のテストで挙動を変えたい場合は
 // `server.use(...)` で一時的に上書きする（例: エラーレスポンスの検証）。
 export const handlers = [
   http.post('/api/render', () => {
     return HttpResponse.json(dummyRenderResponse)
   }),
+  http.post('/api/render/upload-url', () =>
+    HttpResponse.json({ job_id: 'job-1', upload_url: DUMMY_UPLOAD_URL }),
+  ),
+  http.put(DUMMY_UPLOAD_URL, () => new HttpResponse(null, { status: 200 })),
+  http.post('/api/render/jobs', () => HttpResponse.json({ job_id: 'job-1' }, { status: 202 })),
+  http.get('/api/render/jobs/:jobId', () =>
+    HttpResponse.json({ status: 'done', ...dummyRenderResponse }),
+  ),
   // 編集中スナップショットの保存・上書き。保存時のidは以降の上書き先として使われる。
   http.post('/api/history/edit', () =>
     HttpResponse.json({ id: 'edit-1', kind: 'edit' }, { status: 201 }),

@@ -140,6 +140,10 @@ services:
       # 起動済みのfrontendサービスに対してテストする（playwright.config.tsのwebServer自動起動を
       # スキップし、コンテナ間のサービス名で疎通する）。
       - PLAYWRIGHT_TEST_BASE_URL=http://frontend:5173
+      # auth-history-flow.spec.tsがsupabase-jsのsessionStorageキー（sb-<project-ref>-auth-token）を
+      # 組み立てるために使う。frontendサービスのビルド時の値と一致させる必要があるため同じ変数を渡す
+      # （未設定時はテスト側がスキップする）。
+      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-}
     depends_on:
       - frontend
     profiles:

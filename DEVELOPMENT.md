@@ -162,7 +162,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 #### ⬛ ステップ 28: Supabase（PostgreSQL）の統合 ＆ 最終クローズ
 - [x] ⚙️ **ローカルDB環境の構築:** docker-compose.ymlへ`db`サービス（Postgres）を追加し、手元の開発環境を汚さずにマイグレーションやテストができる環境を整備（Supabase Local CLIではなく素のPostgresコンテナを選択）
 - [x] SQLAlchemy経由でのSupabase接続設定と、データ保存ロジックの実装（`app/db.py`・`app/models.py`・`app/services/history.py`、Alembicマイグレーション`backend/migrations/`。`POST /api/render`成功時にログイン中のユーザーの履歴を自動保存し、`GET /api/history`で一覧取得できる）
-- [ ] 🧪 **最終結合テスト:** 認証・DB保存・AI生成が絡む全シナリオのテストをPlaywright等で追加（バックエンドのpytest統合テストは追加済み。フロントの保存済み履歴閲覧UI（`HistorySlider`のセッション切れ後の再取得・`HistoryArchive`）はVitest/Testing Libraryで実装・検証済み。Playwright E2Eは未実装、残課題）
+- [x] 🧪 **最終結合テスト:** 認証・DB保存・AI生成が絡む全シナリオのテストをPlaywright等で追加（バックエンドのpytest統合テストは追加済み。フロントの保存済み履歴閲覧UI（`HistorySlider`のセッション切れ後の再取得・`HistoryArchive`）はVitest/Testing Libraryで実装・検証済み。`frontend/e2e/auth-history-flow.spec.ts`で、ログイン状態の復元・生成AI系エンジンの非同期ジョブ経路・`HistoryArchive`での履歴取得・ログアウトまでの一連をE2Eで検証）
 - [ ] 🚀 **本番デプロイ:** 全テストが自動でパスし、安全にデプロイされることを確認してプロジェクト完了（実Supabaseプロジェクト・AWS本番環境への適用は別途対応）
 
 #### ⬛ ステップ 29: ログイン専用化とセキュリティ強化

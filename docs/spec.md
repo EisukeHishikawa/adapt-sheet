@@ -74,10 +74,11 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 | `prompt` | string | 任意 | 生成方針の自然言語指示（生成AI選択時のみ使用） |
 | `width_mm` | number | 任意 | 帳票の横幅（mm） |
 | `height_mm` | number | 任意 | 帳票の縦幅（mm） |
-| `engine` | string | 任意 | 生成エンジン。`gemini_free`（既定）/`gemini`/`claude`/`openai`/`docling`/`pdf2htmlex`/`pymupdf`のいずれか |
+| `engine` | string | 任意 | 生成エンジン。`gemini_free`（既定）/`gemini`/`claude`/`openai`/`hybrid`/`docling`/`pdf2htmlex`/`pymupdf`のいずれか |
 
 > `css`・`json`（業務データ）・`html`（既存HTML）はいずれも独立したリクエストフィールドを持たない。生成AIへはPDFファイルをそのままマルチモーダル入力として渡し、PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない。
 > `engine`が`gemini`/`claude`/`openai`（標準プラン）の場合、未ログインユーザーには`403 FREE_ACCESS_FORBIDDEN`を返す（4章参照）。ログイン済みかどうかは`Authorization: Bearer <Supabaseアクセストークン>`ヘッダーの有効性で判定する（DEVELOPMENT.md ステップ27、ADR-020）。
+> このエンドポイント自体はAPI Gatewayの統合タイムアウト（29秒固定）を受ける同期処理のため、フロントは生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）ではこのエンドポイントを直接呼ばず、3.1a「非同期レンダリングジョブ」を経由する（ADR-031）。変換エンジン（`docling`/`pdf2htmlex`/`pymupdf`）は引き続きこのエンドポイントを直接呼ぶ。
 
 **レスポンス（200 OK）**
 
@@ -90,6 +91,63 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 ```
 
 > `engine`が変換エンジン（`docling`/`pdf2htmlex`/`pymupdf`）の場合、AIを介さず各エンジンの変換結果をそのまま`html`に、`css`は空文字列、`json`は空オブジェクトとして返す。
+
+### 3.1a 非同期レンダリングジョブ（生成AI系engine、ADR-031）
+
+生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）はAPI Gatewayの29秒制約を受けないよう、3つのエンドポイントを組み合わせた非同期ジョブとして描画する。処理フローの全体像は[`architecture.md`](./architecture.md#41-非同期レンダリングジョブ生成ai系engineadr-031)を参照。
+
+#### `POST /api/render/upload-url`
+
+PDFをS3へ直接アップロードするための署名付きURLを発行する。PDFを添付する場合のみ、`POST /api/render/jobs`より先に呼ぶ。認証不要・リクエストボディなし。
+
+**レスポンス（200 OK）**
+
+```json
+{ "job_id": "9b605914-8927-4c45-bcba-0515801beb0c", "upload_url": "https://s3.ap-northeast-1.amazonaws.com/..." }
+```
+
+呼び出し側は`upload_url`へPDFを`PUT`する（`Content-Type: application/pdf`、backendを経由しない）。有効期限は300秒。
+
+#### `POST /api/render/jobs`
+
+描画ジョブを起動する。ゲート対象engine（`gemini`/`claude`/`openai`）の未ログイン判定は`POST /api/render`と同じくここで同期的に行う。
+
+**リクエスト（application/json）**
+
+| フィールド | 型 | 必須 | 説明 |
+|---|---|---|---|
+| `prompt` | string | 任意 | 生成方針の自然言語指示 |
+| `width_mm` / `height_mm` | number | 任意 | 帳票の横幅・縦幅（mm） |
+| `engine` | string | 任意 | 生成エンジン。既定は`gemini_free` |
+| `current_html` / `current_json` | string | 任意 | PDF未添付時のみ使う、画面に表示中のHTML/JSON |
+| `job_id` | string | 任意 | `POST /api/render/upload-url`で得たjob_idを指定すると、そのアップロード済みPDFを使う |
+| `has_pdf` | boolean | 任意 | `true`の場合、`job_id`のアップロード済みPDFをS3から取得して使う（既定`false`） |
+
+**レスポンス（202 Accepted）**
+
+```json
+{ "job_id": "9b605914-8927-4c45-bcba-0515801beb0c" }
+```
+
+`job_id`未指定の場合はサーバー側で新規発行する。レスポンスは受理のみを表し、描画の完了は待たない。
+
+#### `GET /api/render/jobs/{job_id}`
+
+ジョブの状態を取得する。フロントは`status`が`pending`の間、2秒間隔で呼び直す。
+
+**レスポンス（200 OK）**
+
+```json
+{ "status": "done", "html": "<!doctype html>...", "css": "body { ... }", "json": { "invoice_no": "..." }, "message": null }
+```
+
+| `status` | 説明 |
+|---|---|
+| `pending` | 処理中。`html`/`css`/`json`/`message`はすべて`null` |
+| `done` | 完了。`html`/`css`/`json`にPOST /api/renderと同じ内容が入る |
+| `error` | 失敗。`message`にユーザー向けの安全な日本語文言が入る（バリデーションエラー・AI生成エラー・PDF解析エラーいずれも同じ`message`フィールドに統一し、HTTPステータスでは区別しない。ジョブ自体のHTTP応答は常に200） |
+
+存在しない`job_id`（発行から1日以上経過し自動失効した場合を含む）には`404`を返す。
 
 ### 3.2 `POST /convert`（docling-service、内部API）
 

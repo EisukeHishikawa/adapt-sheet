@@ -183,6 +183,21 @@
 
 ---
 
+## ADR-031: 生成AI描画のジョブ非同期化（S3署名付きURL＋Lambda非同期起動）
+
+- **ステータス**: Accepted
+- **コンテキスト**: 本番実機検証で、`POST /api/render`が生成AI（Gemini）呼び出し中にAPI Gatewayの統合タイムアウト（29秒固定・AWS側のハード上限で変更不可）へ達し、利用者にエラーとして見える事象が繰り返し発生した。IAM権限・docling初期化コスト・DBセッションclose・Geminiクライアントのタイムアウト未設定など原因を1つずつ特定・修正したが、最終的にGemini API自体がGoogle側の事情で20〜60秒以上かかる／504を返すケースがあることが実機ログで確認された。これは同期リクエスト/レスポンス方式である限りコード側のチューニングだけでは解決できない、アーキテクチャ上の制約だった。
+- **決定**: 生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）のレンダリングを非同期ジョブ化する。PDFはS3へ署名付きURLでブラウザから直接アップロードし（入口Lambdaを経由しない）、実処理は`render-worker`という別のLambda関数（入口Lambdaと同じイメージを再利用、タイムアウト180秒）へ`lambda:invoke`（`InvocationType=Event`）で非同期起動する。入口Lambdaはジョブの受理（`pending`状態の書き込みと起動）だけを行い、重い処理を一切待たずに`202 Accepted`を返す。フロントは`GET /api/render/jobs/{job_id}`を2秒間隔でポーリングし、結果（S3上のJSON）を取得する。変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は常に高速なため対象外とし、既存の同期経路のまま変更しない。詳細な処理フローは[`architecture.md`](./architecture.md#41-非同期レンダリングジョブ生成ai系engineadr-031)を参照。
+  - `render-worker`はAPI Gateway/Function URLを経由しないIAM専用Lambdaとし、入口Lambdaの実行ロールにのみ`lambda:InvokeFunction`を許可する（Function URL呼び出し用の`lambda:InvokeFunctionUrl`とは別の権限）。
+  - `render-worker`への中継は、AWS Lambda Web Adapter（Docling/pdf2htmlEXと同じ仕組み）がAPI Gateway REST API v1プロキシ形式の合成イベントをHTTP POSTへ変換する前提で設計し、実装前に小さな検証（合成イベントを手動送信しFastAPI側のログを確認）で成立することを確かめてから本実装した。
+  - S3の署名付きURLはリージョナルエンドポイント（`s3.<region>.amazonaws.com`）を明示して発行する。region_nameのみの指定だとboto3はグローバルエンドポイント（`s3.amazonaws.com`）のURLを生成し、実アクセス時にリージョナルエンドポイントへの307リダイレクトが発生する。ブラウザの`fetch`はこのクロスオリジンリダイレクトを安定して扱えず、CORSエラーとして失敗する。
+  - S3バケットにはCORS設定（フロントのCloudFrontオリジンからの`PUT`を許可）と、フロントのCSP（`connect-src`）へのS3オリジン追加の両方が必要（片方だけでは失敗する。前者はS3側、後者はブラウザ自身のポリシー）。
+- **理由**: API Gatewayの29秒統合タイムアウトはAWS側のハード上限で変更できないため、コードのチューニングでは解決できない。S3署名付きURLによる直接アップロードはbackendの帯域・メモリを消費せず、既存のDocling/pdf2htmlEX（Function URL＋Web Adapter）と同じ実行モデルを流用できるため新しい仕組みを持ち込まずに済む。ポーリング方式はWebSocket等より実装・運用がシンプルで、既存の「描画中」UI（経過秒数表示）とも自然に馴染む。
+- **トレードオフ**: フロントの`fetchRender`が生成AI系engineと変換エンジンで異なる経路（非同期ジョブ／同期呼び出し）を持つことになり、コードパスが増える。ポーリング間隔（2秒）の分だけ結果反映がわずかに遅れる。`render-worker`は入口Lambdaと同じイメージを再利用するため、backend用の依存関係（Docling/pdf2htmlEXクライアント等）も含んだまま起動する（専用の軽量イメージに分離すればコールドスタートを短縮できるが、現時点ではイメージ管理の一本化を優先した）。
+- **関連**: ADR-011（構造化ログ、`render-worker`は`request_id`が伝播しないため`job_id`で相関する）。
+
+---
+
 ## 今後の追記予定
 
 - フェーズ4・5の実装過程で発生した追加の技術決定（Terraformのstate管理方式、Supabaseのスキーマ設計方針等）を随時ADRとして追記する。

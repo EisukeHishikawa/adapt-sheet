@@ -179,3 +179,20 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] **アカウント作成のガード:** `scripts/create_user.sh`はGoogle OAuth未設定・`env(...)`未展開・GoTrue側でgoogle無効のいずれでも作成を拒否する。パスワードは設定しない（ADR-020）
 - [x] **ローカル検証手順の整備:** `.env`読み込み後に`supabase start`する順序を明示（`env(...)`展開のため必須）、Google Cloudでのクライアント発行手順を追加（`docs/supabase-local-cli-setup.md`）
 - [x] 🧪 **Googleログインの実動作確認:** 実際のGoogle Cloud OAuthクライアントでログインに成功。既存アカウント（`email` identity）へ`google` identityが自動連携されることも`auth.identities`で確認済み
+
+---
+
+### 🛠️ フェーズ 6: 本番運用後の改善
+本番デプロイ後の実機検証で見つかった課題への対応。
+
+#### ⬛ ステップ 31: 生成AI描画のジョブ非同期化（API Gatewayの29秒制約回避）
+- [x] ⚙️ **非同期ジョブ基盤の構築:** S3（`infra/modules/job_bucket`、1日で自動失効、CORS設定込み）と、backendと同じイメージを再利用する`render-worker` Lambda（`infra/main.tf`の`module "lambda_render_worker"`、既存の`infra/modules/lambda`を再利用。API Gateway/Function URLなし、タイムアウト180秒）を追加（ADR-031）
+- [x] **backend: 非同期エンドポイントの実装:** `POST /api/render/upload-url`・`POST /api/render/jobs`・`GET /api/render/jobs/{job_id}`・`POST /internal/render-jobs/process`を追加（`app/services/job_store.py`・`app/services/worker_invoker.py`）。既存の`POST /api/render`のAI生成ロジックは`_generate_ai_result`として抽出し、同期・非同期の両経路で共用する
+- [x] **frontend: ポーリング対応:** `sheetStore.fetchRender`を生成AI系engineと変換エンジンで分岐し、生成AI系はS3への直接アップロード→ジョブ起動→2秒間隔のポーリングへ変更（`lib/api.ts`）
+- [x] 🧪 **テストコード追加:** `backend/tests/test_job_store.py`・`test_worker_invoker.py`・`test_render_jobs.py`、`frontend/src/store/sheetStore.test.ts`のポーリングテスト（`vi.useFakeTimers`）を追加
+- [x] 🚀 **実機不具合の修正:** 実AWS環境での検証で見つかった4件を個別に修正
+  - Geminiクライアントのタイムアウトが20秒のままで（旧・API Gatewayの29秒制約に合わせた設定）毎回504になっていた問題を150秒へ延長
+  - S3署名付きアップロードURLへのCORS設定漏れ
+  - S3署名付きURLがグローバルエンドポイントで発行され307リダイレクトが発生していた問題（リージョナルエンドポイントを明示）
+  - フロントのCSP（`connect-src`）にS3オリジンが未許可だった問題
+  - Geminiが稀に返す構文的に不正なJSONをリトライ対象に追加

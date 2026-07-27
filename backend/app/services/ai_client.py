@@ -364,10 +364,12 @@ class GeminiAIClient:
     # 帳票のHTML+CSS+JSONは長くなりやすい。出力が途中で切れると不正JSONになるため上限を広く取る。
     _MAX_OUTPUT_TOKENS = 16384
 
-    # 未指定だとSDK/httpxの既定（実質無制限）のまま無応答でハングしうる。Lambda自体の
-    # タイムアウト（29秒、API Gatewayの統合タイムアウト上限に合わせている）より短く切り、
-    # ハング時もLambdaの強制終了ではなくAIGenerationErrorとして明確に失敗させる。
-    _HTTP_TIMEOUT_MS = 20_000
+    # 未指定だとSDK/httpxの既定（実質無制限）のまま無応答でハングしうる。この値はSDKが
+    # X-Server-TimeoutヘッダーとしてGemini API側へも送信され、サーバー側がこのデッドラインで
+    # 504 DEADLINE_EXCEEDEDを返す（クライアント側の読み取りタイムアウトではない）。
+    # 生成AI系エンジンはrender-worker Lambda（タイムアウト180秒）上の非同期ジョブとして動くため、
+    # S3書き込み・履歴保存の余地を残して180秒よりは短く切る。
+    _HTTP_TIMEOUT_MS = 150_000
 
     def __init__(
         self, api_key: str, client: Optional[object] = None, standard: bool = False

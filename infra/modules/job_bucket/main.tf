@@ -15,6 +15,19 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+# ブラウザ（フロントのCloudFrontオリジン）から署名付きURLへ直接PUTするため、CORSの許可が必須。
+# 未設定だとpresigned URLの署名自体は正しくても、ブラウザのfetchがCORSでブロックし
+# 「サーバーで想定外のエラーが発生しました」として失敗する（curl等CORSを検査しないツールでは再現しない）。
+resource "aws_s3_bucket_cors_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  cors_rule {
+    allowed_methods = ["PUT"]
+    allowed_origins = var.allowed_origins
+    allowed_headers = ["Content-Type"]
+  }
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 

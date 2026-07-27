@@ -39,6 +39,17 @@
 
 APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront）から配信し、`src/lib/api.ts`は相対パス`/api/...`のまま本番でも動く。
 
+### Supabase AuthのGoogleプロバイダ（ホスト型プロジェクト）
+
+`supabase/config.toml`の`[auth.external.google]`はローカルCLI（`supabase start`）にのみ適用され、ホスト型（本番）Supabaseプロジェクトには反映されない。本番でGoogleログインを使うには、Supabaseダッシュボード側で個別に設定が必要。
+
+1. Google Cloud ConsoleのOAuthクライアントに、本番用の認可済みリダイレクトURIを追加する: `https://<project-ref>.supabase.co/auth/v1/callback`（Supabaseダッシュボードの「Callback URL (for OAuth)」欄に表示される値をそのまま使う）
+2. Supabaseダッシュボード → 対象プロジェクト → Authentication → Providers → Google を有効化し、Client ID / Secretを設定する。
+3. Supabaseダッシュボード → Authentication → URL Configuration で、**Site URL**を本番フロントエンドURL（CloudFrontドメイン）に、**Redirect URLs**にも同URLを追加する。未設定のままだとログイン自体は成功するが、初期値の`http://localhost:3000`へ`?code=...`付きでリダイレクトされてしまう（ローカル開発用のURLはそのまま残してよい）。
+4. `https://<project-ref>.supabase.co/auth/v1/settings` を叩き、`external.google: true`になっているか確認する。
+
+1〜3はSupabase側（GoTrueサーバー）の設定であり、フロントエンドの再ビルド・再デプロイなしに即時反映される。未設定のままだとフロントの`signInWithOAuth({ provider: 'google' })`が`{"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}`で失敗する。
+
 ### ClaudeCode / MCP
 
 | 変数名 | 説明 | 備考 |

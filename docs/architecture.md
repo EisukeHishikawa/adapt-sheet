@@ -19,8 +19,10 @@ flowchart LR
         S3["S3 (静的ホスティング)"]
         APIGW["API Gateway"]
         LambdaEntry["Lambda (入口API)"]
+        LambdaWorker["Lambda (render-worker)"]
         LambdaDocling["Lambda (Docling)"]
         LambdaPdf2HtmlEx["Lambda (pdf2htmlEX)"]
+        S3Jobs["S3 (非同期ジョブ置き場<br/>1日で自動失効)"]
     end
 
     subgraph External["外部サービス"]
@@ -32,18 +34,25 @@ flowchart LR
 
     Browser -->|静的アセット| CF --> S3
     Browser -->|"/api/*"| CF --> APIGW --> LambdaEntry
+    Browser -->|"PDFを直接PUT（署名付きURL）"| S3Jobs
     LambdaEntry -->|SigV4| LambdaDocling
     LambdaEntry -->|SigV4| LambdaPdf2HtmlEx
-    LambdaEntry --> Gemini
-    LambdaEntry --> Claude
-    LambdaEntry --> OpenAI
+    LambdaEntry -->|"lambda:invoke（Event、非同期起動）"| LambdaWorker
     LambdaEntry --> Supabase
+    LambdaWorker -->|"PDF読み取り/結果書き込み"| S3Jobs
+    LambdaWorker -->|SigV4| LambdaDocling
+    LambdaWorker -->|SigV4| LambdaPdf2HtmlEx
+    LambdaWorker --> Gemini
+    LambdaWorker --> Claude
+    LambdaWorker --> OpenAI
+    LambdaWorker --> Supabase
 ```
 
 - フロントとAPIは同一オリジン（CloudFront配下の`/api/*`）で提供する。
 - 入口Lambdaは`FastAPI + Lambda Web Adapter`で動き、PyMuPDFによるレイアウト変換を内包する。
 - Docling/pdf2htmlEXの各Lambdaは内部専用で、API Gatewayを介さずAWS_IAM認証必須のFunction URLとして公開する。
-- 生成AIへはPDFをマルチモーダル入力として直接添付する。
+- 生成AI（Gemini/Claude/OpenAI/hybrid）はAPI Gatewayの統合タイムアウト（29秒固定）に収まらないことがあるため、`render-worker`Lambda（入口Lambdaと同じイメージ、タイムアウト180秒）へ`lambda:invoke`（`InvocationType=Event`）で非同期起動し、API Gatewayを介さない経路で処理する（ADR-031）。PDFはS3の署名付きURLへブラウザから直接アップロードし、入口Lambdaを経由しない。生成AIへはPDFをマルチモーダル入力として直接添付する。
+- 変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は引き続き入口Lambda上で同期処理する（常に高速なため29秒制約を受けない）。
 
 ---
 
@@ -131,9 +140,9 @@ flowchart LR
 
 ## 4. バックエンドAPI設計概要図
 
-`POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。
+`POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。生成AI系engineの実際の処理（`_generate_ai_result`）はこの図の通りだが、フロントは「4.1 非同期レンダリングジョブ」の経路でこれを呼び出す。`POST /api/render`自体は変換エンジン向けの同期経路として引き続き提供する。
 
-エンジン選択（`engine`）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
+エンジン選択（`engine`）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI/hybrid）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
 
 ```mermaid
 sequenceDiagram
@@ -164,6 +173,45 @@ sequenceDiagram
     end
     Note over API,FE: バリデーション/AI生成/PDF解析エラーは<br/>例外種別に応じたHTTPステータスで返却
 ```
+
+---
+
+## 4.1 非同期レンダリングジョブ（生成AI系engine、ADR-031）
+
+生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）は、Gemini APIが20〜60秒以上かかることがあり、API Gatewayの統合タイムアウト（29秒固定・AWS側のハード上限）に収まらない場合がある。これを回避するため、フロントはこれらのengineでは`POST /api/render`を直接呼ばず、以下の非同期ジョブ経路を使う（詳細仕様は [`spec.md`](./spec.md) 3.1a参照）。変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は引き続き上記4章の同期経路のままで変更しない。
+
+```mermaid
+sequenceDiagram
+    participant FE as フロントエンド
+    participant API as 入口Lambda (backend)
+    participant S3 as S3 (ジョブ置き場)
+    participant Worker as render-worker Lambda
+
+    opt PDFがある場合
+        FE->>API: POST /api/render/upload-url
+        API-->>FE: { job_id, upload_url }
+        FE->>S3: PUT（署名付きURLへ直接、backendを経由しない）
+    end
+    FE->>API: POST /api/render/jobs { engine, prompt, job_id, has_pdf, ... }
+    API->>S3: results/{job_id}.json = {"status": "pending"}
+    API->>Worker: lambda:invoke（InvocationType=Event、非同期起動）
+    API-->>FE: 202 Accepted { job_id }
+    Note over API,Worker: 起動の受理のみを待ち、完了は待たない
+    Worker->>S3: uploads/{job_id}.pdf を取得（has_pdf時）
+    Worker->>Worker: 4章の生成ロジック（_generate_ai_result）を実行
+    Worker->>S3: results/{job_id}.json = {"status": "done"|"error", ...}
+    loop 2秒間隔でポーリング
+        FE->>API: GET /api/render/jobs/{job_id}
+        API->>S3: results/{job_id}.json を取得
+        API-->>FE: { status, html?, css?, json?, message? }
+    end
+```
+
+- `render-worker`はAPI Gateway/Function URLを経由しないIAM専用のLambdaのため、入口Lambda（backend）以外からは呼び出せない。
+- `POST /api/render/jobs`のゲート判定（`GATED_ENGINES`）は入口Lambda側で同期的に行い、即座に403を返せる（ジョブは起動しない）。
+- `uploads/*`・`results/*`とも1日で自動失効するライフサイクルルールを持つ（PDFに業務データを含むため無期限に残さない）。
+- S3の署名付きURLはリージョナルエンドポイント（`s3.<region>.amazonaws.com`）で発行する。グローバルエンドポイントだと307リダイレクトが発生し、ブラウザの`fetch`がクロスオリジンリダイレクトを安定して扱えないため。
+- フロントのCSP（`connect-src`）にS3のリージョナルエンドポイントを許可している（`frontend/vite.config.ts`）。
 
 ---
 
@@ -227,20 +275,25 @@ flowchart TD
 
     Backend -->|"X-Request-ID を伝播"| Docling["docling Lambda"]
     Backend -->|"X-Request-ID を伝播"| P2H["pdf2htmlex Lambda"]
+    Backend -->|"lambda:invoke（Event）<br/>job_idのみ渡す"| Worker["render-worker Lambda"]
+    Worker -->|SigV4| Docling
+    Worker -->|SigV4| P2H
 
     Backend -->|"JSON1行ログ<br/>request_id / user_id"| CWApp["CloudWatch Logs<br/>/aws/lambda/*"]
     Docling --> CWApp
     P2H --> CWApp
+    Worker -->|"JSON1行ログ<br/>（独立したLambda呼び出しのためrequest_idは非連続）"| CWApp
 
     CWApp -->|"メトリクスフィルタ<br/>level = ERROR"| Alarm["CloudWatch アラーム"]
     APIGW -->|"4XX / 5XX メトリクス"| Alarm
     Backend -->|"Errors / Throttles"| Alarm
+    Worker -->|"Errors / Throttles"| Alarm
     Alarm --> SNS["SNS トピック"] --> Mail["メール通知"]
 
     Supabase["Supabase (Auth / Postgres)"] -.->|"保持期間はプラン依存<br/>調査時の二次ソース"| Dashboard["Supabase ダッシュボード"]
 ```
 
-相関のたどり方: 画面のエラーに出る`request_id`（＝レスポンスの`X-Request-ID`）でbackend・docling・pdf2htmlexの3ロググループを横断検索できる。API Gatewayのアクセスログとの突き合わせは`xrayTraceId`で行う。
+相関のたどり方: 画面のエラーに出る`request_id`（＝レスポンスの`X-Request-ID`）でbackend・docling・pdf2htmlexの3ロググループを横断検索できる。API Gatewayのアクセスログとの突き合わせは`xrayTraceId`で行う。`render-worker`は`lambda:invoke`（Event）による非同期起動のため独立したLambda実行コンテキストとなり、`X-Request-ID`は伝播しない。ジョブ単位の相関は`job_id`（`POST /api/render/jobs`のレスポンス、S3オブジェクトキー`uploads/{job_id}.pdf`・`results/{job_id}.json`と共通）で行う。
 
 ---
 

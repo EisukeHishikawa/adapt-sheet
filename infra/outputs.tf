@@ -72,3 +72,13 @@ output "api_access_log_group_name" {
   description = "API GatewayアクセスログのCloudWatch Logsロググループ名"
   value       = module.api.access_log_group_name
 }
+
+output "render_jobs_bucket_name" {
+  description = "非同期レンダリングジョブ（アップロード済みPDF・結果）のS3バケット名"
+  value       = module.job_bucket.bucket_name
+}
+
+output "render_worker_function_name" {
+  description = "生成AIエンジンの非同期処理を担うrender-worker Lambda関数名"
+  value       = module.lambda_render_worker.function_name
+}

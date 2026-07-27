@@ -79,6 +79,7 @@ module "job_bucket" {
   source          = "./modules/job_bucket"
   name            = local.name_prefix
   expiration_days = var.render_jobs_bucket_expiration_days
+  allowed_origins = ["https://${module.frontend.distribution_domain_name}"]
 }
 
 # 生成AIエンジン（gemini_free/gemini/claude/openai/hybrid）の実処理を担う非同期ワーカー。

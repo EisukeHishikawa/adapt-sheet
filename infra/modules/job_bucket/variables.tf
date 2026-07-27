@@ -8,3 +8,8 @@ variable "expiration_days" {
   type        = number
   default     = 1
 }
+
+variable "allowed_origins" {
+  description = "ブラウザから署名付きURLへ直接PUTするためのCORS許可オリジン（フロントのCloudFrontドメイン）"
+  type        = list(string)
+}

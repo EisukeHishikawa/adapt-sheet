@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.db import db_session_for_user, get_db_pinger, get_db_session, get_db_session_or_none
 from app.errors import (
     ai_generation_error_handler,
+    build_error_payload,
     http_exception_handler,
     pdf_conversion_error_handler,
     validation_exception_handler,
@@ -361,7 +362,8 @@ async def process_render_job(
             html_extractor=html_extractor,
         )
     except HTTPException as exc:
-        job_store.write_status(payload.job_id, {"status": "error", "message": str(exc.detail)})
+        message = build_error_payload(exc.status_code)["error"]["message"]
+        job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except (PDFConversionError, AIGenerationError) as exc:
         job_store.write_status(payload.job_id, {"status": "error", "message": str(exc)})

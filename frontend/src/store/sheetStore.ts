@@ -1,6 +1,16 @@
 import { create } from 'zustand'
-import { RenderApiError, getHistory, renderSheet, saveEditHistory, updateEditHistory } from '@/lib/api'
-import type { HistoryItemResponse } from '@/lib/api'
+import {
+  RenderApiError,
+  getHistory,
+  getRenderJobStatus,
+  renderSheet,
+  requestUploadUrl,
+  saveEditHistory,
+  startRenderJob,
+  updateEditHistory,
+  uploadPdfToPresignedUrl,
+} from '@/lib/api'
+import type { HistoryItemResponse, RenderJobStatusResponse } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
@@ -31,6 +41,25 @@ export type RenderEngineId =
   | 'docling'
   | 'pdf2htmlex'
   | 'pymupdf'
+
+// 生成AIエンジン（backendのGATED_ENGINES + gemini_free/hybrid）。Gemini API自体が
+// 20〜60秒以上かかることがあり、API Gatewayの29秒固定タイムアウトを受けないよう、
+// この集合のengineのみ非同期ジョブ（POST /api/render/jobs→ポーリング）で描画する。
+// docling/pdf2htmlex/pymupdfは常に高速なため対象外（既存のrenderSheetのまま）。
+const AI_ENGINES: ReadonlySet<RenderEngineId> = new Set([
+  'gemini_free',
+  'gemini',
+  'claude',
+  'openai',
+  'hybrid',
+])
+
+// ポーリング間隔。warmupStoreと同じ発想でテスト側はvi.useFakeTimersでスキップする。
+const RENDER_JOB_POLL_INTERVAL_MS = 2000
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 // たて（ポートレート）は短辺が幅・長辺が高さ。よこ（ランドスケープ）は用紙を90度回すため入れ替わる。
 // ストアのサイズ適用とSizeControlsの選択肢表示が同じ変換を二重に持たないよう、ここへ集約する。
@@ -250,6 +279,110 @@ function syncEditSnapshotToServer(seq: number, entry: HistoryEntry, engine: Rend
     .catch(() => undefined)
 }
 
+type RenderResultLike = { html: string; css: string; json?: Record<string, unknown> | null }
+
+// job_store.write_status(status="error")のmessageを画面のerrorへそのまま出す（backendの
+// _generate_ai_result由来の安全文言のため、messageForStatusのようなステータス別変換は不要）。
+class RenderJobFailedError extends Error {}
+
+// 変換エンジン（docling/pdf2htmlex/pymupdf）向けの既存の同期経路。挙動は変更しない。
+async function runRenderSync(): Promise<RenderResultLike> {
+  const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } =
+    useSheetStore.getState()
+  const accessToken = useAuthStore.getState().session?.access_token
+  return renderSheet(
+    {
+      prompt: promptContent,
+      pdf: pdfFile ?? undefined,
+      current_html: pdfFile ? undefined : htmlContent || undefined,
+      current_json: pdfFile ? undefined : jsonContent || undefined,
+      width_mm: widthMm ?? undefined,
+      height_mm: heightMm ?? undefined,
+      engine,
+    },
+    accessToken,
+  )
+}
+
+// 生成AIエンジン向けの非同期経路。PDFがある場合のみ先にS3へ直接アップロードし、
+// そのjob_idを描画ジョブでも使い回す。ジョブ起動後はstatusがpendingでなくなるまで
+// 一定間隔でポーリングする（API Gatewayの29秒制約を受けないため、Gemini自体が
+// 20〜60秒以上かかっても待ちきれる）。
+async function runRenderJob(): Promise<RenderResultLike> {
+  const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } =
+    useSheetStore.getState()
+  const accessToken = useAuthStore.getState().session?.access_token
+
+  let jobId: string | undefined
+  if (pdfFile) {
+    const uploadTarget = await requestUploadUrl()
+    await uploadPdfToPresignedUrl(uploadTarget.upload_url, pdfFile)
+    jobId = uploadTarget.job_id
+  }
+
+  const job = await startRenderJob(
+    {
+      prompt: promptContent,
+      width_mm: widthMm ?? undefined,
+      height_mm: heightMm ?? undefined,
+      engine,
+      current_html: pdfFile ? undefined : htmlContent || undefined,
+      current_json: pdfFile ? undefined : jsonContent || undefined,
+      job_id: jobId,
+      has_pdf: Boolean(pdfFile),
+    },
+    accessToken,
+  )
+
+  let status: RenderJobStatusResponse = await getRenderJobStatus(job.job_id)
+  while (status.status === 'pending') {
+    await sleep(RENDER_JOB_POLL_INTERVAL_MS)
+    status = await getRenderJobStatus(job.job_id)
+  }
+
+  if (status.status !== 'done') {
+    throw new RenderJobFailedError(status.message ?? messageForStatus(0))
+  }
+
+  return { html: status.html ?? '', css: status.css ?? '', json: status.json }
+}
+
+// renderSheet/runRenderJobいずれの結果も、この関数を通してエディタ・履歴へ同じ形で反映する。
+function applySuccessfulRender(
+  result: RenderResultLike,
+  widthMm: number | null,
+  heightMm: number | null,
+): void {
+  const newEntry: HistoryEntry = {
+    html: result.html,
+    css: result.css,
+    // レスポンスのjsonはオブジェクトのため、JSON入力エディタへ戻せる整形済みテキストにする。
+    json: JSON.stringify(result.json ?? {}, null, 2),
+    widthMm,
+    heightMm,
+  }
+
+  useSheetStore.setState((state) => {
+    const nextSeq = state.historySeq + 1
+    return {
+      ...toEditorState(newEntry),
+      isLoading: false,
+      successMessage: '描画が完了しました',
+      historySeq: nextSeq,
+      // 描画結果が新しい基準になるため、次の編集は新しい編集中スナップショットとして積む。
+      activeEditSeq: null,
+      // 添付したPDFは1回の描画にのみ使う。応答が返った時点で解除し、次回以降は
+      // 現在のHTML/JSON（今回の描画結果）を基準に生成させる。
+      pdfFile: null,
+      pdfFileName: null,
+      history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(
+        0,
+        MAX_HISTORY_LENGTH,
+      ),
+    }
+  })
+}
+
 export const useSheetStore = create<SheetState>((set, get) => ({
   htmlContent: '',
   cssContent: '',
@@ -368,62 +501,18 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     set({ isLoading: true, error: null, successMessage: null })
 
     try {
-      // cssは送らない（既存CSSはhtmlの<style>に埋め込まれている前提）。
-      // PDFがある場合はPDFの直接添付を正とし、current_html/current_jsonは送らない
-      // （backend側もhas_pdf=Trueの間は無視する）。PDFが無い場合は、現在画面に
-      // 表示中のHTML/JSONを生成AIへの入力として送る。
-      const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } = get()
-      // gemini/claude/openai（標準プラン）はログイン済みユーザーのみ利用可能。
-      // 未ログイン時はaccess_tokenがundefinedのままrenderSheetへ渡り、
-      // ゲート対象engineはバックエンドが403を返す。
-      const accessToken = useAuthStore.getState().session?.access_token
-      const result = await renderSheet(
-        {
-          prompt: promptContent,
-          pdf: pdfFile ?? undefined,
-          current_html: pdfFile ? undefined : htmlContent || undefined,
-          current_json: pdfFile ? undefined : jsonContent || undefined,
-          width_mm: widthMm ?? undefined,
-          height_mm: heightMm ?? undefined,
-          engine,
-        },
-        accessToken,
-      )
+      const { widthMm, heightMm, engine } = get()
+      const result = AI_ENGINES.has(engine) ? await runRenderJob() : await runRenderSync()
 
-      const newEntry: HistoryEntry = {
-        html: result.html,
-        css: result.css,
-        // レスポンスのjsonはオブジェクトのため、JSON入力エディタへ戻せる整形済みテキストにする。
-        json: JSON.stringify(result.json ?? {}, null, 2),
-        widthMm,
-        heightMm,
-      }
-
-      set((state) => {
-        const nextSeq = state.historySeq + 1
-        return {
-          ...toEditorState(newEntry),
-          isLoading: false,
-          successMessage: '描画が完了しました',
-          historySeq: nextSeq,
-          // 描画結果が新しい基準になるため、次の編集は新しい編集中スナップショットとして積む。
-          activeEditSeq: null,
-          // 添付したPDFは1回の描画にのみ使う。応答が返った時点で解除し、次回以降は
-          // 現在のHTML/JSON（今回の描画結果）を基準に生成させる。
-          pdfFile: null,
-          pdfFileName: null,
-          history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(
-            0,
-            MAX_HISTORY_LENGTH,
-          ),
-        }
-      })
+      applySuccessfulRender(result, widthMm, heightMm)
     } catch (err) {
       // バックエンド提供の安全文言を最優先し、得られない場合のみ既定文言へ落とす。
       const message =
         err instanceof RenderApiError
           ? (err.backendMessage ?? messageForStatus(err.status))
-          : messageForStatus(0)
+          : err instanceof RenderJobFailedError
+            ? err.message
+            : messageForStatus(0)
       set({ error: message, successMessage: null, isLoading: false })
     }
   },

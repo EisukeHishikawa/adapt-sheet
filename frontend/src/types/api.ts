@@ -21,6 +21,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/render/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Upload Url
+         * @description PDFをbackendを経由せずS3へ直接アップロードするための署名付きURLを発行する。
+         *
+         *     生成AIエンジン（POST /api/render/jobs）向け。発行したjob_idをその後のジョブ起動と
+         *     紐付けるために使う。
+         */
+        post: operations["create_upload_url_api_render_upload_url_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/render/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Render Job
+         * @description 生成AIエンジン（hybrid/gemini_free/gemini/claude/openai）のレンダリングを
+         *     非同期ジョブとして起動する。
+         *
+         *     Gemini API自体がGoogle側の事情で20〜30秒以上かかる・504を返すことがあり、
+         *     API Gatewayの統合タイムアウト（29秒固定）に収まらない。実処理はrender-worker
+         *     Lambdaへ非同期起動（lambda:invoke Event、API Gatewayを経由しないため29秒制約を
+         *     受けない）し、ここではジョブIDだけを即座に返す。ゲート判定は/api/renderと同じく
+         *     ここで同期的に行う。
+         */
+        post: operations["create_render_job_api_render_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/render/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Render Job */
+        get: operations["get_render_job_api_render_jobs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/render-jobs/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process Render Job
+         * @description render-workerが処理する非同期レンダリングジョブの実体。
+         *
+         *     API Gateway/Function URLを経由せず、backendからのlambda:invoke（Event、合成した
+         *     API Gatewayプロキシ形式のイベント）でのみ到達する。IAMレベルで既に外部から
+         *     呼び出せない（docling/pdf2htmlexと異なりresource-based policyは不要）。
+         */
+        post: operations["process_render_job_internal_render_jobs_process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/history": {
         parameters: {
             query?: never;
@@ -120,6 +211,16 @@ export interface components {
             engine: string;
             /** Pdf */
             pdf?: string | null;
+            /**
+             * Current Html
+             * @default
+             */
+            current_html: string;
+            /**
+             * Current Json
+             * @default
+             */
+            current_json: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -184,6 +285,93 @@ export interface components {
             /** Created At */
             created_at: string;
         };
+        /** RenderJobProcessRequest */
+        RenderJobProcessRequest: {
+            /** Job Id */
+            job_id: string;
+            /** Engine */
+            engine: string;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Width Mm */
+            width_mm?: number | null;
+            /** Height Mm */
+            height_mm?: number | null;
+            /**
+             * Current Html
+             * @default
+             */
+            current_html: string;
+            /**
+             * Current Json
+             * @default
+             */
+            current_json: string;
+            /**
+             * Has Pdf
+             * @default false
+             */
+            has_pdf: boolean;
+            /** User Id */
+            user_id?: string | null;
+        };
+        /** RenderJobRequest */
+        RenderJobRequest: {
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string;
+            /** Width Mm */
+            width_mm?: number | null;
+            /** Height Mm */
+            height_mm?: number | null;
+            /**
+             * Engine
+             * @default gemini_free
+             */
+            engine: string;
+            /**
+             * Current Html
+             * @default
+             */
+            current_html: string;
+            /**
+             * Current Json
+             * @default
+             */
+            current_json: string;
+            /** Job Id */
+            job_id?: string | null;
+            /**
+             * Has Pdf
+             * @default false
+             */
+            has_pdf: boolean;
+        };
+        /** RenderJobResponse */
+        RenderJobResponse: {
+            /** Job Id */
+            job_id: string;
+        };
+        /** RenderJobStatusResponse */
+        RenderJobStatusResponse: {
+            /** Status */
+            status: string;
+            /** Html */
+            html?: string | null;
+            /** Css */
+            css?: string | null;
+            /** Json */
+            json?: {
+                [key: string]: unknown;
+            } | null;
+            /** Message */
+            message?: string | null;
+        };
         /** RenderResponse */
         RenderResponse: {
             /** Html */
@@ -194,6 +382,13 @@ export interface components {
             json?: {
                 [key: string]: unknown;
             };
+        };
+        /** UploadUrlResponse */
+        UploadUrlResponse: {
+            /** Job Id */
+            job_id: string;
+            /** Upload Url */
+            upload_url: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -251,6 +446,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RenderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_upload_url_api_render_upload_url_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadUrlResponse"];
+                };
+            };
+        };
+    };
+    create_render_job_api_render_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderJobRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderJobResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_render_job_api_render_jobs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenderJobStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_render_job_internal_render_jobs_process_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenderJobProcessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

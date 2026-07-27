@@ -78,9 +78,10 @@ describe('sheetStore（履歴スライド機能）', () => {
 
   it('11件目の描画で最も古い履歴が破棄され、最大10件を維持する', async () => {
     for (let i = 0; i < 11; i += 1) {
+      // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
       server.use(
-        http.post('/api/render', () =>
-          HttpResponse.json({ ...dummyRenderResponse, html: `<p>${i}</p>` }),
+        http.get('/api/render/jobs/:jobId', () =>
+          HttpResponse.json({ status: 'done', ...dummyRenderResponse, html: `<p>${i}</p>` }),
         ),
       )
       // 履歴の積み上げ順序を検証するため、あえて直列（await）で1件ずつ描画する。
@@ -372,7 +373,8 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
     [502, 'AIによる生成に失敗しました。しばらくしてから再度お試しください。'],
     [500, 'サーバーで想定外のエラーが発生しました。'],
   ])('ステータス%dの場合、規定のエラーメッセージが表示される', async (status, expectedMessage) => {
-    server.use(http.post('/api/render', () => new HttpResponse(null, { status })))
+    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ起動側を差し替える。
+    server.use(http.post('/api/render/jobs', () => new HttpResponse(null, { status })))
 
     await useSheetStore.getState().fetchRender()
 
@@ -385,7 +387,7 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
     // バックエンド提供のmessageが実際に画面表示用のerrorへ入ることを検証する。
     const backendMessage = 'モデルが混雑しています。数分後に再度お試しください。(#req-xyz)'
     server.use(
-      http.post('/api/render', () =>
+      http.post('/api/render/jobs', () =>
         HttpResponse.json(
           { error: { code: 'AI_GENERATION_ERROR', message: backendMessage, request_id: 'req-xyz' } },
           { status: 502 },
@@ -418,11 +420,12 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   })
 
   it('promptContentの値がfetchRenderでリクエストのpromptフィールドとして送信され、PDF未添付時はhtmlContent/jsonContentがcurrent_html/current_jsonとして送信される', async () => {
-    let capturedFormData: FormData | undefined
+    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
+    let capturedBody: Record<string, unknown> | undefined
     server.use(
-      http.post('/api/render', async ({ request }) => {
-        capturedFormData = await request.formData()
-        return HttpResponse.json(dummyRenderResponse)
+      http.post('/api/render/jobs', async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ job_id: 'job-1' }, { status: 202 })
       }),
     )
     useSheetStore.setState({
@@ -433,13 +436,11 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
 
     await useSheetStore.getState().fetchRender()
 
-    expect(capturedFormData?.get('prompt')).toBe('請求書レイアウトにして')
-    expect(capturedFormData?.get('current_html')).toBe('<p>x</p>')
-    expect(capturedFormData?.get('current_json')).toBe('{"customer_name":"田中"}')
-    // jsonContentそのものはローカルのJSON入力エディタ状態のためリクエストへは含めない。
-    expect(capturedFormData?.has('json')).toBe(false)
+    expect(capturedBody?.prompt).toBe('請求書レイアウトにして')
+    expect(capturedBody?.current_html).toBe('<p>x</p>')
+    expect(capturedBody?.current_json).toBe('{"customer_name":"田中"}')
     // cssは独立したリクエストフィールドを持たないため、送信されないことを固定する。
-    expect(capturedFormData?.has('css')).toBe(false)
+    expect(capturedBody).not.toHaveProperty('css')
   })
 
   it('描画に成功すると、jsonContentはレスポンスのjsonを整形したテキストで上書きされ、promptContentは変わらない', async () => {
@@ -452,11 +453,12 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   })
 
   it('PDFを添付している場合はcurrent_html/current_jsonを送信しない（PDFの直接添付を正とする）', async () => {
-    let capturedFormData: FormData | undefined
+    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
+    let capturedBody: Record<string, unknown> | undefined
     server.use(
-      http.post('/api/render', async ({ request }) => {
-        capturedFormData = await request.formData()
-        return HttpResponse.json(dummyRenderResponse)
+      http.post('/api/render/jobs', async ({ request }) => {
+        capturedBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ job_id: 'job-1' }, { status: 202 })
       }),
     )
     const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
@@ -469,8 +471,9 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
 
     await useSheetStore.getState().fetchRender()
 
-    expect(capturedFormData?.has('current_html')).toBe(false)
-    expect(capturedFormData?.has('current_json')).toBe(false)
+    expect(capturedBody).not.toHaveProperty('current_html')
+    expect(capturedBody).not.toHaveProperty('current_json')
+    expect(capturedBody?.has_pdf).toBe(true)
   })
 
   it('PDFを添付して描画に成功すると、応答が返った時点でPDFの添付が解除される', async () => {
@@ -596,6 +599,84 @@ describe('sheetStore（サーバー履歴の復元・セッション切れ後の
   })
 })
 
+// 生成AIエンジン（gemini_free/gemini/claude/openai/hybrid）はAPI Gatewayの29秒制約を
+// 受けないよう、POST /api/render/jobs→GET /api/render/jobs/{job_id}のポーリングで描画する。
+// ポーリング間隔（RENDER_JOB_POLL_INTERVAL_MS）はwarmupStore.test.tsと同様
+// vi.useFakeTimers()+vi.advanceTimersByTimeAsyncでスキップする。
+describe('sheetStore（生成AIエンジンの非同期ジョブ・ポーリング）', () => {
+  beforeEach(() => {
+    useSheetStore.setState(initialSheetState)
+    useAuthStore.setState({ session: null })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('ジョブがpendingの間ポーリングを続け、doneになった時点で結果が反映される', async () => {
+    vi.useFakeTimers()
+    let getCount = 0
+    server.use(
+      http.get('/api/render/jobs/:jobId', () => {
+        getCount += 1
+        if (getCount < 3) {
+          return HttpResponse.json({ status: 'pending' })
+        }
+        return HttpResponse.json({ status: 'done', ...dummyRenderResponse })
+      }),
+    )
+
+    const fetchPromise = useSheetStore.getState().fetchRender()
+    // 2回分のポーリング待機を進める（3回目のGETでdoneになる）。
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(2000)
+    await fetchPromise
+
+    expect(getCount).toBe(3)
+    expect(useSheetStore.getState().htmlContent).toBe(dummyRenderResponse.html)
+    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました')
+  })
+
+  it('ジョブがerrorになった場合、backendのmessageがそのままエラー表示に使われる', async () => {
+    server.use(
+      http.get('/api/render/jobs/:jobId', () =>
+        HttpResponse.json({ status: 'error', message: 'Gemini API呼び出しに失敗しました: 504' }),
+      ),
+    )
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().error).toBe('Gemini API呼び出しに失敗しました: 504')
+    expect(useSheetStore.getState().successMessage).toBeNull()
+  })
+
+  it('PDFがある場合、先にrequestUploadUrlで発行したjob_idをジョブ起動でも使い回す', async () => {
+    let uploadedTo: string | undefined
+    let jobBody: Record<string, unknown> | undefined
+    server.use(
+      http.post('/api/render/upload-url', () =>
+        HttpResponse.json({ job_id: 'job-shared-1', upload_url: 'https://example.com/uploads/job-shared-1.pdf' }),
+      ),
+      http.put('https://example.com/uploads/job-shared-1.pdf', ({ request }) => {
+        uploadedTo = request.url
+        return new HttpResponse(null, { status: 200 })
+      }),
+      http.post('/api/render/jobs', async ({ request }) => {
+        jobBody = (await request.json()) as Record<string, unknown>
+        return HttpResponse.json({ job_id: jobBody.job_id as string }, { status: 202 })
+      }),
+    )
+    const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
+    useSheetStore.setState({ pdfFile, pdfFileName: pdfFile.name })
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(uploadedTo).toBe('https://example.com/uploads/job-shared-1.pdf')
+    expect(jobBody?.job_id).toBe('job-shared-1')
+    expect(jobBody?.has_pdf).toBe(true)
+  })
+})
+
 describe('sheetStore（ログイン状態の反映）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
@@ -603,11 +684,12 @@ describe('sheetStore（ログイン状態の反映）', () => {
   })
 
   it('authStoreにsessionがある場合、Authorizationヘッダーへaccess_tokenを付与する', async () => {
+    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのヘッダーを検証する。
     let capturedAuthorization: string | null = null
     server.use(
-      http.post('/api/render', ({ request }) => {
+      http.post('/api/render/jobs', ({ request }) => {
         capturedAuthorization = request.headers.get('Authorization')
-        return HttpResponse.json(dummyRenderResponse)
+        return HttpResponse.json({ job_id: 'job-1' }, { status: 202 })
       }),
     )
     useAuthStore.setState({ session: { access_token: 'token-xyz' } as never })
@@ -620,9 +702,9 @@ describe('sheetStore（ログイン状態の反映）', () => {
   it('authStoreにsessionが無い場合、Authorizationヘッダーを付けない', async () => {
     let capturedAuthorization: string | null = 'not-called'
     server.use(
-      http.post('/api/render', ({ request }) => {
+      http.post('/api/render/jobs', ({ request }) => {
         capturedAuthorization = request.headers.get('Authorization')
-        return HttpResponse.json(dummyRenderResponse)
+        return HttpResponse.json({ job_id: 'job-1' }, { status: 202 })
       }),
     )
 

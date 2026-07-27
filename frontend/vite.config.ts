@@ -9,6 +9,11 @@ import tailwindcss from '@tailwindcss/vite'
 // ビルド成果物にのみ注入する。本番配信時はCloudFront側の応答ヘッダーで同等のCSPを付けるのが
 // 本筋で（metaタグはframe-ancestors等を解釈できない）、これはその二重化。
 // connect-srcはSupabase（Auth/PostgREST）への接続を許可するため、ビルド時の環境変数から差し込む。
+// 生成AI系エンジンはPDFを署名付きURLでS3（ap-northeast-1）へ直接アップロードするため
+// （backendを経由しない、API Gatewayの29秒制約回避が目的）、S3のリージョナルエンドポイントも
+// 許可する。infra側のAWSリージョンは固定運用のためここも合わせて固定値にしている。
+const RENDER_JOBS_S3_ORIGIN = 'https://s3.ap-northeast-1.amazonaws.com'
+
 function contentSecurityPolicy(): Plugin {
   return {
     name: 'adapt-sheet-csp',
@@ -22,7 +27,7 @@ function contentSecurityPolicy(): Plugin {
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob:",
         "font-src 'self' data:",
-        `connect-src 'self' ${supabaseOrigin}`.trim(),
+        `connect-src 'self' ${supabaseOrigin} ${RENDER_JOBS_S3_ORIGIN}`.trim(),
         // プレビューはsrcdocのiframe。srcdoc文書は親のCSPを継承するため、帳票HTML内の
         // <style>を通すstyle-srcのunsafe-inlineが必要（script-srcは'self'のままなので、
         // sandbox=""と併せて生成HTML内のscriptは実行されない）。

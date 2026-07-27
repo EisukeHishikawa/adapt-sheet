@@ -73,6 +73,47 @@ module "lambda_pdf2htmlex" {
   enable_xray           = var.enable_xray
 }
 
+# 非同期レンダリングジョブ（アップロード済みPDF・結果）の置き場。backendが署名付きURLを発行し
+# 状態を読み取り、render-workerがPDFを取得し結果を書き込む。
+module "job_bucket" {
+  source          = "./modules/job_bucket"
+  name            = local.name_prefix
+  expiration_days = var.render_jobs_bucket_expiration_days
+}
+
+# 生成AIエンジン（gemini_free/gemini/claude/openai/hybrid）の実処理を担う非同期ワーカー。
+# backendと同じイメージを使い回し、backendからのlambda:invoke（Event）で起動される。
+# API Gateway/Function URLを経由しないためAPI Gatewayの29秒制約を受けず、docling/pdf2htmlex
+# 同様backend以外からは呼び出せない（IAMで制限、resource-based policyは不要）。
+module "lambda_render_worker" {
+  source      = "./modules/lambda"
+  name        = "${local.name_prefix}-render-worker"
+  image_uri   = "${module.ecr.repository_url}:${var.image_tag}"
+  memory_size = var.lambda_memory_size
+  timeout     = var.render_worker_lambda_timeout
+
+  ssm_prefix         = local.ssm_prefix
+  ssm_parameter_arns = module.ssm.parameter_arns
+  use_mock_ai        = var.use_mock_ai
+
+  log_retention_in_days = var.log_retention_in_days
+  enable_xray           = var.enable_xray
+
+  invoke_function_url_arns = [module.lambda_docling.function_arn, module.lambda_pdf2htmlex.function_arn]
+  s3_read_write_arns       = ["${module.job_bucket.bucket_arn}/*"]
+
+  extra_env = merge(
+    {
+      DOCLING_SERVICE_URL     = module.lambda_docling.function_url
+      DOCLING_SERVICE_AUTH    = "aws_sigv4"
+      PDF2HTMLEX_SERVICE_URL  = module.lambda_pdf2htmlex.function_url
+      PDF2HTMLEX_SERVICE_AUTH = "aws_sigv4"
+      RENDER_JOBS_BUCKET      = module.job_bucket.bucket_name
+    },
+    var.supabase_jwt_jwks_url != "" ? { SUPABASE_JWT_JWKS_URL = var.supabase_jwt_jwks_url } : {},
+  )
+}
+
 # 入口エンドポイント（backend）のLambda。実行ロールにSSM読み取り＋KMS復号に加え、docling/pdf2htmlexの
 # Function URL呼び出し権限（identity-based）を最小権限で付与する。resource-based側の許可は上記
 # function_url_invoker_role_arnsが担う。
@@ -90,13 +131,17 @@ module "lambda" {
   enable_xray           = var.enable_xray
 
   invoke_function_url_arns = [module.lambda_docling.function_arn, module.lambda_pdf2htmlex.function_arn]
+  invoke_function_arns     = [module.lambda_render_worker.function_arn]
+  s3_read_write_arns       = ["${module.job_bucket.bucket_arn}/*"]
   extra_env = merge(
     {
       # remote_extractor.pyがこのURL宛にPOSTし、*_AUTH=aws_sigv4でSigV4署名を有効化する。
-      DOCLING_SERVICE_URL     = module.lambda_docling.function_url
-      DOCLING_SERVICE_AUTH    = "aws_sigv4"
-      PDF2HTMLEX_SERVICE_URL  = module.lambda_pdf2htmlex.function_url
-      PDF2HTMLEX_SERVICE_AUTH = "aws_sigv4"
+      DOCLING_SERVICE_URL         = module.lambda_docling.function_url
+      DOCLING_SERVICE_AUTH        = "aws_sigv4"
+      PDF2HTMLEX_SERVICE_URL      = module.lambda_pdf2htmlex.function_url
+      PDF2HTMLEX_SERVICE_AUTH     = "aws_sigv4"
+      RENDER_JOBS_BUCKET          = module.job_bucket.bucket_name
+      RENDER_WORKER_FUNCTION_NAME = module.lambda_render_worker.function_name
     },
     # SupabaseがJWT Signing Keys（ES256）を使う場合の公開鍵配布URL。公開情報のため
     # SecureStringではなく環境変数で渡す。HS256共有シークレット方式なら未設定のままでよく、
@@ -154,6 +199,7 @@ module "monitoring" {
     module.lambda.function_name,
     module.lambda_docling.function_name,
     module.lambda_pdf2htmlex.function_name,
+    module.lambda_render_worker.function_name,
   ]
 
   api_name       = "${local.name_prefix}-api"

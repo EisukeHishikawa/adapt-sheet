@@ -79,3 +79,15 @@ variable "invoke_function_url_arns" {
   type        = list(string)
   default     = []
 }
+
+variable "invoke_function_arns" {
+  description = "このLambdaの実行ロールにlambda:InvokeFunction（通常の非同期起動、Function URL不要）を許可する呼び出し先Lambda関数ARNの一覧。backendがrender-workerを非同期起動するために使う"
+  type        = list(string)
+  default     = []
+}
+
+variable "s3_read_write_arns" {
+  description = "GetObject/PutObjectを許可するS3オブジェクトARN（バケットARN + \"/*\"）の一覧。空リストならS3権限を一切付与しない"
+  type        = list(string)
+  default     = []
+}

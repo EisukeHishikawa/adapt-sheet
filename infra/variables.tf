@@ -76,6 +76,18 @@ variable "pdf2htmlex_lambda_timeout" {
   default     = 60
 }
 
+variable "render_worker_lambda_timeout" {
+  description = "render-worker Lambdaのタイムアウト（秒）。生成AIエンジンの実処理をAPI Gatewayの29秒制約なしで実行するための非同期ワーカー"
+  type        = number
+  default     = 180
+}
+
+variable "render_jobs_bucket_expiration_days" {
+  description = "非同期レンダリングジョブ（アップロード済みPDF・結果）を自動失効させるまでの日数"
+  type        = number
+  default     = 1
+}
+
 variable "secret_parameter_names" {
   description = "Parameter Store（SecureString）で管理する秘密情報の環境変数名。backendのapp/secrets_loader.pyが読む名前と一致させる"
   type        = list(string)

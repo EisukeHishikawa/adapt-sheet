@@ -81,6 +81,43 @@ resource "aws_iam_role_policy" "invoke_function_url" {
   policy = data.aws_iam_policy_document.invoke_function_url[0].json
 }
 
+# render-worker等、Function URLを持たないLambdaを通常の非同期起動（lambda:invoke,
+# InvocationType=Event）で呼ぶための呼び出し元権限。同一アカウント内の呼び出しは
+# identity-based policyのみで許可され、呼び出し先の resource-based policy は不要。
+data "aws_iam_policy_document" "invoke_function" {
+  count = length(var.invoke_function_arns) > 0 ? 1 : 0
+
+  statement {
+    actions   = ["lambda:InvokeFunction"]
+    resources = var.invoke_function_arns
+  }
+}
+
+resource "aws_iam_role_policy" "invoke_function" {
+  count  = length(var.invoke_function_arns) > 0 ? 1 : 0
+  name   = "${var.name}-invoke-function"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.invoke_function[0].json
+}
+
+# 非同期レンダリングジョブ用S3バケットへの読み書き権限（backend: 署名付きURL発行・状態読み取り、
+# render-worker: PDF取得・結果書き込み）。
+data "aws_iam_policy_document" "s3_read_write" {
+  count = length(var.s3_read_write_arns) > 0 ? 1 : 0
+
+  statement {
+    actions   = ["s3:GetObject", "s3:PutObject"]
+    resources = var.s3_read_write_arns
+  }
+}
+
+resource "aws_iam_role_policy" "s3_read_write" {
+  count  = length(var.s3_read_write_arns) > 0 ? 1 : 0
+  name   = "${var.name}-s3-read-write"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.s3_read_write[0].json
+}
+
 # ロググループをTerraform管理下に置き、保持期間を明示する。Lambdaの暗黙作成に任せると
 # 「無期限保持」かつdestroyでも残る。
 resource "aws_cloudwatch_log_group" "this" {

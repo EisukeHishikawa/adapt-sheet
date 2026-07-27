@@ -17,3 +17,5 @@ awscli = "2.36.2"
 supabase = "2.109.1"
 # PR作成・Branch Protection設定
 gh = "2.96.0"
+# AWS MCP Server接続用プロキシ（mcp-proxy-for-aws）の実行環境
+uv = "0.11.32"

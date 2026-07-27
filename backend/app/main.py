@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.db import get_db_pinger, get_db_session, get_db_session_or_none
+from app.db import db_session_for_user, get_db_pinger, get_db_session, get_db_session_or_none
 from app.errors import (
     ai_generation_error_handler,
     http_exception_handler,
@@ -24,6 +24,7 @@ from app.services.ai_client import (
     AIGenerationError,
     CONVERTER_ENGINES,
     GATED_ENGINES,
+    RenderResult,
     build_hybrid_prompt,
     build_prompt,
     get_ai_client_factory,
@@ -31,12 +32,14 @@ from app.services.ai_client import (
 )
 from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
 from app.services.history import list_history, save_history, update_edit_history
+from app.services.job_store import JobStore, get_job_store
 from app.services.pdf2htmlex_client import (
     PDFHtmlExtractor as Pdf2HtmlExExtractor,
     get_pdf2htmlex_extractor,
 )
 from app.services.pdf_layout import PDFLayoutConverter, get_layout_converter
 from app.services.pdf_common import PDFConversionError
+from app.services.worker_invoker import WorkerInvoker, get_worker_invoker
 
 logger = logging.getLogger("app.history")
 warmup_logger = logging.getLogger("app.warmup")
@@ -124,60 +127,27 @@ async def render(
         )
         return RenderResponse(html=html, css="", json_={})
 
-    if engine == "hybrid":
-        # PyMuPDF（正確なフォントサイズ・位置）とDocling（表・段落構造）の変換結果を、
-        # PDF本体と一緒にGemini（VLM）へ渡して1つのHTML/CSS/JSONへ統合させる。PDF添付必須。
-        if pdf is None:
-            raise HTTPException(status_code=400)
-        content = await pdf.read()
-        filename = pdf.filename or "uploaded.pdf"
-        pymupdf_html, docling_html = await asyncio.gather(
-            asyncio.to_thread(layout_converter.convert_to_html, filename, content),
-            asyncio.to_thread(html_extractor.convert_to_html, filename, content),
-        )
-        prompt_text = build_hybrid_prompt(
-            prompt=prompt,
-            width_mm=width_mm,
-            height_mm=height_mm,
-            pymupdf_html=pymupdf_html,
-            docling_html=docling_html,
-        )
-        ai_client = ai_client_factory(engine)
-        result = await asyncio.to_thread(ai_client.generate, prompt_text, content)
-        validate_render_result(result)
-
-        _save_history(
-            db_session,
-            current_user,
-            engine=engine,
-            html=result.html,
-            css=result.css,
-            json_data=result.data,
-            width_mm=width_mm,
-            height_mm=height_mm,
-        )
-        return RenderResponse(html=result.html, css=result.css, json_=result.data)
-
-    # 生成AI（gemini_free。gemini/claude/openaiは上記ゲートにより現状ここへは到達しない）。
-    # PDFがある場合はマルチモーダル入力として直接添付する（PyMuPDF/Docling経由の事前変換は
-    # 行わない）。PDFが無い場合は現在のHTML/JSON（current_html/current_json）を送る。
-    # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う。
+    # 生成AI（hybrid/gemini_free。gemini/claude/openaiは上記ゲートにより未ログインでは
+    # 到達しない）。PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う。
     pdf_bytes: Optional[bytes] = None
+    filename = "uploaded.pdf"
     if pdf is not None:
         pdf_bytes = await pdf.read()
+        filename = pdf.filename or filename
 
-    prompt_text = build_prompt(
+    result = await _generate_ai_result(
+        engine=engine,
+        pdf_bytes=pdf_bytes,
+        filename=filename,
         prompt=prompt,
         width_mm=width_mm,
         height_mm=height_mm,
-        has_pdf=pdf_bytes is not None,
         current_html=current_html,
         current_json=current_json,
+        ai_client_factory=ai_client_factory,
+        layout_converter=layout_converter,
+        html_extractor=html_extractor,
     )
-
-    ai_client = ai_client_factory(engine)
-    result = await asyncio.to_thread(ai_client.generate, prompt_text, pdf_bytes)
-    validate_render_result(result)
 
     _save_history(
         db_session,
@@ -190,6 +160,241 @@ async def render(
         height_mm=height_mm,
     )
     return RenderResponse(html=result.html, css=result.css, json_=result.data)
+
+
+async def _generate_ai_result(
+    *,
+    engine: str,
+    pdf_bytes: Optional[bytes],
+    filename: str,
+    prompt: str,
+    width_mm: Optional[float],
+    height_mm: Optional[float],
+    current_html: str,
+    current_json: str,
+    ai_client_factory: Callable[[str], AIClient],
+    layout_converter: PDFLayoutConverter,
+    html_extractor: DoclingHtmlExtractor,
+) -> RenderResult:
+    """生成AI（hybrid/gemini_free/gemini/claude/openai）でHTML/CSS/JSONを生成する。
+
+    `/api/render`（同期）と非同期ワーカー（`POST /internal/render-jobs/process`）の
+    両方から呼ばれる共通ロジック。engine=hybridのみPDF必須でPyMuPDF・Doclingの
+    抽出結果も使う。PDFがある場合はマルチモーダル入力として直接添付する
+    （PyMuPDF/Docling経由の事前変換はhybrid以外では行わない）。
+    """
+    if engine == "hybrid":
+        # PyMuPDF（正確なフォントサイズ・位置）とDocling（表・段落構造）の変換結果を、
+        # PDF本体と一緒にGemini（VLM）へ渡して1つのHTML/CSS/JSONへ統合させる。PDF添付必須。
+        if pdf_bytes is None:
+            raise HTTPException(status_code=400)
+        pymupdf_html, docling_html = await asyncio.gather(
+            asyncio.to_thread(layout_converter.convert_to_html, filename, pdf_bytes),
+            asyncio.to_thread(html_extractor.convert_to_html, filename, pdf_bytes),
+        )
+        prompt_text = build_hybrid_prompt(
+            prompt=prompt,
+            width_mm=width_mm,
+            height_mm=height_mm,
+            pymupdf_html=pymupdf_html,
+            docling_html=docling_html,
+        )
+        ai_client = ai_client_factory(engine)
+        result = await asyncio.to_thread(ai_client.generate, prompt_text, pdf_bytes)
+        validate_render_result(result)
+        return result
+
+    prompt_text = build_prompt(
+        prompt=prompt,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        has_pdf=pdf_bytes is not None,
+        current_html=current_html,
+        current_json=current_json,
+    )
+    ai_client = ai_client_factory(engine)
+    result = await asyncio.to_thread(ai_client.generate, prompt_text, pdf_bytes)
+    validate_render_result(result)
+    return result
+
+
+class UploadUrlResponse(BaseModel):
+    job_id: str
+    upload_url: str
+
+
+@app.post("/api/render/upload-url", response_model=UploadUrlResponse)
+def create_upload_url(job_store: JobStore = Depends(get_job_store)) -> UploadUrlResponse:
+    """PDFをbackendを経由せずS3へ直接アップロードするための署名付きURLを発行する。
+
+    生成AIエンジン（POST /api/render/jobs）向け。発行したjob_idをその後のジョブ起動と
+    紐付けるために使う。
+    """
+    job_id = job_store.new_job_id()
+    return UploadUrlResponse(job_id=job_id, upload_url=job_store.presigned_upload_url(job_id))
+
+
+class RenderJobRequest(BaseModel):
+    prompt: str = Field("", max_length=100)
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    engine: str = "gemini_free"
+    current_html: str = ""
+    current_json: str = ""
+    # POST /api/render/upload-urlで発行したjob_id。PDFを使わない場合は未指定でよい。
+    job_id: Optional[str] = None
+    has_pdf: bool = False
+
+
+class RenderJobResponse(BaseModel):
+    job_id: str
+
+
+@app.post("/api/render/jobs", response_model=RenderJobResponse, status_code=202)
+def create_render_job(
+    payload: RenderJobRequest,
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+    job_store: JobStore = Depends(get_job_store),
+    worker_invoker: WorkerInvoker = Depends(get_worker_invoker),
+) -> RenderJobResponse:
+    """生成AIエンジン（hybrid/gemini_free/gemini/claude/openai）のレンダリングを
+    非同期ジョブとして起動する。
+
+    Gemini API自体がGoogle側の事情で20〜30秒以上かかる・504を返すことがあり、
+    API Gatewayの統合タイムアウト（29秒固定）に収まらない。実処理はrender-worker
+    Lambdaへ非同期起動（lambda:invoke Event、API Gatewayを経由しないため29秒制約を
+    受けない）し、ここではジョブIDだけを即座に返す。ゲート判定は/api/renderと同じく
+    ここで同期的に行う。
+    """
+    if payload.engine in GATED_ENGINES and current_user is None:
+        raise HTTPException(status_code=403)
+
+    job_id = payload.job_id or job_store.new_job_id()
+    job_store.write_status(job_id, {"status": "pending"})
+
+    worker_invoker.invoke(
+        "/internal/render-jobs/process",
+        {
+            "job_id": job_id,
+            "engine": payload.engine,
+            "prompt": payload.prompt,
+            "width_mm": payload.width_mm,
+            "height_mm": payload.height_mm,
+            "current_html": payload.current_html,
+            "current_json": payload.current_json,
+            "has_pdf": payload.has_pdf,
+            "user_id": current_user.sub if current_user is not None else None,
+        },
+    )
+    return RenderJobResponse(job_id=job_id)
+
+
+class RenderJobStatusResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: str
+    html: Optional[str] = None
+    css: Optional[str] = None
+    json_: Optional[dict] = Field(default=None, alias="json")
+    message: Optional[str] = None
+
+
+@app.get(
+    "/api/render/jobs/{job_id}",
+    response_model=RenderJobStatusResponse,
+    response_model_by_alias=True,
+)
+def get_render_job(
+    job_id: str, job_store: JobStore = Depends(get_job_store)
+) -> RenderJobStatusResponse:
+    status = job_store.read_status(job_id)
+    if status is None:
+        raise HTTPException(status_code=404)
+    return RenderJobStatusResponse(
+        status=status.get("status", "error"),
+        html=status.get("html"),
+        css=status.get("css"),
+        json=status.get("json"),
+        message=status.get("message"),
+    )
+
+
+class RenderJobProcessRequest(BaseModel):
+    job_id: str
+    engine: str
+    prompt: str = ""
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    current_html: str = ""
+    current_json: str = ""
+    has_pdf: bool = False
+    user_id: Optional[str] = None
+
+
+@app.post("/internal/render-jobs/process", status_code=202)
+async def process_render_job(
+    payload: RenderJobProcessRequest,
+    ai_client_factory: Callable[[str], AIClient] = Depends(get_ai_client_factory),
+    layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
+    html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
+    job_store: JobStore = Depends(get_job_store),
+) -> dict:
+    """render-workerが処理する非同期レンダリングジョブの実体。
+
+    API Gateway/Function URLを経由せず、backendからのlambda:invoke（Event、合成した
+    API Gatewayプロキシ形式のイベント）でのみ到達する。IAMレベルで既に外部から
+    呼び出せない（docling/pdf2htmlexと異なりresource-based policyは不要）。
+    """
+    try:
+        pdf_bytes = job_store.fetch_uploaded_pdf(payload.job_id) if payload.has_pdf else None
+        result = await _generate_ai_result(
+            engine=payload.engine,
+            pdf_bytes=pdf_bytes,
+            filename="uploaded.pdf",
+            prompt=payload.prompt,
+            width_mm=payload.width_mm,
+            height_mm=payload.height_mm,
+            current_html=payload.current_html,
+            current_json=payload.current_json,
+            ai_client_factory=ai_client_factory,
+            layout_converter=layout_converter,
+            html_extractor=html_extractor,
+        )
+    except HTTPException as exc:
+        job_store.write_status(payload.job_id, {"status": "error", "message": str(exc.detail)})
+        return {"status": "error"}
+    except (PDFConversionError, AIGenerationError) as exc:
+        job_store.write_status(payload.job_id, {"status": "error", "message": str(exc)})
+        return {"status": "error"}
+    except Exception:
+        logger.exception(
+            "非同期レンダリングジョブの処理に失敗しました", extra={"job_id": payload.job_id}
+        )
+        job_store.write_status(
+            payload.job_id,
+            {"status": "error", "message": "サーバーで想定外のエラーが発生しました。"},
+        )
+        return {"status": "error"}
+
+    job_store.write_status(
+        payload.job_id,
+        {"status": "done", "html": result.html, "css": result.css, "json": result.data},
+    )
+
+    if payload.user_id is not None:
+        with db_session_for_user(payload.user_id) as db_session:
+            _save_history(
+                db_session,
+                SupabaseUser(sub=payload.user_id, email=None),
+                engine=payload.engine,
+                html=result.html,
+                css=result.css,
+                json_data=result.data,
+                width_mm=payload.width_mm,
+                height_mm=payload.height_mm,
+            )
+
+    return {"status": "done"}
 
 
 def _save_history(

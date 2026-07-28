@@ -88,7 +88,7 @@ services:
       # マイグレーション（alembic）専用の接続。テーブル作成・ポリシー定義には所有者権限が必要な
       # ため、実行時とは別にpostgresロールで接続する（ADR-021）。
       - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-}
-      # 生成AI系エンジン（ADR-031の非同期ジョブ）が使うS3を、ローカルでは実AWSではなく
+      # 生成AI系エンジン（ADR-024の非同期ジョブ）が使うS3を、ローカルでは実AWSではなく
       # 下記minioサービスで代替する。job_store.S3JobStoreへ渡る設定値の違いに過ぎず、コード側は
       # ローカル/本番で分岐しない（本番のTerraform側はこれらを定義せず、実AWS S3の
       # リージョナルエンドポイントを使う）。値はminioサービス・minio-initと揃えた固定のローカル
@@ -141,7 +141,7 @@ services:
       - ./pdf2htmlex-service:/app
 
   # ⑤ ローカル開発用のS3互換オブジェクトストレージ（MinIO）
-  # 生成AI系エンジン（ADR-031の非同期ジョブ）が使うS3（アップロード済みPDF・結果JSON）を、
+  # 生成AI系エンジン（ADR-024の非同期ジョブ）が使うS3（アップロード済みPDF・結果JSON）を、
   # ローカルでは実AWS S3の代わりにこのMinIOで代替する。backendサービスのRENDER_JOBS_*
   # 環境変数と対応する。
   minio:

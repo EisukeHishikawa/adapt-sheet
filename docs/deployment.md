@@ -77,8 +77,8 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 - モジュール構成（`infra/modules/`）
   - `frontend`: CloudFront + S3（非公開バケット＋OAC、SPAフォールバック）
-  - `lambda`: Lambda関数の共通モジュール。`backend`（入口エンドポイント、メモリ4GB既定、SSM読み取り＋SSM経由KMS復号の最小権限）、`render-worker`（backendと同じイメージを再利用する生成AI系engine専用の非同期ワーカー。API Gateway/Function URLを持たず、backendからの`lambda:invoke`のみ受け付ける。タイムアウト180秒。ADR-031）、`docling`/`pdf2htmlex`（内部専用、AWS_IAM認証Function URL、backend・render-worker双方から呼び出し許可）の4関数で共用する
-  - `job_bucket`: 非同期レンダリングジョブのPDF・結果置き場となるS3バケット。1日で自動失効するライフサイクルルールと、ブラウザから署名付きURLへ直接PUTするためのCORS設定を持つ（ADR-031）
+  - `lambda`: Lambda関数の共通モジュール。`backend`（入口エンドポイント、メモリ4GB既定、SSM読み取り＋SSM経由KMS復号の最小権限）、`render-worker`（backendと同じイメージを再利用する生成AI系engine専用の非同期ワーカー。API Gateway/Function URLを持たず、backendからの`lambda:invoke`のみ受け付ける。タイムアウト180秒。ADR-024）、`docling`/`pdf2htmlex`（内部専用、AWS_IAM認証Function URL、backend・render-worker双方から呼び出し許可）の4関数で共用する
+  - `job_bucket`: 非同期レンダリングジョブのPDF・結果置き場となるS3バケット。1日で自動失効するライフサイクルルールと、ブラウザから署名付きURLへ直接PUTするためのCORS設定を持つ（ADR-024）
   - `api_gateway`: REST API（REGIONAL）→ backend Lambdaプロキシ。docling/pdf2htmlex/render-workerはAPI Gatewayを経由しない。ステージ単位のスロットリング（`aws_api_gateway_method_settings`）で過度なAPIコールを防ぐ（WAFは使わない）
   - `ecr`: backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制。render-workerはbackendと同じECRリポジトリ・イメージを使う）
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）

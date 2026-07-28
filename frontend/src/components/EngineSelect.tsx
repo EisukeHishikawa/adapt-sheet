@@ -20,14 +20,14 @@ type EngineDefinition = {
 const ENGINES: readonly EngineDefinition[] = [
   {
     id: 'hybrid',
-    label: '精密復元（無料）',
-    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（PDF添付必須）',
+    label: '精密復元',
+    description: 'PyMuPDF・Docling・Gemini（無料枠）（数十秒〜数分）',
     icon: Layers,
     gated: false,
   },
   {
     id: 'gemini_free',
-    label: 'Gemini API（無料）',
+    label: 'Gemini API（無料枠）',
     description: 'PDFを直接読み取り、無料枠モデルで整形します',
     icon: Sparkles,
     gated: false,

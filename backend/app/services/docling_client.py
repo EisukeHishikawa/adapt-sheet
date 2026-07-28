@@ -8,6 +8,8 @@ Markdownではなく単独のHTMLエンジンとして選択可能（AIを介さ
 
 from __future__ import annotations
 
+import os
+
 from app.services.pdf_common import PDFConversionError
 from app.services.remote_extractor import PDFHtmlExtractor, RemoteHtmlExtractor
 
@@ -41,6 +43,10 @@ class RemoteDoclingHtmlExtractor(RemoteHtmlExtractor):
     # Lambda本番はIAM認証必須のFunction URLとして公開するため、terraformがこの環境変数に
     # "aws_sigv4"を設定してSigV4署名を有効化する。
     _auth_env_var = "DOCLING_SERVICE_AUTH"
+    # ローカルdocker-compose環境はdoclingコンテナが常時起動済みでLambdaのような
+    # コールドスタートが存在しないため、この環境変数がtrueの間は実convertを叩かず
+    # 即座にOK扱いにする（docker-compose.ymlが明示設定する）。
+    _skip_warmup_env_var = "DOCLING_SERVICE_SKIP_WARMUP"
 
     def warmup(self) -> bool:
         """最小PDFを実際に`POST /convert`へ送り、モデルパイプラインまで温める。
@@ -51,6 +57,9 @@ class RemoteDoclingHtmlExtractor(RemoteHtmlExtractor):
         兼ねてしまい、後続のAI生成に残せる時間がAPI Gatewayの統合タイムアウト
         （29秒）内で不足する。
         """
+        if os.environ.get(self._skip_warmup_env_var, "").strip().lower() == "true":
+            return True
+
         try:
             self.convert_to_html("warmup.pdf", _WARMUP_PDF)
             return True

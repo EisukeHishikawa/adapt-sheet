@@ -57,6 +57,11 @@ services:
       # （サービス名docling）で解決するため、ホストへは公開しない。
       # レイアウトHTML生成はbackend内のPyMuPDFで完結するため、専用サービスへの接続先は不要（ADR-015）。
       - DOCLING_SERVICE_URL=http://docling:8100
+      # doclingコンテナはdocker-compose起動中は常時稼働済みでLambdaのようなコールド
+      # スタートが存在しないため、実convertによる重いモデルウォームアップは不要
+      # （backend/app/services/docling_client.py）。詰まったdoclingへwarmupが繰り返し
+      # 実convertを投げ続けて悪化させる事態を避ける。
+      - DOCLING_SERVICE_SKIP_WARMUP=true
       # ADR-016: pdf2htmlEX専用サービスへの接続先。doclingと同じくCompose内部DNSで解決し、
       # ホストへは公開しない。
       - PDF2HTMLEX_SERVICE_URL=http://pdf2htmlex:8200

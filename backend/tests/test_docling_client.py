@@ -96,10 +96,13 @@ def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
     assert sent_page_widths == [200.0]
 
 
-def test_warmup_posts_minimal_pdf_to_convert_endpoint():
+def test_warmup_posts_minimal_pdf_to_convert_endpoint(monkeypatch):
     # 基底クラスの既定warmup（GET /health）はLambda実行環境のプロセスを起こすだけで、
     # DocumentConverterのモデルパイプライン構築（初回convert時）には触れない。doclingは
     # そのコストが無視できないため、POST /convertまで実際に叩いて温める上書きになっている。
+    # docker-compose環境ではDOCLING_SERVICE_SKIP_WARMUPが常時trueのため、この本来の
+    # 挙動を検証するテストとしては明示的に打ち消しておく。
+    monkeypatch.delenv("DOCLING_SERVICE_SKIP_WARMUP", raising=False)
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -114,10 +117,29 @@ def test_warmup_posts_minimal_pdf_to_convert_endpoint():
     assert captured["path"] == "/convert"
 
 
-def test_warmup_returns_false_when_convert_fails():
+def test_warmup_returns_false_when_convert_fails(monkeypatch):
+    monkeypatch.delenv("DOCLING_SERVICE_SKIP_WARMUP", raising=False)
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(422, json={"detail": "PDFの解析に失敗しました（テスト用）"})
 
     extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
 
     assert extractor.warmup() is False
+
+
+def test_warmup_skips_convert_when_skip_warmup_env_set(monkeypatch):
+    # ローカルdocker-compose環境はdoclingコンテナが常時起動済みでLambdaのようなコールド
+    # スタートが存在しないため、実convertによる重いモデルウォームアップは不要。
+    monkeypatch.setenv("DOCLING_SERVICE_SKIP_WARMUP", "true")
+    called = False
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal called
+        called = True
+        return httpx.Response(200, json={"html": "<html>warmup</html>"})
+
+    extractor = RemoteDoclingHtmlExtractor(base_url="http://docling:8100", client=_client_with(handler))
+
+    assert extractor.warmup() is True
+    assert called is False

@@ -53,6 +53,8 @@ RenderEngine = Literal[
 GATED_ENGINES: frozenset = frozenset({"gemini", "claude", "openai"})
 AI_ENGINES: frozenset = frozenset({"gemini_free", "gemini", "claude", "openai", "hybrid"})
 CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
+# RenderEngineの全8値。未知のengine値をPDF読み込み等の重い処理より前に弾くための許可リスト。
+ALL_ENGINES: frozenset = AI_ENGINES | CONVERTER_ENGINES
 
 
 def _log_ai_payload(message: str, **fields: str) -> None:

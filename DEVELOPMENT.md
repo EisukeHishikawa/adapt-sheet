@@ -136,13 +136,11 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 
 #### ⬛ ステップ 25: TerraformによるAWSインフラのコード化
 > ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは`mise.toml`で固定する（ADR-023）。Terraformは1.15.8、providerは`.terraform.lock.hcl`（コミット対象）で固定。
-> 本ステップは**コード定義まで**（`terraform validate`・`fmt`まで実施、`terraform apply`＝実AWSリソース作成は未実施）。OIDC・GitHub Actionsからのデプロイ認証はステップ26のCI/CD構築時に定義する。
 - [x] ⚙️ **AWS認証情報の設定:** GitHub ActionsからのデプロイをOIDCで行うためのプロバイダとデプロイロールを`infra/modules/github_oidc`で定義（長期アクセスキーは発行しない。許可refは`main`のみ、IAM権限は`adapt-sheet-*`のロールに限定）
-- [x] TerraformによるCloudFront + S3、AWS Lambda（メモリは余裕を持たせた4GB〜8GB推奨） + API Gateway（ステージ単位のスロットリングで過度なAPIコールを防ぐ。WAFは固定費が高いため不採用）、**ECR Private（Lambdaコンテナは同一リージョンのPrivateからのみ取得可。無料枠500MBの逼迫はライフサイクルで抑制）** をコード定義（`infra/`）。APIキーはSecureStringのSSM Parameter Storeで管理し、Lambdaの実行ロールに`ssm:GetParameters`/`kms:Decrypt`を最小権限で付与。state土台は`infra/bootstrap`（S3+DynamoDB）。`terraform apply`（実AWS作成）は未実施
-- [ ] 🧪 **ステージングテスト:** デプロイされたクラウド環境のエンドポイントに対して、ローカルからAPIテストを実行して疎通を確認
+- [x] TerraformによるCloudFront + S3、AWS Lambda + API Gateway（ステージ単位のスロットリングで過度なAPIコールを防ぐ。WAFは固定費が高いため不採用）、**ECR Private（Lambdaコンテナは同一リージョンのPrivateからのみ取得可。無料枠500MBの逼迫はライフサイクルで抑制）** をコード定義（`infra/`）。Lambdaのメモリは新規AWSアカウントのデフォルトクォータ上限（3008MB）に合わせている。APIキーはSecureStringのSSM Parameter Storeで管理し、Lambdaの実行ロールに`ssm:GetParameters`/`kms:Decrypt`を最小権限で付与。state土台は`infra/bootstrap`（S3+DynamoDB）
+- [x] 🧪 **ステージングテスト:** デプロイ済みの本番エンドポイント（CloudFront配信）に対し、ローカルから`GET /`・`POST /api/warmup`を実行し、フロント配信とbackend→docling/pdf2htmlex/DBの疎通を確認（`{"docling":"ok","pdf2htmlex":"ok","database":"ok"}`）
 
 #### ⬛ ステップ 26: GitHub ActionsによるCI構築 【自動テスト化】
-> CI/CDのワークフロー定義とOIDCのコード定義まで完了。`terraform apply`（実AWSリソース作成）と初回の本番デプロイは、AWSアカウントでの手動実行が前提のため未実施。
 - [x] ⚙️ **GitHub Actions設定:** `.github/workflows/ci.yml` を新設。プルリクエスト（PR）作成時、およびmainブランチへのマージ時に、**「フロントのテスト（Vitest/ESLint/vite build）」「バックのテスト（pytest/ruff）」「docling/pdf2htmlexのテスト（pytest/ruff）」が自動で走るワークフロー**を構築。ローカル開発と同じ`docker-compose.yml`のサービス定義をそのまま使い、ローカル/CIの実行結果が乖離しないようにする（backend/frontendは`--no-deps`で単体起動。backendのテストはDocling/pdf2htmlexクライアントをhttpxモックで検証しており実サービス起動は不要）
 - [x] ⚙️ **GitHub設定変更:** mainのブランチ保護ルールに必須ステータスチェック（`backend`/`docling`/`pdf2htmlex`/`frontend`）を追加。`strict`（mainに追従していないブランチはマージ不可）と管理者への強制適用も有効
 - [x] ⚙️ **CD構築:** `.github/workflows/cd.yml`を新設。mainへのpushでOIDCによるAWS認証→3イメージのビルド・ECR Privateへのpush（コミットSHAタグ）→`terraform apply`→フロントのS3同期・CloudFront無効化→`POST /api/warmup`によるスモークテストまでを自動化。初回のみ土台をローカルから手動applyする必要がある（`infra/README.md`）
@@ -163,7 +161,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] ⚙️ **ローカルDB環境の構築:** docker-compose.ymlへ`db`サービス（Postgres）を追加し、手元の開発環境を汚さずにマイグレーションやテストができる環境を整備（Supabase Local CLIではなく素のPostgresコンテナを選択）
 - [x] SQLAlchemy経由でのSupabase接続設定と、データ保存ロジックの実装（`app/db.py`・`app/models.py`・`app/services/history.py`、Alembicマイグレーション`backend/migrations/`。`POST /api/render`成功時にログイン中のユーザーの履歴を自動保存し、`GET /api/history`で一覧取得できる）
 - [x] 🧪 **最終結合テスト:** 認証・DB保存・AI生成が絡む全シナリオのテストをPlaywright等で追加（バックエンドのpytest統合テストは追加済み。フロントの保存済み履歴閲覧UI（`HistorySlider`のセッション切れ後の再取得・`HistoryArchive`）はVitest/Testing Libraryで実装・検証済み。`frontend/e2e/auth-history-flow.spec.ts`で、ログイン状態の復元・生成AI系エンジンの非同期ジョブ経路・`HistoryArchive`での履歴取得・ログアウトまでの一連をE2Eで検証）
-- [ ] 🚀 **本番デプロイ:** 全テストが自動でパスし、安全にデプロイされることを確認してプロジェクト完了（実Supabaseプロジェクト・AWS本番環境への適用は別途対応）
+- [x] 🚀 **本番デプロイ:** CD（`.github/workflows/cd.yml`）がOIDC認証→イメージビルド・push→`terraform apply`→フロント配信→スモークテストまで自動で成功することを確認しプロジェクト完了
 
 #### ⬛ ステップ 29: ログイン専用化とセキュリティ強化
 - [x] ⚙️ **ローカル検証環境の整備:** Supabase Local CLIを導入し、JWT検証をJWKS/ES256へ対応（`supabase/config.toml`・`app/services/auth.py`。ADR-020、`docs/supabase-local-cli-setup.md`）

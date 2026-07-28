@@ -358,14 +358,66 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
   })
 
   it('描画に成功すると成功メッセージが設定され、エラーはnullになる', async () => {
+    // 既定engine（hybrid）はgemini_freeと同じ無料枠を使うため、成功メッセージには
+    // mocks/handlers.tsの既定モック（本日3/10回）が付加される。
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().successMessage).toBe(
+      '描画が完了しました（Gemini無料枠 本日3/10回）',
+    )
+    expect(useSheetStore.getState().error).toBeNull()
+  })
+
+  it('gemini_freeで描画に成功すると、成功メッセージへGemini無料枠の当日利用回数が付加される', async () => {
+    useSheetStore.setState({ engine: 'gemini_free' })
+    server.use(
+      http.get('/api/usage/gemini-free', () =>
+        HttpResponse.json({ date: '2026-01-01', count: 4, limit: 10 }),
+      ),
+    )
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().successMessage).toBe(
+      '描画が完了しました（Gemini無料枠 本日4/10回）',
+    )
+  })
+
+  it('hybridはgemini_freeと同じ無料枠モデルを使うため、成功メッセージへ利用回数が付加される', async () => {
+    useSheetStore.setState({ engine: 'hybrid' })
+    server.use(
+      http.get('/api/usage/gemini-free', () =>
+        HttpResponse.json({ date: '2026-01-01', count: 5, limit: 10 }),
+      ),
+    )
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().successMessage).toBe(
+      '描画が完了しました（Gemini無料枠 本日5/10回）',
+    )
+  })
+
+  it('変換エンジン（AIを介さない）では、利用回数の付加なしに既定の成功メッセージのままになる', async () => {
+    useSheetStore.setState({ engine: 'docling' })
+
     await useSheetStore.getState().fetchRender()
 
     expect(useSheetStore.getState().successMessage).toBe('描画が完了しました')
-    expect(useSheetStore.getState().error).toBeNull()
+  })
+
+  it('利用回数の取得に失敗しても、描画自体の成功メッセージ表示は妨げない', async () => {
+    useSheetStore.setState({ engine: 'gemini_free' })
+    server.use(http.get('/api/usage/gemini-free', () => new HttpResponse(null, { status: 500 })))
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました')
   })
 
   it.each([
     [400, 'リクエスト内容に誤りがあります。入力値をご確認ください。'],
+    [428, 'このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。'],
     [403, '現在、この生成AIは登録ユーザーのみご利用いただけます。アカウント機能の追加までお待ちください。'],
     [413, 'PDFファイルのサイズが上限を超えています。'],
     [422, 'PDFの解析に失敗しました。ファイルの内容をご確認ください。'],
@@ -634,7 +686,9 @@ describe('sheetStore（生成AIエンジンの非同期ジョブ・ポーリン�
 
     expect(getCount).toBe(3)
     expect(useSheetStore.getState().htmlContent).toBe(dummyRenderResponse.html)
-    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました')
+    expect(useSheetStore.getState().successMessage).toBe(
+      '描画が完了しました（Gemini無料枠 本日3/10回）',
+    )
   })
 
   it('ジョブがerrorになった場合、backendのmessageがそのままエラー表示に使われる', async () => {

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import date
 from typing import Callable, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
@@ -32,6 +33,12 @@ from app.services.ai_client import (
     validate_render_result,
 )
 from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
+from app.services.gemini_usage import (
+    GEMINI_FREE_DAILY_LIMIT,
+    GEMINI_FREE_QUOTA_ENGINES,
+    get_gemini_free_usage,
+    record_gemini_free_usage,
+)
 from app.services.history import list_history, save_history, update_edit_history
 from app.services.job_store import JobStore, get_job_store
 from app.services.pdf2htmlex_client import (
@@ -108,9 +115,9 @@ async def render(
         raise HTTPException(status_code=403)
 
     if engine in CONVERTER_ENGINES:
-        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。
+        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。PDF必須。
         if pdf is None:
-            raise HTTPException(status_code=400)
+            raise HTTPException(status_code=428)
         content = await pdf.read()
         filename = pdf.filename or "uploaded.pdf"
         html = await _convert_with_engine(
@@ -150,6 +157,9 @@ async def render(
         html_extractor=html_extractor,
     )
 
+    if engine in GEMINI_FREE_QUOTA_ENGINES:
+        _record_gemini_free_usage(db_session)
+
     _save_history(
         db_session,
         current_user,
@@ -188,7 +198,7 @@ async def _generate_ai_result(
         # PyMuPDF（正確なフォントサイズ・位置）とDocling（表・段落構造）の変換結果を、
         # PDF本体と一緒にGemini（VLM）へ渡して1つのHTML/CSS/JSONへ統合させる。PDF添付必須。
         if pdf_bytes is None:
-            raise HTTPException(status_code=400)
+            raise HTTPException(status_code=428)
         pymupdf_html, docling_html = await asyncio.gather(
             asyncio.to_thread(layout_converter.convert_to_html, filename, pdf_bytes),
             asyncio.to_thread(html_extractor.convert_to_html, filename, pdf_bytes),
@@ -383,18 +393,23 @@ async def process_render_job(
         {"status": "done", "html": result.html, "css": result.css, "json": result.data},
     )
 
-    if payload.user_id is not None:
+    # gemini_free/hybridは未ログインでも使えるため、履歴保存（ログイン時のみ）とは別に
+    # user_idの有無に関わらずカウンタ更新が必要かどうかでセッションを開く。
+    if payload.engine in GEMINI_FREE_QUOTA_ENGINES or payload.user_id is not None:
         with db_session_for_user(payload.user_id) as db_session:
-            _save_history(
-                db_session,
-                SupabaseUser(sub=payload.user_id, email=None),
-                engine=payload.engine,
-                html=result.html,
-                css=result.css,
-                json_data=result.data,
-                width_mm=payload.width_mm,
-                height_mm=payload.height_mm,
-            )
+            if payload.engine in GEMINI_FREE_QUOTA_ENGINES:
+                _record_gemini_free_usage(db_session)
+            if payload.user_id is not None:
+                _save_history(
+                    db_session,
+                    SupabaseUser(sub=payload.user_id, email=None),
+                    engine=payload.engine,
+                    html=result.html,
+                    css=result.css,
+                    json_data=result.data,
+                    width_mm=payload.width_mm,
+                    height_mm=payload.height_mm,
+                )
 
     return {"status": "done"}
 
@@ -430,6 +445,39 @@ def _save_history(
         )
     except Exception:
         logger.warning("生成履歴の保存に失敗しました", exc_info=True)
+
+
+def _record_gemini_free_usage(db_session: Optional[Session]) -> None:
+    """gemini_free描画成功時にカウンタを更新する。未ログインでもカウント対象のため
+    current_userの有無は問わない。DB保存の失敗は描画結果のレスポンスへ波及させない。"""
+    if db_session is None:
+        return
+    try:
+        record_gemini_free_usage(db_session)
+    except Exception:
+        logger.warning("Gemini無料枠の利用回数記録に失敗しました", exc_info=True)
+
+
+class GeminiFreeUsageResponse(BaseModel):
+    date: str
+    count: int
+    limit: int
+
+
+@app.get("/api/usage/gemini-free", response_model=GeminiFreeUsageResponse)
+def get_gemini_free_usage_status(
+    db_session: Optional[Session] = Depends(get_db_session_or_none),
+) -> GeminiFreeUsageResponse:
+    """Gemini無料枠（gemini_free）の当日利用回数。認証不要（匿名利用も対象のため）。"""
+    if db_session is None:
+        return GeminiFreeUsageResponse(
+            date=date.today().isoformat(), count=0, limit=GEMINI_FREE_DAILY_LIMIT
+        )
+
+    status = get_gemini_free_usage(db_session)
+    return GeminiFreeUsageResponse(
+        date=status.date.isoformat(), count=status.count, limit=status.limit
+    )
 
 
 class HistoryItemResponse(BaseModel):

@@ -55,6 +55,8 @@ docker compose up --build
 
 backend/frontend/docling/pdf2htmlexはそれぞれ`./backend`・`./frontend`・`./docling-service`・`./pdf2htmlex-service`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`GEMINI_API_KEY`に上書きする。
 
+生成AI系エンジン（Gemini/Claude/OpenAI/精密復元）は本番同様に非同期ジョブ（ADR-031）で描画するため、S3の代わりにローカルではMinIO（`minio`/`minio-init`サービス）を使う。追加設定は不要で、`docker compose up --build`だけでブラウザから通しで試せる。
+
 描画ボタンの隣（`EngineSelect`）で、7つの生成エンジンを選べる。
 
 | エンジン | 種別 | 説明 |

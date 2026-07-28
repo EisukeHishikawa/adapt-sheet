@@ -194,3 +194,16 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
   - S3署名付きURLがグローバルエンドポイントで発行され307リダイレクトが発生していた問題（リージョナルエンドポイントを明示）
   - フロントのCSP（`connect-src`）にS3オリジンが未許可だった問題
   - Geminiが稀に返す構文的に不正なJSONをリトライ対象に追加
+
+#### ⬛ ステップ 32: Gemini無料枠の利用回数表示
+- [x] `gemini_free_usage`テーブル（全ユーザー共有・JST日次リセットのカウンタ）を追加し、`gemini_free`/`hybrid`エンジン（いずれも同じ無料枠モデルを使う）での描画成功時（同期・非同期ジョブ双方）にカウントする。個人データを持たないためRLS非適用、未ログイン時の`authenticator`ロールにもGRANTし匿名利用も計測対象にする。
+- [x] `GET /api/usage/gemini-free`（認証不要）で当日の利用回数・上限を返す。上限到達時も`gemini_free`/`hybrid`エンジンの利用はブロックしない。
+- [x] フロント: 描画ボタン押下でgemini_free/hybrid描画が成功した際、成功メッセージへ「本日x/10回」を付加して表示する（`sheetStore.fetchRender`）。
+- [x] 🧪 **テストコード追加:** `backend/tests/test_gemini_usage.py`（カウンタのincrement/取得）、`backend/tests/test_render.py`・`test_render_jobs.py`（匿名利用でのincrement・hybridでもincrementすること・変換エンジンでは増えないこと・DB失敗時も描画は成功すること・エンドポイントの認証不要性）、`frontend/src/store/sheetStore.test.ts`（成功メッセージへの付加・hybridでも付加されること・取得失敗時のフォールバック）を追加。
+- [x] 🧪 **ローカルテスト実行:** `pytest`（backend 239件、全パス）・`ruff`・`Vitest`（frontend 171件、全パス）・`ESLint`・`vite build`がパス。ローカルSupabase（Docker Compose経由）に対しAlembicマイグレーションを適用し、`curl`で匿名リクエストによるカウンタ増分（0→1）を実機確認済み。
+- [x] **ローカルでの生成AI系engine検証環境の整備:** 上記の実機確認中に、生成AI系engine（ADR-031の非同期ジョブ経路）がローカルのdocker-compose環境では一切動作しない既存の制約が判明したため対応（ADR-031へ追記）。`docker-compose.yml`にS3互換のMinIO（`minio`/`minio-init`サービス）を追加し、`job_store.S3JobStore`にエンドポイントの上書き（`RENDER_JOBS_S3_ENDPOINT_URL`/`RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL`）を追加。`worker_invoker.py`にはrender-worker Lambdaの代わりにbackend自身へHTTP POSTする`LocalHttpWorkerInvoker`を追加し、`RENDER_WORKER_LOCAL_URL`設定時のみ使う。本番向けクラス（`S3JobStore`・`LambdaWorkerInvoker`）自体は無変更。
+- [x] 🧪 **テストコード追加:** `backend/tests/test_job_store.py`（エンドポイント上書き・path-styleアドレッシング切り替え・presign用クライアントの分離）、`backend/tests/test_worker_invoker.py`（`LocalHttpWorkerInvoker`のPOST送信・非ブロッキング起動・接続エラーの握りつぶし・ファクトリの選択）を追加。
+- [x] 🧪 **ローカルテスト実行:** `pytest`（backend 247件、全パス）・`ruff`がパス。ホストから実際にpresigned URLへPUTでPDFをアップロードし、`hybrid`エンジンの非同期ジョブが`status: "done"`まで完了することをブラウザと同じ経路（ホスト→MinIO直接PUT）で実機確認済み。
+- [x] **エラーメッセージの細分化:** PDF未添付（変換エンジン/`hybrid`）が一律400 VALIDATION_ERRORの汎用文言だったため、専用の`428 Precondition Required`/`PDF_REQUIRED`を新設し「このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。」を返すよう分離（`docs/spec.md` 4章のエラーカタログを更新）。
+- [x] 🧪 **テストコード更新:** `backend/tests/test_render.py`・`test_render_jobs.py`（PDF未添付時の期待ステータスを400→428へ、エラーメッセージ文言を更新）、`frontend/src/store/sheetStore.test.ts`（428のケースを追加）。
+- [x] 🧪 **ローカルテスト実行:** `pytest`（backend 247件、全パス）・`ruff`・`Vitest`（frontend 172件、全パス）・`ESLint`がパス。`curl`で実際に428・`PDF_REQUIRED`・専用文言が返ることを実機確認済み。

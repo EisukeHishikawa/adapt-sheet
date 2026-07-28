@@ -7,13 +7,24 @@ REST API（v1プロキシ統合）形式のイベントをHTTP呼び出しへ変
 
 RENDER_WORKER_FUNCTION_NAME未設定のローカル/pytestでは想定利用者が無いため、
 LambdaWorkerInvokerの構築時点で例外を送出する（job_store.pyと同じ方針）。
+
+ローカル開発（docker-compose.yml）にはrender-worker Lambdaが存在しないため、代わりに
+LocalHttpWorkerInvokerがbackend自身の/internal/render-jobs/processへ直接HTTP POSTする。
+lambda:invoke（InvocationType=Event）と同じ「起動だけ待って完了は待たない」動作を保つため、
+バックグラウンドスレッドで送信する。
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 from typing import Optional, Protocol
+
+import httpx
+
+logger = logging.getLogger("app.worker_invoker")
 
 
 class WorkerInvokerError(Exception):
@@ -47,6 +58,26 @@ class LambdaWorkerInvoker:
         )
 
 
+class LocalHttpWorkerInvoker:
+    """ローカル開発用実装。render-worker LambdaはURLで直接叩ける相手が無いため、
+    backend自身のエンドポイントへHTTP POSTすることでlambda:invokeの代わりにする。"""
+
+    def __init__(self, base_url: str, client: Optional[httpx.Client] = None) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._client = client or httpx.Client(timeout=180.0)
+
+    def invoke(self, path: str, body: dict) -> None:
+        threading.Thread(target=self._send, args=(path, body), daemon=True).start()
+
+    def _send(self, path: str, body: dict) -> None:
+        try:
+            self._client.post(f"{self._base_url}{path}", json=body)
+        except httpx.HTTPError:
+            # 起動元（POST /api/render/jobs）へは既に202を返し終えているため、ここでの失敗は
+            # ログのみに留める（ジョブは"pending"のまま残り、ポーリング側がタイムアウトする）。
+            logger.warning("render-workerへのローカルHTTP起動に失敗しました", exc_info=True)
+
+
 def _build_apigw_event(path: str, body: dict) -> dict:
     """AWS Lambda Web AdapterがHTTPリクエストへ変換できる、API Gateway REST API
     （v1プロキシ統合）相当の最小イベントを組み立てる。
@@ -75,5 +106,12 @@ def _build_apigw_event(path: str, body: dict) -> dict:
 
 
 def get_worker_invoker() -> WorkerInvoker:
-    """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。"""
+    """FastAPIのDependsとして利用するファクトリ。テスト側はdependency_overridesで差し替える。
+
+    RENDER_WORKER_LOCAL_URLはローカルのdocker-compose.ymlのみが設定し、本番のTerraform側では
+    定義しないため、本番では常にLambdaWorkerInvokerへフォールバックする。
+    """
+    local_url = os.environ.get("RENDER_WORKER_LOCAL_URL", "").strip()
+    if local_url:
+        return LocalHttpWorkerInvoker(local_url)
     return LambdaWorkerInvoker()

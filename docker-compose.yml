@@ -88,11 +88,28 @@ services:
       # マイグレーション（alembic）専用の接続。テーブル作成・ポリシー定義には所有者権限が必要な
       # ため、実行時とは別にpostgresロールで接続する（ADR-021）。
       - MIGRATION_DATABASE_URL=${MIGRATION_DATABASE_URL:-}
+      # 生成AI系エンジン（ADR-031の非同期ジョブ）が使うS3を、ローカルでは実AWSではなく
+      # 下記minioサービスで代替する。job_store.S3JobStoreへ渡る設定値の違いに過ぎず、コード側は
+      # ローカル/本番で分岐しない（本番のTerraform側はこれらを定義せず、実AWS S3の
+      # リージョナルエンドポイントを使う）。値はminioサービス・minio-initと揃えた固定のローカル
+      # 開発用定数であり秘密情報ではないため、.envを介さずここに直接書く。
+      - RENDER_JOBS_BUCKET=render-jobs-local
+      - RENDER_JOBS_S3_ENDPOINT_URL=http://minio:9000
+      - RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL=http://localhost:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_REGION=ap-northeast-1
+      # render-worker Lambdaが存在しないローカルでは、backend自身の
+      # /internal/render-jobs/processへ直接HTTP POSTする（worker_invoker.LocalHttpWorkerInvoker）。
+      # localhostはbackendコンテナ自身を指す（同じコンテナ内で自己呼び出しするため）。
+      - RENDER_WORKER_LOCAL_URL=http://localhost:8000
     depends_on:
       docling:
         condition: service_started
       pdf2htmlex:
         condition: service_started
+      minio-init:
+        condition: service_completed_successfully
 
   # ③ Doclingによるテキスト抽出専用の内部サービス（ADR-014/015、DEVELOPMENT.md ステップ15）
   # torch/opencv-python等の重量級ML依存を含み、backendの起動速度に影響しないよう分離した。
@@ -123,7 +140,37 @@ services:
     volumes:
       - ./pdf2htmlex-service:/app
 
-  # ⑤ E2Eテスト (Playwright)
+  # ⑤ ローカル開発用のS3互換オブジェクトストレージ（MinIO）
+  # 生成AI系エンジン（ADR-031の非同期ジョブ）が使うS3（アップロード済みPDF・結果JSON）を、
+  # ローカルでは実AWS S3の代わりにこのMinIOで代替する。backendサービスのRENDER_JOBS_*
+  # 環境変数と対応する。
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000" # S3 API。presigned URLへフロント（ブラウザ）が直接PUTするためホストへ公開する。
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      # フロントの開発サーバー（http://localhost:5173）からのpresigned URLへの直接PUTを許可する。
+      - MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:5173
+    command: server /data
+    volumes:
+      - minio_data:/data
+
+  # MinIO起動後にrender-worker用バケットを1回だけ作成する初期化専用コンテナ。バケット作成が
+  # 終わるまでbackendを起動させないよう、backend.depends_onからcondition:
+  # service_completed_successfullyで参照される。
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done
+        mc mb -p local/render-jobs-local || true
+
+  # ⑥ E2Eテスト (Playwright)
   # frontendの軽量なnode:20-alpineイメージはPlaywrightのブラウザバイナリ実行（glibc必須）に
   # 非対応のため、Microsoft公式のPlaywrightイメージ（frontend/Dockerfile.e2e）を使う独立コンテナ
   # として用意する（ADR-010）。frontend/backendのように常時起動する必要はないため、
@@ -149,7 +196,7 @@ services:
     profiles:
       - e2e
 
-  # ⑥⑦ エディタ（Zed）向けのLSPサービス（ADR-024）
+  # ⑦⑧ エディタ（Zed）向けのLSPサービス（ADR-024）
   # リンター/フォーマッターをホストへ二重導入せず、開発用イメージと同じruff/ESLintをエディタからも
   # 使うための入口。エディタがLSPでやり取りするのはファイルの絶対パス（URI）であるため、ホストと
   # 同じ絶対パス（${PWD}）へリポジトリをマウントし、コンテナ側でのパス読み替えを不要にする。
@@ -184,3 +231,5 @@ volumes:
   docling_rapidocr_models:
   # frontend-lspがESLint実行に使う依存（上記frontend-lsp.volumes参照）。
   frontend_lsp_node_modules:
+  # ローカル開発用MinIOのオブジェクト永続化用（上記minio.volumes参照）。
+  minio_data:

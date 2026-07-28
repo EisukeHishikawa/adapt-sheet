@@ -2,10 +2,16 @@ import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
+from app.db import get_db_session, get_db_session_or_none
 from app.main import app
+from app.models import Base
 from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client_factory
 from app.services.docling_client import get_html_extractor
+from app.services.gemini_usage import get_gemini_free_usage
 from app.services.pdf2htmlex_client import get_pdf2htmlex_extractor
 from app.services.pdf_layout import get_layout_converter
 from app.services.pdf_common import PDFConversionError
@@ -14,6 +20,30 @@ from app.services.pdf_common import PDFConversionError
 SAMPLE_PDF = Path(__file__).resolve().parent / "fixtures" / "sample.pdf"
 
 client = TestClient(app)
+
+
+def _sqlite_session() -> Session:
+    # test_history.pyと同じ方式（StaticPoolで単一コネクションを共有）。
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine, expire_on_commit=False)()
+
+
+def _override_db(db_session: Session) -> None:
+    def _yield_session():
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = _yield_session
+    app.dependency_overrides[get_db_session_or_none] = _yield_session
+
+
+def _clear_db_override() -> None:
+    app.dependency_overrides.pop(get_db_session, None)
+    app.dependency_overrides.pop(get_db_session_or_none, None)
 
 
 def _override_ai_client(fake_client) -> None:
@@ -377,7 +407,7 @@ def test_render_pdf2htmlex_engine_returns_converted_html_without_ai():
 
 def test_render_converter_engine_requires_pdf():
     response = client.post("/api/render", data={"engine": "pymupdf"})
-    assert response.status_code == 400
+    assert response.status_code == 428
 
 
 def test_render_converter_engine_does_not_call_ai_client():
@@ -443,9 +473,9 @@ def test_render_returns_422_when_pymupdf_engine_conversion_fails():
 
 
 def test_render_hybrid_engine_requires_pdf_but_not_login():
-    # ゲート対象ではないため未ログインでも403にはならず、PDF未添付のみが400になる。
+    # ゲート対象ではないため未ログインでも403にはならず、PDF未添付は428 PDF_REQUIREDになる。
     response = client.post("/api/render", data={"engine": "hybrid"})
-    assert response.status_code == 400
+    assert response.status_code == 428
 
 
 def test_render_hybrid_engine_combines_pymupdf_docling_and_ai():
@@ -536,3 +566,93 @@ def test_render_returns_422_when_pdf2htmlex_engine_conversion_fails():
         assert response.status_code == 422
     finally:
         app.dependency_overrides.pop(get_pdf2htmlex_extractor, None)
+
+
+def test_render_increments_gemini_free_usage_for_anonymous_user():
+    # gemini_freeはログイン不要で使えるため、匿名利用でも共有カウンタは増える必要がある。
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.post("/api/render", data={"engine": "gemini_free"})
+        assert response.status_code == 200
+
+        status = get_gemini_free_usage(db_session)
+        assert status.count == 1
+    finally:
+        _clear_db_override()
+
+
+def test_render_increments_gemini_free_usage_for_hybrid_engine():
+    # hybridはgemini_freeと同じ無料枠モデルを使うため（ai_client.pyのAI_ENGINES定義コメント参照）、
+    # 同じ共有カウンタの対象になる。
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "hybrid"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+
+        status = get_gemini_free_usage(db_session)
+        assert status.count == 1
+    finally:
+        _clear_db_override()
+
+
+def test_render_does_not_increment_gemini_free_usage_for_converter_engines():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "docling"},
+            files={"pdf": ("sample.pdf", SAMPLE_PDF.read_bytes(), "application/pdf")},
+        )
+        assert response.status_code == 200
+
+        status = get_gemini_free_usage(db_session)
+        assert status.count == 0
+    finally:
+        _clear_db_override()
+
+
+def test_render_still_succeeds_when_gemini_free_usage_record_fails():
+    # DB保存が失敗しても、描画自体のレスポンスは失敗させない（_save_historyと同じ方針）。
+    db_session = _sqlite_session()
+    db_session.close()
+    _override_db(db_session)
+    try:
+        response = client.post("/api/render", data={"engine": "gemini_free"})
+        assert response.status_code == 200
+    finally:
+        _clear_db_override()
+
+
+def test_get_gemini_free_usage_endpoint_returns_count_and_limit():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        client.post("/api/render", data={"engine": "gemini_free"})
+        client.post("/api/render", data={"engine": "gemini_free"})
+
+        response = client.get("/api/usage/gemini-free")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["count"] == 2
+        assert body["limit"] == 10
+        assert "date" in body
+    finally:
+        _clear_db_override()
+
+
+def test_get_gemini_free_usage_endpoint_does_not_require_login():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.get("/api/usage/gemini-free")
+        assert response.status_code == 200
+        assert response.json()["count"] == 0
+    finally:
+        _clear_db_override()

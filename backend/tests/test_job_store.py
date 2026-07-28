@@ -62,7 +62,7 @@ def test_new_job_id_returns_unique_uuids():
 def test_presigned_upload_url_targets_uploads_prefix(monkeypatch):
     fake_client = _FakeS3Client()
     store = S3JobStore(bucket="test-bucket")
-    monkeypatch.setattr(store, "_client", lambda: fake_client)
+    monkeypatch.setattr(store, "_presign_client", lambda: fake_client)
 
     url = store.presigned_upload_url("job-1")
 
@@ -110,3 +110,65 @@ def test_fetch_uploaded_pdf_returns_bytes(monkeypatch):
 def test_get_job_store_returns_s3_job_store(monkeypatch):
     monkeypatch.setenv("RENDER_JOBS_BUCKET", "test-bucket")
     assert isinstance(get_job_store(), S3JobStore)
+
+
+def test_endpoint_defaults_to_real_aws_regional_endpoint_when_unset(monkeypatch):
+    monkeypatch.delenv("RENDER_JOBS_S3_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL", raising=False)
+    monkeypatch.setenv("AWS_REGION", "ap-northeast-1")
+
+    store = S3JobStore(bucket="test-bucket")
+
+    assert store._endpoint_url == "https://s3.ap-northeast-1.amazonaws.com"
+    assert store._public_endpoint_url == store._endpoint_url
+    assert store._use_path_style is False
+
+
+def test_endpoint_url_overridable_for_local_s3_compatible_server(monkeypatch):
+    # ローカル開発ではdocker-compose.yml側がRENDER_JOBS_S3_ENDPOINT_URL等をMinIOへ向けて
+    # 設定する。コンストラクタ引数でも同じことができる（テスト・render-worker双方向け）。
+    monkeypatch.delenv("RENDER_JOBS_S3_ENDPOINT_URL", raising=False)
+    monkeypatch.delenv("RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL", raising=False)
+
+    store = S3JobStore(
+        bucket="test-bucket",
+        endpoint_url="http://minio:9000",
+        public_endpoint_url="http://localhost:9000",
+    )
+
+    assert store._endpoint_url == "http://minio:9000"
+    assert store._public_endpoint_url == "http://localhost:9000"
+    # MinIO等のS3互換サーバー向けにpath-styleアドレッシングへ切り替わる。
+    assert store._use_path_style is True
+
+
+def test_public_endpoint_falls_back_to_internal_endpoint_when_unset(monkeypatch):
+    # docker-compose.yml（ローカル）はRENDER_JOBS_S3_PUBLIC_ENDPOINT_URLを設定するため、
+    # コンストラクタ引数を優先することを明示的に検証するにはこの環境変数を除去しておく必要がある。
+    monkeypatch.delenv("RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL", raising=False)
+
+    store = S3JobStore(bucket="test-bucket", endpoint_url="http://minio:9000")
+
+    assert store._public_endpoint_url == "http://minio:9000"
+
+
+def test_presign_client_uses_public_endpoint_not_internal_endpoint(monkeypatch):
+    captured_endpoints: list[str] = []
+
+    class _FakeBoto3:
+        @staticmethod
+        def client(service, **kwargs):
+            captured_endpoints.append(kwargs["endpoint_url"])
+            return _FakeS3Client()
+
+    store = S3JobStore(
+        bucket="test-bucket",
+        endpoint_url="http://minio:9000",
+        public_endpoint_url="http://localhost:9000",
+    )
+    monkeypatch.setattr("boto3.client", _FakeBoto3.client)
+
+    store._client()
+    store._presign_client()
+
+    assert captured_endpoints == ["http://minio:9000", "http://localhost:9000"]

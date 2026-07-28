@@ -16,6 +16,10 @@ export type RenderJobStatusResponse = components['schemas']['RenderJobStatusResp
 export type HistoryEditRequest = components['schemas']['HistoryEditRequest']
 export type HistoryItemResponse = components['schemas']['HistoryItemResponse']
 
+// GET /api/usage/gemini-freeのレスポンス。gemini_free（無料枠）の当日利用回数（全ユーザー共有・
+// JST日次リセット）。認証不要（匿名利用もカウント対象のため）。
+export type GeminiFreeUsageResponse = components['schemas']['GeminiFreeUsageResponse']
+
 // docs/spec.md 3.1の契約に沿ったリクエスト項目。
 // cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提）。
 // current_html/current_jsonは、PDFを添付しない生成AIリクエストでのみ意味を持つ
@@ -184,6 +188,17 @@ export async function getRenderJobStatus(jobId: string): Promise<RenderJobStatus
   }
 
   return (await response.json()) as RenderJobStatusResponse
+}
+
+// gemini_free描画成功後に、当日の利用回数（全ユーザー共有）を取得する。認証不要。
+export async function getGeminiFreeUsage(): Promise<GeminiFreeUsageResponse> {
+  const response = await fetch('/api/usage/gemini-free')
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
+
+  return (await response.json()) as GeminiFreeUsageResponse
 }
 
 // 編集中スナップショットをサーバーの履歴へ保存する。描画と違い画面の主目的ではないため、

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   RenderApiError,
+  getGeminiFreeUsage,
   getHistory,
   getRenderJobStatus,
   renderSheet,
@@ -53,6 +54,10 @@ const AI_ENGINES: ReadonlySet<RenderEngineId> = new Set([
   'openai',
   'hybrid',
 ])
+
+// hybridはgemini_freeと同じ無料枠モデルを使うため（backend/app/services/gemini_usage.py
+// GEMINI_FREE_QUOTA_ENGINES参照）、同じ共有カウンタの表示対象にする。
+const GEMINI_FREE_QUOTA_ENGINES: ReadonlySet<RenderEngineId> = new Set(['gemini_free', 'hybrid'])
 
 // ポーリング間隔。warmupStoreと同じ発想でテスト側はvi.useFakeTimersでスキップする。
 const RENDER_JOB_POLL_INTERVAL_MS = 2000
@@ -149,6 +154,8 @@ function messageForStatus(status: number): string {
   switch (status) {
     case 400:
       return 'リクエスト内容に誤りがあります。入力値をご確認ください。'
+    case 428:
+      return 'このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。'
     case 413:
       return 'PDFファイルのサイズが上限を超えています。'
     case 422:
@@ -505,6 +512,18 @@ export const useSheetStore = create<SheetState>((set, get) => ({
       const result = AI_ENGINES.has(engine) ? await runRenderJob() : await runRenderSync()
 
       applySuccessfulRender(result, widthMm, heightMm)
+
+      // Gemini無料枠は全ユーザー共有・日次リセットの共有カウンタのため、描画ボタンを押して
+      // 成功した都度、最新の利用回数を取得して成功メッセージへ付加する。取得に失敗しても
+      // 描画自体は成功しているため、既定の成功メッセージのまま表示する。
+      if (GEMINI_FREE_QUOTA_ENGINES.has(engine)) {
+        try {
+          const usage = await getGeminiFreeUsage()
+          set({ successMessage: `描画が完了しました（Gemini無料枠 本日${usage.count}/${usage.limit}回）` })
+        } catch {
+          // 既定の成功メッセージのままにする（何もしない）。
+        }
+      }
     } catch (err) {
       // バックエンド提供の安全文言を最優先し、得られない場合のみ既定文言へ落とす。
       const message =

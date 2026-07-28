@@ -8,6 +8,11 @@ S3バケット（uploads/{job_id}.pdf・results/{job_id}.json）を扱う。
 RENDER_JOBS_BUCKET未設定のローカル/pytestでは想定利用者（POST /api/render/jobs等）が
 無いため、S3JobStoreの構築時点で例外を送出する（remote_extractor.py等と同じ
 「本番専用機能はモジュールスコープでboto3を遅延import」方針を踏襲する）。
+
+エンドポイントはRENDER_JOBS_S3_ENDPOINT_URL/RENDER_JOBS_S3_PUBLIC_ENDPOINT_URLで
+上書きできる。ローカル開発（docker-compose.yml）ではS3互換のMinIOを指すが、これは設定値の
+違いに過ぎずクラスを分けない。未設定時（本番）は従来どおり実AWS S3のリージョナルエンドポイントを
+使うため、本番の挙動はこの変更の前後で変わらない。
 """
 
 from __future__ import annotations
@@ -39,18 +44,41 @@ class JobStore(Protocol):
 
 
 class S3JobStore:
-    """本番用実装。RENDER_JOBS_BUCKET環境変数で指定されたバケットを使う。"""
+    """RENDER_JOBS_BUCKET環境変数で指定されたバケットを使う。エンドポイントは
+    RENDER_JOBS_S3_ENDPOINT_URL（内部通信用）/RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL
+    （presigned URLの発行先。ブラウザから到達できるホストである必要がある）で上書き可能。
+    いずれも未設定時は実AWS S3のリージョナルエンドポイントを両方に使う（本番の既定動作）。
+    """
 
-    def __init__(self, bucket: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        bucket: Optional[str] = None,
+        endpoint_url: Optional[str] = None,
+        public_endpoint_url: Optional[str] = None,
+    ) -> None:
         self._bucket = bucket or os.environ.get("RENDER_JOBS_BUCKET", "").strip()
         if not self._bucket:
             raise JobStoreError("RENDER_JOBS_BUCKET is not set")
+
+        self._region = os.environ.get("AWS_REGION", "ap-northeast-1")
+        default_endpoint = f"https://s3.{self._region}.amazonaws.com"
+        self._endpoint_url = (
+            endpoint_url or os.environ.get("RENDER_JOBS_S3_ENDPOINT_URL", "").strip() or default_endpoint
+        )
+        self._public_endpoint_url = (
+            public_endpoint_url
+            or os.environ.get("RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL", "").strip()
+            or self._endpoint_url
+        )
+        # MinIO等のS3互換サーバーはバケット名をサブドメインへ含めるvirtual-hosted-style
+        # アドレッシングに対応しないため、エンドポイントが上書きされている場合はpath-styleを使う。
+        self._use_path_style = self._endpoint_url != default_endpoint
 
     def new_job_id(self) -> str:
         return str(uuid.uuid4())
 
     def presigned_upload_url(self, job_id: str) -> str:
-        return self._client().generate_presigned_url(
+        return self._presign_client().generate_presigned_url(
             "put_object",
             Params={
                 "Bucket": self._bucket,
@@ -81,14 +109,27 @@ class S3JobStore:
         return json.loads(obj["Body"].read())
 
     def _client(self):
+        """backend/render-worker自身がオブジェクトを読み書きする際に使う内部向けクライアント。"""
+        return self._build_client(self._endpoint_url)
+
+    def _presign_client(self):
+        """presigned URLの署名専用クライアント。ネットワーク接続は発生せず、URLへ埋め込む
+        ホスト名（ブラウザから到達できる必要がある）を決めるためだけに使う。"""
+        return self._build_client(self._public_endpoint_url)
+
+    def _build_client(self, endpoint_url: str):
         import boto3  # 遅延import: 本番のみ必要（secrets_loader.py等と同じ方針）
 
         # region_nameのみ指定するとgenerate_presigned_urlは既定でグローバルエンドポイント
         # （s3.amazonaws.com）のURLを生成し、実際のアクセス時にリージョナルエンドポイントへの
         # 307リダイレクトが発生する。ブラウザのfetchはこのクロスオリジンリダイレクトを
         # 正しく扱えずCORSエラーになるため、endpoint_urlを明示してリダイレクト自体を無くす。
-        region = os.environ.get("AWS_REGION", "ap-northeast-1")
-        return boto3.client("s3", region_name=region, endpoint_url=f"https://s3.{region}.amazonaws.com")
+        kwargs = {"region_name": self._region, "endpoint_url": endpoint_url}
+        if self._use_path_style:
+            from botocore.config import Config
+
+            kwargs["config"] = Config(s3={"addressing_style": "path"})
+        return boto3.client("s3", **kwargs)
 
     @staticmethod
     def _upload_key(job_id: str) -> str:

@@ -24,6 +24,7 @@ from app.services.auth import SupabaseUser, get_current_user
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
+    ALL_ENGINES,
     CONVERTER_ENGINES,
     GATED_ENGINES,
     RenderResult,
@@ -84,6 +85,19 @@ class RenderResponse(BaseModel):
     json_: dict = Field(default_factory=dict, alias="json")
 
 
+def _validate_render_params(engine: str, current_user: Optional[SupabaseUser]) -> None:
+    """engineに関するパラメータチェックを1箇所にまとめる。
+
+    PDF読み込み・PyMuPDF/Docling変換・AI呼び出し等の重い処理より前に、各エンドポイントの
+    冒頭で必ず呼ぶこと。未知のengine値は本来ai_client.get_ai_clientのif/elifチェーン末尾
+    でしか検出できず、それより先にPDF読み込みが走ってしまうため、ここで先に弾く。
+    """
+    if engine not in ALL_ENGINES:
+        raise HTTPException(status_code=400)
+    if engine in GATED_ENGINES and current_user is None:
+        raise HTTPException(status_code=403)
+
+
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
 async def render(
     # セキュリティ対策: promptはプロンプトインジェクションの温床になり得る自由入力のため、
@@ -109,10 +123,8 @@ async def render(
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Optional[Session] = Depends(get_db_session_or_none),
 ) -> RenderResponse:
-    # 標準プランの生成AI（Gemini標準/Claude/OpenAI）はログイン済みユーザーのみに提供する。
-    # PDF処理・AI呼び出しより前に判定し、無駄な処理を避ける。
-    if engine in GATED_ENGINES and current_user is None:
-        raise HTTPException(status_code=403)
+    # engineに関するパラメータチェックはPDF読み込み・AI呼び出しより前に行い、無駄な処理を避ける。
+    _validate_render_params(engine, current_user)
 
     if engine in CONVERTER_ENGINES:
         # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。PDF必須。
@@ -274,11 +286,10 @@ def create_render_job(
     Gemini API自体がGoogle側の事情で20〜30秒以上かかる・504を返すことがあり、
     API Gatewayの統合タイムアウト（29秒固定）に収まらない。実処理はrender-worker
     Lambdaへ非同期起動（lambda:invoke Event、API Gatewayを経由しないため29秒制約を
-    受けない）し、ここではジョブIDだけを即座に返す。ゲート判定は/api/renderと同じく
+    受けない）し、ここではジョブIDだけを即座に返す。パラメータチェックは/api/renderと同じく
     ここで同期的に行う。
     """
-    if payload.engine in GATED_ENGINES and current_user is None:
-        raise HTTPException(status_code=403)
+    _validate_render_params(payload.engine, current_user)
 
     job_id = payload.job_id or job_store.new_job_id()
     job_store.write_status(job_id, {"status": "pending"})
@@ -357,6 +368,10 @@ async def process_render_job(
     呼び出せない（docling/pdf2htmlexと異なりresource-based policyは不要）。
     """
     try:
+        # ゲート判定（GATED_ENGINES）は起動元のcreate_render_jobで既に行っているため、
+        # ここではengine自体の妥当性のみをPDF取得（重い処理）より前に確認する。
+        if payload.engine not in ALL_ENGINES:
+            raise HTTPException(status_code=400)
         pdf_bytes = job_store.fetch_uploaded_pdf(payload.job_id) if payload.has_pdf else None
         result = await _generate_ai_result(
             engine=payload.engine,

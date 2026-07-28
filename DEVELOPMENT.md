@@ -184,7 +184,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 本番デプロイ後の実機検証で見つかった課題への対応。
 
 #### ⬛ ステップ 31: 生成AI描画のジョブ非同期化（API Gatewayの29秒制約回避）
-- [x] ⚙️ **非同期ジョブ基盤の構築:** S3（`infra/modules/job_bucket`、1日で自動失効、CORS設定込み）と、backendと同じイメージを再利用する`render-worker` Lambda（`infra/main.tf`の`module "lambda_render_worker"`、既存の`infra/modules/lambda`を再利用。API Gateway/Function URLなし、タイムアウト180秒）を追加（ADR-031）
+- [x] ⚙️ **非同期ジョブ基盤の構築:** S3（`infra/modules/job_bucket`、1日で自動失効、CORS設定込み）と、backendと同じイメージを再利用する`render-worker` Lambda（`infra/main.tf`の`module "lambda_render_worker"`、既存の`infra/modules/lambda`を再利用。API Gateway/Function URLなし、タイムアウト180秒）を追加（ADR-024）
 - [x] **backend: 非同期エンドポイントの実装:** `POST /api/render/upload-url`・`POST /api/render/jobs`・`GET /api/render/jobs/{job_id}`・`POST /internal/render-jobs/process`を追加（`app/services/job_store.py`・`app/services/worker_invoker.py`）。既存の`POST /api/render`のAI生成ロジックは`_generate_ai_result`として抽出し、同期・非同期の両経路で共用する
 - [x] **frontend: ポーリング対応:** `sheetStore.fetchRender`を生成AI系engineと変換エンジンで分岐し、生成AI系はS3への直接アップロード→ジョブ起動→2秒間隔のポーリングへ変更（`lib/api.ts`）
 - [x] 🧪 **テストコード追加:** `backend/tests/test_job_store.py`・`test_worker_invoker.py`・`test_render_jobs.py`、`frontend/src/store/sheetStore.test.ts`のポーリングテスト（`vi.useFakeTimers`）を追加
@@ -201,7 +201,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] フロント: 描画ボタン押下でgemini_free/hybrid描画が成功した際、成功メッセージへ「本日x/10回」を付加して表示する（`sheetStore.fetchRender`）。
 - [x] 🧪 **テストコード追加:** `backend/tests/test_gemini_usage.py`（カウンタのincrement/取得）、`backend/tests/test_render.py`・`test_render_jobs.py`（匿名利用でのincrement・hybridでもincrementすること・変換エンジンでは増えないこと・DB失敗時も描画は成功すること・エンドポイントの認証不要性）、`frontend/src/store/sheetStore.test.ts`（成功メッセージへの付加・hybridでも付加されること・取得失敗時のフォールバック）を追加。
 - [x] 🧪 **ローカルテスト実行:** `pytest`（backend 239件、全パス）・`ruff`・`Vitest`（frontend 171件、全パス）・`ESLint`・`vite build`がパス。ローカルSupabase（Docker Compose経由）に対しAlembicマイグレーションを適用し、`curl`で匿名リクエストによるカウンタ増分（0→1）を実機確認済み。
-- [x] **ローカルでの生成AI系engine検証環境の整備:** 上記の実機確認中に、生成AI系engine（ADR-031の非同期ジョブ経路）がローカルのdocker-compose環境では一切動作しない既存の制約が判明したため対応（ADR-031へ追記）。`docker-compose.yml`にS3互換のMinIO（`minio`/`minio-init`サービス）を追加し、`job_store.S3JobStore`にエンドポイントの上書き（`RENDER_JOBS_S3_ENDPOINT_URL`/`RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL`）を追加。`worker_invoker.py`にはrender-worker Lambdaの代わりにbackend自身へHTTP POSTする`LocalHttpWorkerInvoker`を追加し、`RENDER_WORKER_LOCAL_URL`設定時のみ使う。本番向けクラス（`S3JobStore`・`LambdaWorkerInvoker`）自体は無変更。
+- [x] **ローカルでの生成AI系engine検証環境の整備:** 上記の実機確認中に、生成AI系engine（ADR-024の非同期ジョブ経路）がローカルのdocker-compose環境では一切動作しない既存の制約が判明したため対応（ADR-024へ追記）。`docker-compose.yml`にS3互換のMinIO（`minio`/`minio-init`サービス）を追加し、`job_store.S3JobStore`にエンドポイントの上書き（`RENDER_JOBS_S3_ENDPOINT_URL`/`RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL`）を追加。`worker_invoker.py`にはrender-worker Lambdaの代わりにbackend自身へHTTP POSTする`LocalHttpWorkerInvoker`を追加し、`RENDER_WORKER_LOCAL_URL`設定時のみ使う。本番向けクラス（`S3JobStore`・`LambdaWorkerInvoker`）自体は無変更。
 - [x] 🧪 **テストコード追加:** `backend/tests/test_job_store.py`（エンドポイント上書き・path-styleアドレッシング切り替え・presign用クライアントの分離）、`backend/tests/test_worker_invoker.py`（`LocalHttpWorkerInvoker`のPOST送信・非ブロッキング起動・接続エラーの握りつぶし・ファクトリの選択）を追加。
 - [x] 🧪 **ローカルテスト実行:** `pytest`（backend 247件、全パス）・`ruff`がパス。ホストから実際にpresigned URLへPUTでPDFをアップロードし、`hybrid`エンジンの非同期ジョブが`status: "done"`まで完了することをブラウザと同じ経路（ホスト→MinIO直接PUT）で実機確認済み。
 - [x] **エラーメッセージの細分化:** PDF未添付（変換エンジン/`hybrid`）が一律400 VALIDATION_ERRORの汎用文言だったため、専用の`428 Precondition Required`/`PDF_REQUIRED`を新設し「このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。」を返すよう分離（`docs/spec.md` 4章のエラーカタログを更新）。

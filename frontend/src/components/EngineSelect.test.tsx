@@ -10,24 +10,24 @@ describe('EngineSelect（描画エンジン選択）', () => {
     useSheetStore.setState({ engine: 'gemini_free' })
   })
 
-  it('トリガーは初期表示でGemini API（無料）が選択されている', () => {
+  it('トリガーは初期表示でGemini API（無料枠）が選択されている', () => {
     render(<EngineSelect />)
 
-    const trigger = screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料）' })
-    expect(trigger).toHaveTextContent('Gemini API（無料）')
+    const trigger = screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料枠）' })
+    expect(trigger).toHaveTextContent('Gemini API（無料枠）')
   })
 
   it('開くと8つの選択肢が、生成AI5種→変換エンジン3種の順で並び、それぞれ説明文を持つ', async () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 
-    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料）' }))
+    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料枠）' }))
 
     const options = await screen.findAllByRole('option')
     const labels = options.map((option) => option.textContent)
     expect(labels).toHaveLength(8)
     expect(labels[0]).toContain('精密復元')
-    expect(labels[1]).toContain('Gemini API（無料）')
+    expect(labels[1]).toContain('Gemini API（無料枠）')
     expect(labels[2]).toContain('Gemini API')
     expect(labels[3]).toContain('Claude API')
     expect(labels[4]).toContain('OpenAI API')
@@ -43,7 +43,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 
-    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料）' }))
+    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料枠）' }))
 
     expect(screen.getAllByLabelText('要アカウント登録（フェーズ5で利用可能予定）')).toHaveLength(3)
   })
@@ -52,7 +52,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 
-    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料）' }))
+    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料枠）' }))
     await user.click(await screen.findByRole('option', { name: /^Docling/ }))
 
     expect(useSheetStore.getState().engine).toBe('docling')
@@ -63,7 +63,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 
-    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料）' }))
+    await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料枠）' }))
     const claudeOption = await screen.findByRole('option', { name: /^Claude API/ })
     expect(claudeOption).not.toHaveAttribute('aria-disabled', 'true')
 

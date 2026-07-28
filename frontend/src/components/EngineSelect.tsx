@@ -21,7 +21,7 @@ const ENGINES: readonly EngineDefinition[] = [
   {
     id: 'hybrid',
     label: '精密復元（無料）',
-    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（数分掛かることあり）',
+    description: 'PyMuPDF・Docling・Gemini（無料枠）を組み合わせて精密に復元します（数十秒から数分掛かることあり）',
     icon: Layers,
     gated: false,
   },

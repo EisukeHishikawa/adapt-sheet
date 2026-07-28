@@ -112,6 +112,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/usage/gemini-free": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gemini Free Usage Status
+         * @description Gemini無料枠（gemini_free）の当日利用回数。認証不要（匿名利用も対象のため）。
+         */
+        get: operations["get_gemini_free_usage_status_api_usage_gemini_free_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/history": {
         parameters: {
             query?: never;
@@ -221,6 +241,15 @@ export interface components {
              * @default
              */
             current_json: string;
+        };
+        /** GeminiFreeUsageResponse */
+        GeminiFreeUsageResponse: {
+            /** Date */
+            date: string;
+            /** Count */
+            count: number;
+            /** Limit */
+            limit: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -567,6 +596,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gemini_free_usage_status_api_usage_gemini_free_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeminiFreeUsageResponse"];
                 };
             };
             /** @description Validation Error */

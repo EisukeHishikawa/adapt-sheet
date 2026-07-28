@@ -28,6 +28,9 @@ _ERROR_CATALOG: dict[int, tuple[str, str]] = {
         "現在、この生成AIは登録ユーザーのみご利用いただけます。アカウント機能の追加までお待ちください。",
     ),
     413: ("PAYLOAD_TOO_LARGE", "PDFファイルのサイズが上限を超えています。"),
+    # 変換エンジン（Docling/pdf2htmlEX/PyMuPDF）とhybridはPDF添付が必須のため、
+    # 未添付をVALIDATION_ERROR（400）とは区別し専用のコード・文言にする。
+    428: ("PDF_REQUIRED", "このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。"),
     422: ("PDF_CONVERSION_ERROR", "PDFの解析に失敗しました。ファイルの内容をご確認ください。"),
     429: ("RATE_LIMITED", "リクエストが混み合っています。しばらくしてから再度お試しください。"),
     502: ("AI_GENERATION_ERROR", "AIによる生成に失敗しました。しばらくしてから再度お試しください。"),

@@ -256,9 +256,10 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 
 | HTTPステータス | `error.code` | ケース | 発生条件 |
 |---|---|---|---|
-| `400 Bad Request` | `VALIDATION_ERROR` | バリデーションエラー | 必須項目の欠如、サイズ指定の型不正、JSON構文エラーなど（変換エンジン選択時にPDF未添付の場合を含む） |
+| `400 Bad Request` | `VALIDATION_ERROR` | バリデーションエラー | 必須項目の欠如、サイズ指定の型不正、JSON構文エラーなど |
 | `403 Forbidden` | `FREE_ACCESS_FORBIDDEN` | 標準プランの生成AI利用不可 | `engine`が`gemini`/`claude`/`openai`（標準プラン）で、フェーズ5のアカウント登録機能導入前 |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
+| `428 Precondition Required` | `PDF_REQUIRED` | PDF未添付 | `engine`が変換エンジン（Docling/pdf2htmlEX/PyMuPDF）または`hybrid`で、PDFが添付されていない |
 | `422 Unprocessable Entity` | `PDF_CONVERSION_ERROR` | PDF解析エラー | PDFの構造が破損している、パスワード保護されている等でDocling/pdf2htmlEX/PyMuPDFによる変換に失敗 |
 | `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | API Gatewayステージ全体（全利用者合算、認証有無に関わらず）のスロットリングに抵触 |
 | `502 Bad Gateway` | `AI_GENERATION_ERROR` | AI生成エラー | Gemini/Claude/OpenAI API呼び出し失敗、タイムアウト、不正なレスポンス形式 |

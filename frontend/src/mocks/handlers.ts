@@ -36,6 +36,10 @@ export const handlers = [
   ),
   // 一覧取得は既定で空配列とし、必要なテストがserver.useで個別に上書きする。
   http.get('/api/history', () => HttpResponse.json([])),
+  // gemini_free（無料枠）の当日利用回数。必要なテストがserver.useで個別に上書きする。
+  http.get('/api/usage/gemini-free', () =>
+    HttpResponse.json({ date: '2026-01-01', count: 3, limit: 10 }),
+  ),
   // App表示時のホットスタンバイ。全画面テストが未処理リクエストで落ちないよう既定で持つ。
   http.post('/api/warmup', () =>
     HttpResponse.json({ docling: 'ok', pdf2htmlex: 'ok', database: 'ok' }),

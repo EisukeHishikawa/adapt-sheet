@@ -221,7 +221,7 @@ def test_process_render_job_writes_error_status_on_ai_generation_error():
 
 def test_process_render_job_writes_localized_message_on_http_exception():
     """hybridエンジンでPDF未添付の場合、HTTPExceptionのdetail未指定分がStarletteの
-    英語フレーズ（"Bad Request"）のまま漏れず、日本語カタログの文言になること。"""
+    英語フレーズ（"Precondition Required"）のまま漏れず、日本語カタログの文言（428 PDF_REQUIRED）になること。"""
     job_store = _override_job_store()
     try:
         response = client.post(
@@ -231,8 +231,8 @@ def test_process_render_job_writes_localized_message_on_http_exception():
         assert response.status_code == 202
         assert job_store.statuses["job-1"]["status"] == "error"
         message = job_store.statuses["job-1"]["message"]
-        assert message == "リクエスト内容に誤りがあります。入力値をご確認ください。"
-        assert "Bad Request" not in message
+        assert message == "このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。"
+        assert "Precondition" not in message
     finally:
         _clear_overrides()
 
@@ -300,5 +300,50 @@ def test_process_render_job_saves_history_when_user_id_present(monkeypatch):
             rows = history_module.list_history(session, user_id="user-123")
         assert len(rows) == 1
         assert rows[0].html == "<p>{{x}}</p>"
+    finally:
+        _clear_overrides()
+
+
+def test_process_render_job_records_gemini_free_usage_for_anonymous_job(monkeypatch):
+    # gemini_free/hybridは未ログインでも使えるため、user_id無し（匿名）のジョブでも
+    # 共有カウンタは増える必要がある。
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from app.models import Base
+    from app.services.gemini_usage import get_gemini_free_usage
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+
+    monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    import app.db as db_module
+
+    monkeypatch.setattr(db_module, "_get_session_factory", lambda: factory)
+
+    job_store = _override_job_store()
+
+    class _FakeAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FakeAIClient())
+    try:
+        response = client.post(
+            "/internal/render-jobs/process",
+            json={"job_id": "job-1", "engine": "gemini_free"},
+        )
+        assert response.status_code == 202
+        assert job_store.statuses["job-1"]["status"] == "done"
+
+        with factory() as session:
+            status = get_gemini_free_usage(session)
+        assert status.count == 1
     finally:
         _clear_overrides()

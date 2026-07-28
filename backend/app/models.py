@@ -8,10 +8,10 @@ SQLAlchemy 2.0の汎用型（Uuid/JSON）を使う。pytestはSQLiteのin-memory
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, Float, String, Text, Uuid
+from sqlalchemy import JSON, Date, DateTime, Float, Integer, String, Text, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -42,3 +42,13 @@ class RenderHistory(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+
+
+class GeminiFreeUsage(Base):
+    """Gemini無料枠（gemini_free）の利用回数。全ユーザー共有の日次カウンタ（JST基準）で、
+    個人データではないためRLSは適用しない（未ログインでもカウント対象のため）。"""
+
+    __tablename__ = "gemini_free_usage"
+
+    usage_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

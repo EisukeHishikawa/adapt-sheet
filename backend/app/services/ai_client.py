@@ -55,6 +55,9 @@ AI_ENGINES: frozenset = frozenset({"gemini_free", "gemini", "claude", "openai", 
 CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
 # RenderEngineの全8値。未知のengine値をPDF読み込み等の重い処理より前に弾くための許可リスト。
 ALL_ENGINES: frozenset = AI_ENGINES | CONVERTER_ENGINES
+# PDF添付が必須のengine。hybridは3役統合の入力として、CONVERTER_ENGINESは変換対象として
+# PDFそのものが必須。PDF読み込み・非同期ジョブ起動より前に弾くための許可リスト。
+PDF_REQUIRED_ENGINES: frozenset = CONVERTER_ENGINES | frozenset({"hybrid"})
 
 
 def _log_ai_payload(message: str, **fields: str) -> None:

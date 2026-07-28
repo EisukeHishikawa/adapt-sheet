@@ -27,6 +27,7 @@ from app.services.ai_client import (
     ALL_ENGINES,
     CONVERTER_ENGINES,
     GATED_ENGINES,
+    PDF_REQUIRED_ENGINES,
     RenderResult,
     build_hybrid_prompt,
     build_prompt,
@@ -85,17 +86,37 @@ class RenderResponse(BaseModel):
     json_: dict = Field(default_factory=dict, alias="json")
 
 
-def _validate_render_params(engine: str, current_user: Optional[SupabaseUser]) -> None:
-    """engineに関するパラメータチェックを1箇所にまとめる。
-
-    PDF読み込み・PyMuPDF/Docling変換・AI呼び出し等の重い処理より前に、各エンドポイントの
-    冒頭で必ず呼ぶこと。未知のengine値は本来ai_client.get_ai_clientのif/elifチェーン末尾
-    でしか検出できず、それより先にPDF読み込みが走ってしまうため、ここで先に弾く。
+def _validate_engine(engine: str) -> None:
+    """未知のengine値を弾く。ai_client.get_ai_clientのif/elifチェーン末尾でも検出できるが、
+    それより前段（PDF読み込み・非同期ジョブ起動等）で無駄な処理をさせないためここで先に弾く。
     """
     if engine not in ALL_ENGINES:
         raise HTTPException(status_code=400)
+
+
+def _validate_pdf_requirement(engine: str, has_pdf: bool) -> None:
+    """hybrid・docling・pdf2htmlex・pymupdfはPDF添付必須。
+
+    hybridは非同期ジョブ経路（/api/render/jobs）を通るため、ここでの判定を怠ると
+    ワーカー起動（Lambdaコールドスタート含む）を待った末にようやく428が返る、という
+    無駄な待ち時間が発生する。ジョブ起動より前に判定すること。
+    """
+    if engine in PDF_REQUIRED_ENGINES and not has_pdf:
+        raise HTTPException(status_code=428)
+
+
+def _validate_render_params(
+    engine: str, current_user: Optional[SupabaseUser], has_pdf: bool
+) -> None:
+    """engine・PDF添付有無に関するパラメータチェックを1箇所にまとめる。
+
+    PDF読み込み・PyMuPDF/Docling変換・AI呼び出し・非同期ジョブ起動等の重い処理より前に、
+    各エンドポイントの冒頭で必ず呼ぶこと。
+    """
+    _validate_engine(engine)
     if engine in GATED_ENGINES and current_user is None:
         raise HTTPException(status_code=403)
+    _validate_pdf_requirement(engine, has_pdf)
 
 
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
@@ -123,13 +144,13 @@ async def render(
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Optional[Session] = Depends(get_db_session_or_none),
 ) -> RenderResponse:
-    # engineに関するパラメータチェックはPDF読み込み・AI呼び出しより前に行い、無駄な処理を避ける。
-    _validate_render_params(engine, current_user)
+    # engine・PDF添付有無のパラメータチェックはPDF読み込み・AI呼び出しより前に行い、
+    # 無駄な処理を避ける。
+    _validate_render_params(engine, current_user, has_pdf=pdf is not None)
 
     if engine in CONVERTER_ENGINES:
-        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。PDF必須。
-        if pdf is None:
-            raise HTTPException(status_code=428)
+        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。PDF必須
+        # （上のバリデーションで既に確認済み）。
         content = await pdf.read()
         filename = pdf.filename or "uploaded.pdf"
         html = await _convert_with_engine(
@@ -289,7 +310,7 @@ def create_render_job(
     受けない）し、ここではジョブIDだけを即座に返す。パラメータチェックは/api/renderと同じく
     ここで同期的に行う。
     """
-    _validate_render_params(payload.engine, current_user)
+    _validate_render_params(payload.engine, current_user, payload.has_pdf)
 
     job_id = payload.job_id or job_store.new_job_id()
     job_store.write_status(job_id, {"status": "pending"})
@@ -369,9 +390,9 @@ async def process_render_job(
     """
     try:
         # ゲート判定（GATED_ENGINES）は起動元のcreate_render_jobで既に行っているため、
-        # ここではengine自体の妥当性のみをPDF取得（重い処理）より前に確認する。
-        if payload.engine not in ALL_ENGINES:
-            raise HTTPException(status_code=400)
+        # ここではengine自体の妥当性・PDF添付有無のみをPDF取得（重い処理）より前に確認する。
+        _validate_engine(payload.engine)
+        _validate_pdf_requirement(payload.engine, payload.has_pdf)
         pdf_bytes = job_store.fetch_uploaded_pdf(payload.job_id) if payload.has_pdf else None
         result = await _generate_ai_result(
             engine=payload.engine,

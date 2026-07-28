@@ -108,6 +108,32 @@ def test_create_render_job_writes_pending_status_and_invokes_worker():
         _clear_overrides()
 
 
+def test_create_render_job_returns_428_for_hybrid_without_pdf():
+    """hybridはPDF添付必須。ワーカー起動（Lambdaコールドスタート込みの往復）を待たせず、
+    ジョブ作成時点で即座に428を返すこと。"""
+    _override_job_store()
+    worker_invoker = _override_worker_invoker()
+    try:
+        response = client.post("/api/render/jobs", json={"engine": "hybrid", "has_pdf": False})
+        assert response.status_code == 428
+        assert worker_invoker.calls == []
+    finally:
+        _clear_overrides()
+
+
+def test_create_render_job_returns_428_for_converter_engine_without_pdf():
+    """docling/pdf2htmlex/pymupdfも本来/api/renderのみが使う想定だが、/api/render/jobsへ
+    誤って投げられた場合もワーカー起動前にPDF必須チェックで弾く。"""
+    _override_job_store()
+    worker_invoker = _override_worker_invoker()
+    try:
+        response = client.post("/api/render/jobs", json={"engine": "docling", "has_pdf": False})
+        assert response.status_code == 428
+        assert worker_invoker.calls == []
+    finally:
+        _clear_overrides()
+
+
 def test_create_render_job_returns_403_for_gated_engine_without_login():
     _override_job_store()
     worker_invoker = _override_worker_invoker()

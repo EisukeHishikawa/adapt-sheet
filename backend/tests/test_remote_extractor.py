@@ -110,8 +110,11 @@ def test_warmup_signs_with_sigv4_when_auth_env_is_aws_sigv4(monkeypatch):
     assert captured_headers["authorization"].startswith("AWS4-HMAC-SHA256 ")
 
 
-def test_warmup_returns_false_instead_of_raising_on_failure():
+def test_warmup_returns_false_instead_of_raising_on_failure(monkeypatch):
     # ウォームアップは画面表示のついでに投げる副次的な処理のため、失敗しても例外にしない。
+    # docker-compose環境ではDOCLING_SERVICE_SKIP_WARMUPが常時trueのため明示的に打ち消す。
+    monkeypatch.delenv("DOCLING_SERVICE_SKIP_WARMUP", raising=False)
+
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
@@ -120,7 +123,9 @@ def test_warmup_returns_false_instead_of_raising_on_failure():
     assert extractor.warmup() is False
 
 
-def test_warmup_returns_false_on_non_200_status():
+def test_warmup_returns_false_on_non_200_status(monkeypatch):
+    monkeypatch.delenv("DOCLING_SERVICE_SKIP_WARMUP", raising=False)
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(403, json={"Message": "Forbidden"})
 

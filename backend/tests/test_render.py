@@ -584,9 +584,25 @@ def test_render_increments_gemini_free_usage_for_anonymous_user():
 
 def test_render_increments_gemini_free_usage_for_hybrid_engine():
     # hybridはgemini_freeと同じ無料枠モデルを使うため（ai_client.pyのAI_ENGINES定義コメント参照）、
-    # 同じ共有カウンタの対象になる。
+    # 同じ共有カウンタの対象になる。実docling-service/pdf2htmlex-serviceには依存させず、
+    # PyMuPDF/Docling抽出結果とAIクライアントをフェイクへ差し替える（CIの--no-deps実行対策）。
+    class _FakeLayoutConverter:
+        def convert_to_html(self, filename, content):
+            return "<html>pymupdf-marker</html>"
+
+    class _FakeHtmlExtractor:
+        def convert_to_html(self, filename, content):
+            return "<html>docling-marker</html>"
+
+    class _FakeAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
+
     db_session = _sqlite_session()
     _override_db(db_session)
+    _override_ai_client(_FakeAIClient())
+    app.dependency_overrides[get_layout_converter] = lambda: _FakeLayoutConverter()
+    app.dependency_overrides[get_html_extractor] = lambda: _FakeHtmlExtractor()
     try:
         response = client.post(
             "/api/render",
@@ -599,11 +615,21 @@ def test_render_increments_gemini_free_usage_for_hybrid_engine():
         assert status.count == 1
     finally:
         _clear_db_override()
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+        app.dependency_overrides.pop(get_layout_converter, None)
+        app.dependency_overrides.pop(get_html_extractor, None)
 
 
 def test_render_does_not_increment_gemini_free_usage_for_converter_engines():
+    # docling engineはAIを介さずhtml_extractorの変換結果をそのまま返すため、そちらをフェイクへ
+    # 差し替える（CIの--no-deps実行では実docling-serviceに到達できないため）。
+    class _FakeExtractor:
+        def convert_to_html(self, filename, content):
+            return "<html>docling-marker</html>"
+
     db_session = _sqlite_session()
     _override_db(db_session)
+    app.dependency_overrides[get_html_extractor] = lambda: _FakeExtractor()
     try:
         response = client.post(
             "/api/render",
@@ -616,6 +642,7 @@ def test_render_does_not_increment_gemini_free_usage_for_converter_engines():
         assert status.count == 0
     finally:
         _clear_db_override()
+        app.dependency_overrides.pop(get_html_extractor, None)
 
 
 def test_render_still_succeeds_when_gemini_free_usage_record_fails():

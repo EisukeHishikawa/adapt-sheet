@@ -99,9 +99,10 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 1. OIDCでデプロイロールを引き受け、ECRへログイン。
 2. `backend` / `docling` / `pdf2htmlex` の3イメージを`Dockerfile.lambda`からビルドし、コミットSHAのタグでECR Privateへpush。
-3. `terraform apply`（`image_tag`等にコミットSHAを渡す）でインフラを適用し、Lambdaを新しいイメージへ更新。
-4. フロントをビルドしてS3へ同期し、CloudFrontのキャッシュを無効化。`index.html`だけキャッシュさせず、ハッシュ付きアセットは長期キャッシュする。
-5. `POST /api/warmup` でbackend→docling/pdf2htmlex/DBの疎通をスモークテストする。
+3. ビルドした`backend`イメージで`alembic upgrade head`を実行し、本番DBのスキーマを最新化する（デプロイ前に適用し、新しいコードが存在しないテーブルへアクセスする事故を防ぐ）。
+4. `terraform apply`（`image_tag`等にコミットSHAを渡す）でインフラを適用し、Lambdaを新しいイメージへ更新。
+5. フロントをビルドしてS3へ同期し、CloudFrontのキャッシュを無効化。`index.html`だけキャッシュさせず、ハッシュ付きアセットは長期キャッシュする。
+6. `POST /api/warmup` でbackend→docling/pdf2htmlex/DBの疎通をスモークテストする。
 
 ### CDに必要なGitHubリポジトリ設定
 
@@ -114,6 +115,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 | Variables | `ALARM_EMAIL` | CloudWatchアラームの通知先。未設定ならSNSトピックのみ作成 |
 | Variables | `CREATE_GITHUB_OIDC_PROVIDER` | OIDCプロバイダが既にアカウントにある場合のみ`false` |
 | Secrets | `VITE_SUPABASE_ANON_KEY` | フロントのビルド時に埋め込むanon key |
+| Secrets | `MIGRATION_DATABASE_URL` | 本番Supabaseの`postgres`ロール（所有者権限）接続文字列。マイグレーション専用で、実行時用の`DATABASE_URL`（Parameter Store、`authenticator`ロール）とは別物 |
 
 初回だけは、CDが動く前提（state土台・ECR・Lambda・デプロイロール）をローカルから手動で作る必要がある（[infra/README.md](../infra/README.md) の手順1〜6）。それまでの間、CDは`AWS_DEPLOY_ROLE_ARN`が未設定であることを検知してジョブごとスキップする。
 

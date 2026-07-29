@@ -61,6 +61,19 @@ jobs:
             docker push "$image"
           done
 
+      # 本番マイグレーション未適用のままデプロイが進み、新しいコードが存在しないテーブルに
+      # アクセスして落ちる事故を防ぐ。DDL・RLS設定には所有者権限が要るため、実行時用の
+      # DATABASE_URL（authenticator/制限ロール）とは別にMIGRATION_DATABASE_URL（postgresロール）を使う。
+      - name: Run database migrations
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          docker run --rm --entrypoint alembic \
+            -e MIGRATION_DATABASE_URL \
+            "${REGISTRY}/adapt-sheet-prod-backend:${TAG}" upgrade head
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.8

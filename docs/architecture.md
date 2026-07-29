@@ -75,7 +75,7 @@ flowchart LR
     end
 
     subgraph SupaCompose["Supabase Local CLI（別のDocker Compose、`supabase start`）"]
-        SB["Postgres + GoTrue (Auth)<br/>:54321-54329"]
+        SB["Postgres + GoTrue (Auth)<br/>:54320番台"]
     end
 
     subgraph Host["ホスト側ツール（Docker非経由）"]

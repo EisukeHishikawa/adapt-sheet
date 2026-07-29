@@ -412,7 +412,12 @@ async def process_render_job(
         job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except (PDFConversionError, AIGenerationError) as exc:
-        job_store.write_status(payload.job_id, {"status": "error", "message": str(exc)})
+        status_code = 422 if isinstance(exc, PDFConversionError) else 502
+        logger.warning(
+            "Render job failed: %s", exc, extra={"status_code": status_code, "job_id": payload.job_id}
+        )
+        message = build_error_payload(status_code)["error"]["message"]
+        job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except Exception:
         logger.exception(

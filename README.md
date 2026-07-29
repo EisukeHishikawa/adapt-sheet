@@ -2,6 +2,18 @@
 
 本番環境: https://d3lal8vccjsy5y.cloudfront.net/
 
+```mermaid
+flowchart LR
+    Browser["ブラウザ (SPA)"] -->|"静的アセット / \"/api/*\""| CF["CloudFront"]
+    CF --> S3["S3 (静的ホスティング)"]
+    CF --> APIGW["API Gateway"]
+    APIGW --> Lambda["Lambda (backend)"]
+    Lambda --> Supabase["Supabase (Auth + PostgreSQL)"]
+    Lambda --> AI["Gemini / Claude / OpenAI"]
+```
+
+詳細な構成図（非同期ジョブ経路・内部Lambda・ログ収集等）は [`docs/architecture.md`](./docs/architecture.md) を参照。
+
 エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 
 詳細な構想・要件は [`planning/brainstorm.md`](./planning/brainstorm.md)、開発の進め方は [`DEVELOPMENT.md`](./DEVELOPMENT.md) を参照。

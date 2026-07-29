@@ -207,3 +207,9 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] **エラーメッセージの細分化:** PDF未添付（変換エンジン/`hybrid`）が一律400 VALIDATION_ERRORの汎用文言だったため、専用の`428 Precondition Required`/`PDF_REQUIRED`を新設し「このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。」を返すよう分離（`docs/spec.md` 4章のエラーカタログを更新）。
 - [x] 🧪 **テストコード更新:** `backend/tests/test_render.py`・`test_render_jobs.py`（PDF未添付時の期待ステータスを400→428へ、エラーメッセージ文言を更新）、`frontend/src/store/sheetStore.test.ts`（428のケースを追加）。
 - [x] 🧪 **ローカルテスト実行:** `pytest`（backend 247件、全パス）・`ruff`・`Vitest`（frontend 172件、全パス）・`ESLint`がパス。`curl`で実際に428・`PDF_REQUIRED`・専用文言が返ることを実機確認済み。
+
+#### ⬛ ステップ 33: CSSの画面編集対応
+- [x] `EditorPanel`のタブをHTML/JSONの2つからHTML/CSS/JSONの3つへ拡張し、既存の`CodeEditor`と同じテキスト入力パターンでCSSを直接編集できるようにする（`sheetStore.setCssContent`を新設し、`setHtmlContent`と同じスナップショット予約に乗せる）。プレビューへの反映は既存の`composePreviewDocument`がCSSをHTML末尾の`<style>`へ結合する仕組みをそのまま利用するため変更不要。
+- [x] `CodeEditor`にCSS用のシンタックスハイライト（`prismjs/components/prism-css`）を追加。
+- [x] 🧪 **テストコード更新:** `EditorPanel.test.tsx`（CSS入力欄が存在しない前提のテストを、CSSタブでの表示・入力反映を検証するテストへ置き換え）、`CodeEditor.test.tsx`（CSS言語でのトークン色分けを追加）。
+- [x] 🧪 **ローカルテスト実行:** `Vitest`（`EditorPanel.test.tsx`・`CodeEditor.test.tsx`、9件全パス）・`ESLint`・`vite build`がパス。

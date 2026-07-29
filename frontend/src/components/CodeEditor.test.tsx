@@ -45,6 +45,14 @@ describe('CodeEditor（コードエディタ風入力UI）', () => {
     expect(container.querySelector('.token')).not.toBeNull()
   })
 
+  it('CSSがprismのトークン（.token）として色分けされる', () => {
+    const { container } = render(
+      <CodeEditor ariaLabel="CSS入力" language="css" value="body { color: red; }" onChange={() => {}} />,
+    )
+
+    expect(container.querySelector('.token')).not.toBeNull()
+  })
+
   it('コピーボタンが表示される', () => {
     render(<CodeEditor ariaLabel="JSON入力" language="json" value='{"a":1}' onChange={() => {}} />)
 

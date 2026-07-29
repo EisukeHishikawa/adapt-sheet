@@ -1,14 +1,15 @@
 import { useRef, useState, type ChangeEvent, type KeyboardEvent, type UIEvent } from 'react'
 import Prism from 'prismjs'
-// PrismコアはHTML(markup)を同梱するが、JSONは別途読み込んで文法を拡張する。
+// PrismコアはHTML(markup)を同梱するが、JSON/CSSは別途読み込んで文法を拡張する。
 import 'prismjs/components/prism-json'
+import 'prismjs/components/prism-css'
 import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // シンタックスハイライト付きのコード入力欄。編集可能なまま色分けするため、外部エディタライブラリを
 // 足さず、prismでハイライトした<pre>を背面に敷き、文字色を透明にした<textarea>を前面に重ねる方式にした。
 // 見出しは画面に出さないため、アクセシビリティ・テスト用の名前はtextareaのaria-labelで保持する。
-type CodeLanguage = 'html' | 'json'
+type CodeLanguage = 'html' | 'json' | 'css'
 
 type CodeEditorProps = {
   value: string
@@ -30,7 +31,8 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
   const lineCount = Math.max(1, value.split('\n').length)
 
   // 末尾が改行の場合、<pre>では最終空行の高さが出ずtextareaと1行ぶんずれるため末尾に空白を補う。
-  const grammar = language === 'json' ? Prism.languages.json : Prism.languages.markup
+  const grammar =
+    language === 'json' ? Prism.languages.json : language === 'css' ? Prism.languages.css : Prism.languages.markup
   const highlighted = Prism.highlight(value.endsWith('\n') ? `${value} ` : value, grammar, language)
 
   // textareaのスクロール量を背面<pre>と行番号ガターへ転写し、スクロールしても各層を揃え続ける。

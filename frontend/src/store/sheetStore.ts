@@ -195,6 +195,7 @@ type SheetState = {
   error: string | null
   successMessage: string | null
   setHtmlContent: (html: string) => void
+  setCssContent: (css: string) => void
   setJsonContent: (json: string) => void
   setPromptContent: (prompt: string) => void
   setPdfFile: (file: File | null) => void
@@ -407,6 +408,10 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   successMessage: null,
   setHtmlContent: (html) => {
     set({ htmlContent: html })
+    scheduleEditSnapshot(get)
+  },
+  setCssContent: (css) => {
+    set({ cssContent: css })
     scheduleEditSnapshot(get)
   },
   setJsonContent: (json) => {

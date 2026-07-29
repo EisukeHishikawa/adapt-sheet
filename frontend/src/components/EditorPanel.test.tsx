@@ -3,20 +3,33 @@ import userEvent from '@testing-library/user-event'
 import { EditorPanel } from './EditorPanel'
 import { useSheetStore } from '@/store/sheetStore'
 
-// EditorPanelはHTML入力とJSON入力を「タブ切り替え」で表示する右カラム専用コンポーネント。
-// ここではタブ切り替えとストア連動、およびCSS入力欄が存在しないことを固定する。
+// EditorPanelはHTML・CSS・JSON入力を「タブ切り替え」で表示する右カラム専用コンポーネント。
+// ここではタブ切り替えとストア連動を検証する。
 // 見出しテキストは非表示にする方針のため、検証は表示ラベルではなくtextareaのaria-labelとタブ（role=tab）に対して行う。
-describe('EditorPanel（HTML/JSONタブ切り替え）', () => {
+describe('EditorPanel（HTML/CSS/JSONタブ切り替え）', () => {
   beforeEach(() => {
-    useSheetStore.setState({ htmlContent: '', jsonContent: '', promptContent: '' })
+    useSheetStore.setState({ htmlContent: '', cssContent: '', jsonContent: '', promptContent: '' })
   })
 
   it('既定ではHTMLタブが選択され、HTML入力欄のみが表示される', () => {
     render(<EditorPanel />)
 
     expect(screen.getByRole('textbox', { name: 'HTML入力' })).toBeInTheDocument()
-    // 非表示タブのtextareaはアンマウントされるため、JSON入力欄は初期状態では存在しない。
+    // 非表示タブのtextareaはアンマウントされるため、CSS・JSON入力欄は初期状態では存在しない。
+    expect(screen.queryByRole('textbox', { name: 'CSS入力' })).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'JSON入力' })).not.toBeInTheDocument()
+  })
+
+  it('CSSタブに切り替えるとCSS入力欄が表示され、入力でcssContentが更新される', async () => {
+    const user = userEvent.setup()
+    render(<EditorPanel />)
+
+    await user.click(screen.getByRole('tab', { name: 'CSS' }))
+
+    const cssEditor = screen.getByRole('textbox', { name: 'CSS入力' })
+    fireEvent.change(cssEditor, { target: { value: 'body { color: red; }' } })
+
+    expect(useSheetStore.getState().cssContent).toBe('body { color: red; }')
   })
 
   it('JSONタブに切り替えるとJSON入力欄が表示され、入力でjsonContentが更新される', async () => {
@@ -31,12 +44,5 @@ describe('EditorPanel（HTML/JSONタブ切り替え）', () => {
     fireEvent.change(jsonEditor, { target: { value: '{"a":1}' } })
 
     expect(useSheetStore.getState().jsonContent).toBe('{"a":1}')
-  })
-
-  it('CSS入力欄は存在しない（CSSはHTMLの<style>に埋め込む前提のため独立エディタを持たない）', () => {
-    render(<EditorPanel />)
-
-    expect(screen.queryByRole('textbox', { name: 'CSS入力' })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('CSS入力')).not.toBeInTheDocument()
   })
 })

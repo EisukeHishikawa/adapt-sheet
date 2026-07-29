@@ -3,14 +3,17 @@ import { cn } from '@/lib/utils'
 import { CodeEditor } from '@/components/CodeEditor'
 import { useSheetStore } from '@/store/sheetStore'
 
-// 右カラムのコード入力。HTMLとJSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
-// 1つの入力に使えて編集しやすくする。CSS入力は持たない（既存CSSはHTMLの<style>に埋め込む前提）。
+// 右カラムのコード入力。HTML・CSS・JSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
+// 1つの入力に使えて編集しやすくする。CSSはプレビュー合成時（composePreviewDocument）にHTML末尾の
+// <style>へ結合されるため、HTML本文の<style>とは別に独立したタブとして持つ。
 // 見出しは画面に出さないため、名前はtextareaのaria-labelで保持する（SizeControlsと同じ方針）。
-type EditorTab = 'html' | 'json'
+type EditorTab = 'html' | 'css' | 'json'
 
 export function EditorPanel() {
   const htmlContent = useSheetStore((state) => state.htmlContent)
   const setHtmlContent = useSheetStore((state) => state.setHtmlContent)
+  const cssContent = useSheetStore((state) => state.cssContent)
+  const setCssContent = useSheetStore((state) => state.setCssContent)
   const jsonContent = useSheetStore((state) => state.jsonContent)
   const setJsonContent = useSheetStore((state) => state.setJsonContent)
 
@@ -22,7 +25,7 @@ export function EditorPanel() {
     // 無いためh-fullでは潰れてしまう。md以上は右カラム固定幅＋h-full。
     <div className="flex min-h-[60vh] w-full flex-col gap-2 p-4 md:h-full md:min-h-0 md:w-1/2">
       <div role="tablist" aria-label="入力形式" className="flex gap-1 border-b border-input">
-        {(['html', 'json'] as const).map((tab) => (
+        {(['html', 'css', 'json'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -42,9 +45,13 @@ export function EditorPanel() {
         ))}
       </div>
 
-      {activeTab === 'html' ? (
+      {activeTab === 'html' && (
         <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
-      ) : (
+      )}
+      {activeTab === 'css' && (
+        <CodeEditor id="css-editor" ariaLabel="CSS入力" language="css" value={cssContent} onChange={setCssContent} />
+      )}
+      {activeTab === 'json' && (
         // JSON構文チェックはフロントで重複実装せず、バックエンドの400 VALIDATION_ERRORに委ねる。
         <CodeEditor id="json-editor" ariaLabel="JSON入力" language="json" value={jsonContent} onChange={setJsonContent} />
       )}

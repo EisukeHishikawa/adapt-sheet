@@ -4,12 +4,21 @@
 
 ```mermaid
 flowchart LR
-    Browser["ブラウザ (SPA)"] -->|"静的アセット / \"/api/*\""| CF["CloudFront"]
+    Browser["ブラウザ (SPA)"] --> CF["CloudFront"]
     CF --> S3["S3 (静的ホスティング)"]
     CF --> APIGW["API Gateway"]
     APIGW --> Lambda["Lambda (backend)"]
     Lambda --> Supabase["Supabase (Auth + PostgreSQL)"]
     Lambda --> AI["Gemini / Claude / OpenAI"]
+```
+
+```mermaid
+flowchart LR
+    Dev["開発者"] -->|PR作成| GitHub["GitHub"]
+    GitHub --> CI["CI (Vitest/pytest/ESLint/Ruff)"]
+    CI -->|成功| Merge["mainへマージ"]
+    Merge --> CD["CD (Terraform apply)"]
+    CD --> AWSInfra["AWS (S3 / Lambda / CloudFront)"]
 ```
 
 詳細な構成図（非同期ジョブ経路・内部Lambda・ログ収集等）は [`docs/architecture.md`](./docs/architecture.md) を参照。

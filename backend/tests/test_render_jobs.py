@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client_factory
 from app.services.job_store import get_job_store
+from app.services.pdf_common import PDFConversionError
+from app.services.pdf_layout import get_layout_converter
 from app.services.worker_invoker import get_worker_invoker
 
 client = TestClient(app)
@@ -66,6 +68,7 @@ def _clear_overrides() -> None:
     app.dependency_overrides.pop(get_job_store, None)
     app.dependency_overrides.pop(get_worker_invoker, None)
     app.dependency_overrides.pop(get_ai_client_factory, None)
+    app.dependency_overrides.pop(get_layout_converter, None)
 
 
 def _make_bearer_token(secret: str, **claims) -> str:
@@ -226,11 +229,13 @@ def test_process_render_job_writes_done_status_on_success():
 
 
 def test_process_render_job_writes_error_status_on_ai_generation_error():
+    """外部AI APIの生エラー文字列（RESOURCE_EXHAUSTED等）をユーザーへ露出させず、
+    安全な定型文言（AI_GENERATION_ERRORカタログ）に変換して書き込むこと。"""
     job_store = _override_job_store()
 
     class _FailingAIClient:
         def generate(self, prompt: str, pdf=None) -> RenderResult:
-            raise AIGenerationError("AI呼び出しに失敗しました（テスト用）")
+            raise AIGenerationError("Gemini API呼び出しに失敗しました: 429 RESOURCE_EXHAUSTED (テスト用)")
 
     app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FailingAIClient())
     try:
@@ -240,7 +245,33 @@ def test_process_render_job_writes_error_status_on_ai_generation_error():
         )
         assert response.status_code == 202
         assert job_store.statuses["job-1"]["status"] == "error"
-        assert "AI呼び出しに失敗しました" in job_store.statuses["job-1"]["message"]
+        message = job_store.statuses["job-1"]["message"]
+        assert message == "AIによる生成に失敗しました。しばらくしてから再度お試しください。"
+        assert "RESOURCE_EXHAUSTED" not in message
+    finally:
+        _clear_overrides()
+
+
+def test_process_render_job_writes_error_status_on_pdf_conversion_error():
+    """hybridエンジンのPyMuPDF変換失敗時も、生例外メッセージを露出させず定型文言に変換すること。"""
+    job_store = _override_job_store()
+    job_store.uploaded["job-1"] = b"%PDF-1.4 dummy"
+
+    class _FailingLayoutConverter:
+        def convert_to_html(self, filename: str, content: bytes) -> str:
+            raise PDFConversionError("PDFの解析に失敗しました: invalid xref table at offset 123 (テスト用)")
+
+    app.dependency_overrides[get_layout_converter] = lambda: _FailingLayoutConverter()
+    try:
+        response = client.post(
+            "/internal/render-jobs/process",
+            json={"job_id": "job-1", "engine": "hybrid", "has_pdf": True},
+        )
+        assert response.status_code == 202
+        assert job_store.statuses["job-1"]["status"] == "error"
+        message = job_store.statuses["job-1"]["message"]
+        assert message == "PDFの解析に失敗しました。ファイルの内容をご確認ください。"
+        assert "xref" not in message
     finally:
         _clear_overrides()
 

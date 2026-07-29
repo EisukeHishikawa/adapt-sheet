@@ -98,8 +98,8 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 | `engine` | string | 任意 | 生成エンジン。`gemini_free`（既定）/`gemini`/`claude`/`openai`/`hybrid`/`docling`/`pdf2htmlex`/`pymupdf`のいずれか |
 
 > `css`・`json`（業務データ）・`html`（既存HTML）はいずれも独立したリクエストフィールドを持たない。生成AIへはPDFファイルをそのままマルチモーダル入力として渡し、PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない。
-> `engine`が`gemini`/`claude`/`openai`（標準プラン）の場合、未ログインユーザーには`403 FREE_ACCESS_FORBIDDEN`を返す（4章参照）。ログイン済みかどうかは`Authorization: Bearer <Supabaseアクセストークン>`ヘッダーの有効性で判定する（DEVELOPMENT.md ステップ27、ADR-020）。
-> このエンドポイント自体はAPI Gatewayの統合タイムアウト（29秒固定）を受ける同期処理のため、フロントは生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）ではこのエンドポイントを直接呼ばず、3.1a「非同期レンダリングジョブ」を経由する（ADR-024）。変換エンジン（`docling`/`pdf2htmlex`/`pymupdf`）は引き続きこのエンドポイントを直接呼ぶ。
+> `engine`が`gemini`/`claude`/`openai`（標準プラン）の場合、未ログインユーザーには`403 FREE_ACCESS_FORBIDDEN`を返す（4章参照）。ログイン済みかどうかは`Authorization: Bearer <Supabaseアクセストークン>`ヘッダーの有効性で判定する。
+> このエンドポイント自体はAPI Gatewayの統合タイムアウト（29秒固定）を受ける同期処理のため、フロントは生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）ではこのエンドポイントを直接呼ばず、3.1a「非同期レンダリングジョブ」を経由する。変換エンジン（`docling`/`pdf2htmlex`/`pymupdf`）は引き続きこのエンドポイントを直接呼ぶ。
 
 **レスポンス（200 OK）**
 
@@ -113,9 +113,9 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 
 > `engine`が変換エンジン（`docling`/`pdf2htmlex`/`pymupdf`）の場合、AIを介さず各エンジンの変換結果をそのまま`html`に、`css`は空文字列、`json`は空オブジェクトとして返す。
 
-### 3.1a 非同期レンダリングジョブ（生成AI系engine、ADR-024）
+### 3.1a 非同期レンダリングジョブ（生成AI系engine）
 
-生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）はAPI Gatewayの29秒制約を受けないよう、3つのエンドポイントを組み合わせた非同期ジョブとして描画する。処理フローの全体像は[`architecture.md`](./architecture.md#41-非同期レンダリングジョブ生成ai系engineadr-031)を参照。
+生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）はAPI Gatewayの29秒制約を受けないよう、3つのエンドポイントを組み合わせた非同期ジョブとして描画する。処理フローの全体像は[`architecture.md`](./architecture.md#41-非同期レンダリングジョブ生成ai系engine)を参照。
 
 #### `POST /api/render/upload-url`
 
@@ -218,7 +218,7 @@ pdf2htmlEX変換専用のサービスが公開する内部エンドポイント�
 |---|---|
 | `422 Unprocessable Entity` | PDFの構造が破損している等でpdf2htmlEXによる変換に失敗（`backend`側の`RemotePdf2HtmlExExtractor`がこれを検知し、`PDF_CONVERSION_ERROR`として4.1の統一エラー形式に整形した上で`/api/render`のレスポンスに反映する） |
 
-### 3.4 GET /api/history（登録ユーザー限定、DEVELOPMENT.md ステップ28）
+### 3.4 GET /api/history（登録ユーザー限定）
 
 ログイン中のユーザーが`POST /api/render`で成功させた生成履歴を、新しい順に最大50件返す。`POST /api/render`成功時にサーバー側で自動保存されるため、専用の保存操作（保存ボタン等）はない。
 
@@ -288,7 +288,7 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 
 各エラーは例外種別に応じたステータスコードを厳格に返す（[CLAUDE.md](../CLAUDE.md) のエラーハンドリング規約に準拠）。
 
-### 4.1 エラーレスポンス形式（ステップ14・ADR-012）
+### 4.1 エラーレスポンス形式
 
 すべてのエラー応答は、HTTPステータスに加えて次の構造化JSONボディを返す。フロントエンドはこの `message` をそのままユーザー向け文言として表示し、`request_id` を問い合わせ用に保持する（[CLAUDE.md](../CLAUDE.md) の型安全・エラーハンドリング規約に準拠）。
 
@@ -306,7 +306,7 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 |---|---|---|
 | `error.code` | string | 機械可読なエラー識別子（上表の `error.code` 列）。フロントの分岐処理に使う。 |
 | `error.message` | string | ユーザーへ表示する安全な日本語文言。技術的詳細・スタックトレースは含めない。 |
-| `error.request_id` | string | リクエスト単位の相関ID。同じ値が `X-Request-ID` レスポンスヘッダーおよびサーバーの構造化ログ（ステップ13・ADR-011）に出力され、障害調査時に画面表示とログを突き合わせられる。 |
+| `error.request_id` | string | リクエスト単位の相関ID。同じ値が `X-Request-ID` レスポンスヘッダーおよびサーバーの構造化ログに出力され、障害調査時に画面表示とログを突き合わせられる。 |
 
 - `message` はステータス／例外種別ごとに固定の安全文言へ丸める。バックエンドの生の例外メッセージ（英語や内部情報を含みうる）はサーバーログにのみ記録し、レスポンスには出さない。
-- 成功・失敗を問わず全レスポンスに `X-Request-ID` ヘッダーを付与する（ステップ13で導入するログ基盤と相関）。
+- 成功・失敗を問わず全レスポンスに `X-Request-ID` ヘッダーを付与する。

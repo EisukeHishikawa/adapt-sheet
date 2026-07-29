@@ -176,7 +176,7 @@ sequenceDiagram
 
 ---
 
-## 4.1 非同期レンダリングジョブ（生成AI系engine、ADR-024）
+## 4.1 非同期レンダリングジョブ（生成AI系engine）
 
 生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）は、Gemini APIが20〜60秒以上かかることがあり、API Gatewayの統合タイムアウト（29秒固定・AWS側のハード上限）に収まらない場合がある。これを回避するため、フロントはこれらのengineでは`POST /api/render`を直接呼ばず、以下の非同期ジョブ経路を使う（詳細仕様は [`spec.md`](./spec.md) 3.1a参照）。変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は引き続き上記4章の同期経路のままで変更しない。
 

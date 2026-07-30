@@ -45,4 +45,21 @@ describe('EditorPanel（HTML/CSS/JSONタブ切り替え）', () => {
 
     expect(useSheetStore.getState().jsonContent).toBe('{"a":1}')
   })
+
+  it('HTMLタブで「整形表示」を押すと1行のHTMLが改行付きの読み取り専用表示に変わり、ストアのhtmlContentは変えない', async () => {
+    const user = userEvent.setup()
+    useSheetStore.setState({ htmlContent: '<div><p>a</p></div><div><p>b</p></div>' })
+    render(<EditorPanel />)
+
+    await user.click(screen.getByRole('button', { name: '整形表示' }))
+
+    const htmlEditor = screen.getByRole('textbox', { name: 'HTML入力' })
+    expect(htmlEditor).toHaveAttribute('readonly')
+    expect((htmlEditor as HTMLTextAreaElement).value).toContain('\n')
+    // 整形はソース表示だけの見た目変換であり、プレビュー描画に使うストアの値自体は変えない。
+    expect(useSheetStore.getState().htmlContent).toBe('<div><p>a</p></div><div><p>b</p></div>')
+
+    await user.click(screen.getByRole('button', { name: '編集に戻る' }))
+    expect(screen.getByRole('textbox', { name: 'HTML入力' })).not.toHaveAttribute('readonly')
+  })
 })

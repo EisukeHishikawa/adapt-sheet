@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { CodeEditor } from '@/components/CodeEditor'
+import { formatHtml } from '@/lib/htmlFormatter'
 import { useSheetStore } from '@/store/sheetStore'
 
 // 右カラムのコード入力。HTML・CSS・JSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
@@ -19,6 +20,10 @@ export function EditorPanel() {
 
   // 非表示側のtextareaはアンマウントされるが、入力値はストアが保持しているためタブを戻せば復元される。
   const [activeTab, setActiveTab] = useState<EditorTab>('html')
+
+  // 精密復元（pdf2htmlexエンジン）は1行の自己完結HTMLを返すことがあるため、ソース表示だけ
+  // 整形できるようにする。プレビュー描画・保存に使う実際のhtmlContentは変更しない。
+  const [isHtmlFormatted, setIsHtmlFormatted] = useState(false)
 
   return (
     // md未満（左カラムの下に縦積みされる）ではmin-h-[60vh]で自身の高さを確保する。祖先に固定高さが
@@ -46,7 +51,25 @@ export function EditorPanel() {
       </div>
 
       {activeTab === 'html' && (
-        <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
+        <>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsHtmlFormatted((prev) => !prev)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              {isHtmlFormatted ? '編集に戻る' : '整形表示'}
+            </button>
+          </div>
+          <CodeEditor
+            id="html-editor"
+            ariaLabel="HTML入力"
+            language="html"
+            value={isHtmlFormatted ? formatHtml(htmlContent) : htmlContent}
+            onChange={setHtmlContent}
+            readOnly={isHtmlFormatted}
+          />
+        </>
       )}
       {activeTab === 'css' && (
         <CodeEditor id="css-editor" ariaLabel="CSS入力" language="css" value={cssContent} onChange={setCssContent} />

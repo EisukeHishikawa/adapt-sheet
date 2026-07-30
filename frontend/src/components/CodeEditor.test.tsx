@@ -58,4 +58,17 @@ describe('CodeEditor（コードエディタ風入力UI）', () => {
 
     expect(screen.getByRole('button', { name: 'コピー' })).toBeInTheDocument()
   })
+
+  it('readOnly時は入力欄がreadOnlyになり、変更してもonChangeが呼ばれない', () => {
+    const handleChange = vi.fn()
+    render(
+      <CodeEditor ariaLabel="HTML入力" language="html" value="<p>a</p>" onChange={handleChange} readOnly />,
+    )
+
+    const editor = screen.getByRole('textbox', { name: 'HTML入力' })
+    expect(editor).toHaveAttribute('readonly')
+
+    fireEvent.change(editor, { target: { value: '<p>changed</p>' } })
+    expect(handleChange).not.toHaveBeenCalled()
+  })
 })

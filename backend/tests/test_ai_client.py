@@ -8,6 +8,7 @@ from google.genai import errors as genai_errors
 
 from app.services.ai_client import (
     AIGenerationError,
+    AIServiceSuspendedError,
     AIServiceUnavailableError,
     ClaudeAIClient,
     GeminiAIClient,
@@ -288,11 +289,11 @@ def test_get_ai_client_defaults_to_mock(monkeypatch):
 
 def test_get_ai_client_raises_when_real_requested_without_key(monkeypatch):
     # USE_MOCK_AI=falseで実APIを明示指定したのにAPIキーが無い場合は、
-    # 実行時エラーではなく起動直後にAIGenerationErrorとして検知させる。
+    # 実行時エラーではなく起動直後にAIServiceSuspendedErrorとして検知させる。
     monkeypatch.setenv("USE_MOCK_AI", "false")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIServiceSuspendedError):
         get_ai_client()
 
 
@@ -303,7 +304,7 @@ def test_get_ai_client_engine_gemini_standard_requires_gemini_key(monkeypatch):
     monkeypatch.setenv("USE_MOCK_AI", "false")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIServiceSuspendedError):
         get_ai_client("gemini")
 
 
@@ -318,7 +319,7 @@ def test_get_ai_client_engine_claude_requires_anthropic_key(monkeypatch):
     monkeypatch.setenv("USE_MOCK_AI", "false")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIServiceSuspendedError):
         get_ai_client("claude")
 
 
@@ -333,7 +334,7 @@ def test_get_ai_client_engine_openai_requires_openai_key(monkeypatch):
     monkeypatch.setenv("USE_MOCK_AI", "false")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIServiceSuspendedError):
         get_ai_client("openai")
 
 
@@ -348,7 +349,7 @@ def test_get_ai_client_engine_hybrid_requires_gemini_key(monkeypatch):
     monkeypatch.setenv("USE_MOCK_AI", "false")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIServiceSuspendedError):
         get_ai_client("hybrid")
 
 

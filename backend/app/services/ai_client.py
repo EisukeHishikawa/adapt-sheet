@@ -83,6 +83,14 @@ class AIServiceUnavailableError(AIGenerationError):
     """
 
 
+class AIServiceSuspendedError(AIGenerationError):
+    """標準プラン（gemini/claude/openai/hybrid）のAPIキーが未設定の場合の失敗。
+
+    サーバー側の障害ではなく運営側の意図的な未提供であることをユーザーに伝えるため、
+    app/errors.pyのハンドラが通常のAI生成失敗（502）とは別の501・専用文言へ変換する。
+    """
+
+
 @dataclass
 class RenderResult:
     """AIクライアントの生成結果。app/main.pyのRenderResponseへ詰め替えて返却する。"""
@@ -556,7 +564,7 @@ class OpenAIAIClient:
 def _require_env(name: str) -> str:
     value = os.getenv(name)
     if not value:
-        raise AIGenerationError(f"USE_MOCK_AI=false が指定されていますが {name} が未設定です")
+        raise AIServiceSuspendedError(f"USE_MOCK_AI=false が指定されていますが {name} が未設定です")
     return value
 
 

@@ -17,12 +17,14 @@ type CodeEditorProps = {
   ariaLabel: string
   language: CodeLanguage
   id?: string
+  // 整形表示など「見せるだけ」の用途向け。trueの間はvalueの編集を受け付けない。
+  readOnly?: boolean
 }
 
 // 背面<pre>・行番号ガター・前面<textarea>で一致させないと表示がずれるため定数化する。
 const LINE_HEIGHT_PX = 20
 
-export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEditorProps) {
+export function CodeEditor({ value, onChange, ariaLabel, language, id, readOnly = false }: CodeEditorProps) {
   const gutterRef = useRef<HTMLDivElement>(null)
   const preRef = useRef<HTMLPreElement>(null)
   const [copied, setCopied] = useState(false)
@@ -49,7 +51,7 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
 
   // Tabキーの既定のフォーカス移動を止め、コードエディタらしく2スペースを挿入する。
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== 'Tab') return
+    if (readOnly || event.key !== 'Tab') return
     event.preventDefault()
     const el = event.currentTarget
     const { selectionStart, selectionEnd } = el
@@ -105,7 +107,11 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id }: CodeEdi
           value={value}
           spellCheck={false}
           wrap="off"
-          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChange(event.target.value)}
+          readOnly={readOnly}
+          onChange={(event: ChangeEvent<HTMLTextAreaElement>) => {
+            if (readOnly) return
+            onChange(event.target.value)
+          }}
           onScroll={handleScroll}
           onKeyDown={handleKeyDown}
           className="absolute inset-0 resize-none overflow-auto whitespace-pre bg-transparent py-2 pr-3 pl-2 text-transparent caret-[#e6edf3] outline-none"

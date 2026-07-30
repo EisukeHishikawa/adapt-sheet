@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 // シンタックスハイライト付きのコード入力欄。編集可能なまま色分けするため、外部エディタライブラリを
 // 足さず、prismでハイライトした<pre>を背面に敷き、文字色を透明にした<textarea>を前面に重ねる方式にした。
 // 見出しは画面に出さないため、アクセシビリティ・テスト用の名前はtextareaのaria-labelで保持する。
-type CodeLanguage = 'html' | 'json' | 'css'
+export type CodeLanguage = 'html' | 'json' | 'css'
 
 type CodeEditorProps = {
   value: string

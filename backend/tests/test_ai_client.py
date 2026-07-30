@@ -8,6 +8,7 @@ from google.genai import errors as genai_errors
 
 from app.services.ai_client import (
     AIGenerationError,
+    AIServiceUnavailableError,
     ClaudeAIClient,
     GeminiAIClient,
     MockAIClient,
@@ -452,11 +453,14 @@ def test_gemini_client_retries_on_503_and_succeeds(monkeypatch):
 
 
 def test_gemini_client_raises_after_exhausting_retries(monkeypatch):
+    # 503が3回とも解消しなかった場合はAIServiceUnavailableError（AIGenerationErrorのサブクラス）を
+    # 送出する。app/errors.pyがこれを503 AI_SERVICE_UNAVAILABLEとして専用の文言に変換するため、
+    # 通常のAI生成失敗（502）とは区別する。
     monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
     models = _StubGeminiModels(failures=99, response_text=_VALID_RESPONSE)
     client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIServiceUnavailableError):
         client.generate("prompt")
 
     assert models.call_count == 3
@@ -489,12 +493,16 @@ def test_gemini_client_retries_on_malformed_json_and_succeeds(monkeypatch):
 
 
 def test_gemini_client_raises_after_exhausting_retries_on_malformed_json(monkeypatch):
+    # 不正JSONの繰り返しはGemini側の混雑ではなく生成ノイズのため、AIServiceUnavailableErrorには
+    # しない（通常のAIGenerationErrorのまま）。
     monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
     models = _StubGeminiModels(failures=0, response_text="not a json")
     client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
 
-    with pytest.raises(AIGenerationError):
+    with pytest.raises(AIGenerationError) as exc_info:
         client.generate("prompt")
+
+    assert not isinstance(exc_info.value, AIServiceUnavailableError)
 
     assert models.call_count == 3
 

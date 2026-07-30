@@ -166,6 +166,8 @@ function messageForStatus(status: number): string {
       return 'リクエストが混み合っています。しばらくしてから再度お試しください。'
     case 502:
       return 'AIによる生成に失敗しました。しばらくしてから再度お試しください。'
+    case 503:
+      return '生成AIサービスが混雑しています。しばらく時間をおいて再度お試しください。'
     default:
       return 'サーバーで想定外のエラーが発生しました。'
   }

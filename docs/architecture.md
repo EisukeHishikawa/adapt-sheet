@@ -69,12 +69,16 @@ flowchart LR
         BE["backend<br/>FastAPI<br/>:8000"]
         DL["docling<br/>:8100 (内部のみ)"]
         PH["pdf2htmlex<br/>:8200 (内部のみ)"]
+        MinIO["minio<br/>:9000 (実S3の代替)"]
         E2E["e2e (profile: e2e)<br/>Playwright"]
         LSP["backend-lsp / frontend-lsp<br/>(profile: lsp)<br/>Ruff / ESLint"]
     end
 
-    subgraph Host["ホスト側ツール"]
-        SB["Supabase Local CLI<br/>Auth + PostgreSQL"]
+    subgraph SupaCompose["Supabase Local CLI（別のDocker Compose、`supabase start`）"]
+        SB["Postgres + GoTrue (Auth)<br/>:54320番台"]
+    end
+
+    subgraph Host["ホスト側ツール（Docker非経由）"]
         Mise["mise (Terraform / Node / Python / CLI群)"]
     end
 
@@ -84,6 +88,8 @@ flowchart LR
     FE --> BE
     BE --> DL
     BE --> PH
+    BE --> MinIO
+    FE -->|"presigned URLへ直接PUT"| MinIO
     BE --> SB
     FE --> SB
     E2E --> FE
@@ -94,6 +100,7 @@ flowchart LR
 - `e2e` と `*-lsp` は `profiles` によるopt-inで、常時起動しない（ADR-010/024）。
 - Docling用のMLモデルは名前付きボリュームへ永続化し、コンテナ再作成時の再ダウンロードを避ける。
 - ホスト側ツールのバージョンは `mise.toml` で固定する（ADR-023）。
+- Supabase Local CLIも内部的にはDockerコンテナ（Postgres・GoTrue等）を起動するが、この`docker-compose.yml`とは別スタックのため図でも分けている（詳細手順は[`supabase-local-cli-setup.md`](./supabase-local-cli-setup.md)）。
 
 ---
 
@@ -176,7 +183,7 @@ sequenceDiagram
 
 ---
 
-## 4.1 非同期レンダリングジョブ（生成AI系engine、ADR-024）
+## 4.1 非同期レンダリングジョブ（生成AI系engine）
 
 生成AI系engine（`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`）は、Gemini APIが20〜60秒以上かかることがあり、API Gatewayの統合タイムアウト（29秒固定・AWS側のハード上限）に収まらない場合がある。これを回避するため、フロントはこれらのengineでは`POST /api/render`を直接呼ばず、以下の非同期ジョブ経路を使う（詳細仕様は [`spec.md`](./spec.md) 3.1a参照）。変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は引き続き上記4章の同期経路のままで変更しない。
 

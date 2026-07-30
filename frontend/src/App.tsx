@@ -86,14 +86,16 @@ function App() {
 // マウスを寄せた時だけスライドで現れる。空の領域が下のUI操作をブロックしないよう、コンテナは
 // pointer-events-noneにして、ホバー検知帯・ヘッダー本体だけをpointer-events-autoで有効化する。
 // タッチデバイスにはホバーが存在せずヘッダー（ログインボタン等）を開く手段が無いため、
-// pointer-coarseでは常時表示に固定する。
+// pointer-coarseでは常時表示に固定する。absoluteのままだとコンテンツに重なって隠してしまうため、
+// pointer-coarseではstickyにしてドキュメントフローへ戻し、コンテンツ側の表示領域を確保する。
+// ホバー専用の検知帯・ハンドルもタッチデバイスでは意味を持たないため非表示にする。
 function AppHeader() {
   return (
-    <div className="group pointer-events-none absolute inset-x-0 top-0 z-30">
+    <div className="group pointer-events-none absolute inset-x-0 top-0 z-30 pointer-coarse:sticky!">
       {/* ヘッダーが隠れていても反応させるための、常時最上端に居る透明なホバー検知帯。 */}
-      <div className="pointer-events-auto absolute inset-x-0 top-0 h-4" aria-hidden="true" />
+      <div className="pointer-events-auto absolute inset-x-0 top-0 h-4 pointer-coarse:hidden" aria-hidden="true" />
       {/* ヘッダーが隠れていることを示す控えめなハンドル（ホバーで消える）。 */}
-      <div className="pointer-events-none mx-auto mt-1 h-1 w-12 rounded-full bg-border/70 transition-opacity duration-300 group-hover:opacity-0" />
+      <div className="pointer-events-none mx-auto mt-1 h-1 w-12 rounded-full bg-border/70 transition-opacity duration-300 group-hover:opacity-0 pointer-coarse:hidden" />
       <header className="pointer-events-auto flex -translate-y-full items-center justify-between gap-3 border-b border-input bg-background/95 px-4 py-2.5 shadow-sm backdrop-blur transition-transform duration-300 ease-out group-focus-within:translate-y-0 group-hover:translate-y-0 pointer-coarse:translate-y-0!">
         <div className="flex items-center gap-2.5">
           <BrandMark className="size-7 shrink-0" />

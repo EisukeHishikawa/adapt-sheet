@@ -11,7 +11,7 @@
 ### 対象ユーザー
 
 - **未認証ユーザー**: アカウント登録なしで帳票の生成・プレビューを試せる（データ保存は不可）。
-- **登録ユーザー**: Supabase Authでログインし、`POST /api/render`成功時に生成履歴が自動的にSupabase（PostgreSQL）へ保存される。保存済み履歴は`HistorySlider`（最大10件、セッション切れ後もログイン確定時に再取得）と`HistoryArchive`（それより古い過去データ、最大50件）で閲覧できる。名前付きテンプレート機能は未実装。
+- **登録ユーザー**: Supabase Authでログインし、`POST /api/render`成功時に生成履歴が自動的にSupabase（PostgreSQL）へ保存される。保存済み履歴は`HistorySlider`（最大10件、セッション切れ後もログイン確定時に再取得）と`HistoryArchive`（それより古い過去データ、最大50件）で閲覧できる。
 
 ---
 

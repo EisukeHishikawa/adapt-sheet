@@ -301,9 +301,3 @@ flowchart TD
 ```
 
 相関のたどり方: 画面のエラーに出る`request_id`（＝レスポンスの`X-Request-ID`）でbackend・docling・pdf2htmlexの3ロググループを横断検索できる。API Gatewayのアクセスログとの突き合わせは`xrayTraceId`で行う。`render-worker`は`lambda:invoke`（Event）による非同期起動のため独立したLambda実行コンテキストとなり、`X-Request-ID`は伝播しない。ジョブ単位の相関は`job_id`（`POST /api/render/jobs`のレスポンス、S3オブジェクトキー`uploads/{job_id}.pdf`・`results/{job_id}.json`と共通）で行う。
-
----
-
-## 9. 今後の追記予定
-
-- 名前付きテンプレート機能を追加する際、テーブル設計を拡張する。

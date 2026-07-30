@@ -38,6 +38,7 @@ _ERROR_CATALOG: dict[int, tuple[str, str]] = {
         "AI_SERVICE_UNAVAILABLE",
         "生成AIサービスが混雑しています。しばらく時間をおいて再度お試しください。",
     ),
+    501: ("AI_SERVICE_SUSPENDED", "現在、利用停止中です。"),
     500: ("INTERNAL_ERROR", "サーバーで想定外のエラーが発生しました。"),
 }
 
@@ -106,7 +107,8 @@ def _domain_error_handler(
 # HTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
 pdf_conversion_error_handler = _domain_error_handler(422, "PDF conversion failed")
 ai_generation_error_handler = _domain_error_handler(502, "AI generation failed")
-# AIServiceUnavailableErrorはAIGenerationErrorのサブクラスのため、Starletteの例外ハンドラ探索は
-# MRO順に一致するハンドラを探す。サブクラス専用にこちらを登録しておけば、登録順に関わらず
-# 常にこちらが優先して使われる。
+# AIServiceUnavailableError/AIServiceSuspendedErrorはAIGenerationErrorのサブクラスのため、
+# Starletteの例外ハンドラ探索はMRO順に一致するハンドラを探す。サブクラス専用にこちらを
+# 登録しておけば、登録順に関わらず常にこちらが優先して使われる。
 ai_service_unavailable_error_handler = _domain_error_handler(503, "AI service unavailable")
+ai_service_suspended_error_handler = _domain_error_handler(501, "AI service suspended")

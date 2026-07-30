@@ -168,6 +168,8 @@ function messageForStatus(status: number): string {
       return 'AIによる生成に失敗しました。しばらくしてから再度お試しください。'
     case 503:
       return '生成AIサービスが混雑しています。しばらく時間をおいて再度お試しください。'
+    case 501:
+      return '現在、利用停止中です。'
     default:
       return 'サーバーで想定外のエラーが発生しました。'
   }

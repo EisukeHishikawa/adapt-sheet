@@ -13,7 +13,12 @@ import jwt
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client_factory
+from app.services.ai_client import (
+    AIGenerationError,
+    AIServiceSuspendedError,
+    RenderResult,
+    get_ai_client_factory,
+)
 from app.services.job_store import get_job_store
 from app.services.pdf_common import PDFConversionError
 from app.services.pdf_layout import get_layout_converter
@@ -249,6 +254,27 @@ def test_process_render_job_writes_error_status_on_ai_generation_error():
         message = job_store.statuses["job-1"]["message"]
         assert message == "AIによる生成に失敗しました。しばらくしてから再度お試しください。"
         assert "RESOURCE_EXHAUSTED" not in message
+    finally:
+        _clear_overrides()
+
+
+def test_process_render_job_writes_error_status_on_ai_service_suspended_error():
+    """標準プランのAPIキー未設定時は、汎用のAI生成失敗ではなく利用停止中の専用文言にすること。"""
+    job_store = _override_job_store()
+
+    class _SuspendedAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            raise AIServiceSuspendedError("USE_MOCK_AI=false が指定されていますが ANTHROPIC_API_KEY が未設定です")
+
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _SuspendedAIClient())
+    try:
+        response = client.post(
+            "/internal/render-jobs/process",
+            json={"job_id": "job-1", "engine": "claude"},
+        )
+        assert response.status_code == 202
+        assert job_store.statuses["job-1"]["status"] == "error"
+        assert job_store.statuses["job-1"]["message"] == "現在、利用停止中です。"
     finally:
         _clear_overrides()
 

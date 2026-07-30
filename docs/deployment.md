@@ -131,6 +131,27 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 ---
 
-## 7. 今後の追記予定
+## 7. terraform apply実績（本番環境）
 
-- `terraform apply`（実AWSリソース作成）実施後、実際の手順・出力値を追記する。
+`ap-northeast-1`へ`infra/README.md`の手順（bootstrap → ECR先行apply → 本体apply）で実AWSリソースを作成済み。主な出力値（`terraform output`。AWSアカウントIDはリポジトリが公開のため`<account_id>`に置き換える）:
+
+| 出力名 | 値 |
+|---|---|
+| `app_url` | `https://d3lal8vccjsy5y.cloudfront.net` |
+| `cloudfront_distribution_id` | `E30NSRCIJ7685A` |
+| `api_invoke_url` | `https://b8h9qwvzi6.execute-api.ap-northeast-1.amazonaws.com/prod` |
+| `lambda_function_name` | `adapt-sheet-prod-backend` |
+| `render_worker_function_name` | `adapt-sheet-prod-render-worker` |
+| `docling_function_url` | `https://u3ne5g7snhwlixmdv6xczioppm0fkmmq.lambda-url.ap-northeast-1.on.aws/` |
+| `pdf2htmlex_function_url` | `https://mqr7chmqonrcydabqh6xm2nksi0loryt.lambda-url.ap-northeast-1.on.aws/` |
+| `ecr_repository_url` | `<account_id>.dkr.ecr.ap-northeast-1.amazonaws.com/adapt-sheet-prod-backend` |
+| `ecr_docling_repository_url` | `<account_id>.dkr.ecr.ap-northeast-1.amazonaws.com/adapt-sheet-prod-docling` |
+| `ecr_pdf2htmlex_repository_url` | `<account_id>.dkr.ecr.ap-northeast-1.amazonaws.com/adapt-sheet-prod-pdf2htmlex` |
+| `frontend_bucket_name` | `adapt-sheet-prod-frontend-<account_id>` |
+| `render_jobs_bucket_name` | `adapt-sheet-prod-render-jobs-<account_id>` |
+| `ssm_parameter_prefix` | `/adapt-sheet/prod` |
+| `github_actions_role_arn` | `arn:aws:iam::<account_id>:role/adapt-sheet-prod-github-actions` |
+| `alarm_topic_arn` | `arn:aws:sns:ap-northeast-1:<account_id>:adapt-sheet-prod-alarms` |
+| `api_access_log_group_name` | `/aws/apigateway/adapt-sheet-prod-api/access` |
+
+`docling_function_url` / `pdf2htmlex_function_url`はAWS_IAM認証必須のFunction URLのため、URL単体の漏洩では呼び出せない。

@@ -7,6 +7,7 @@ POST /api/render/jobs・GET /api/render/jobs/{job_id}・POST /internal/render-jo
 """
 
 import time
+from unittest.mock import MagicMock
 
 import jwt
 from fastapi.testclient import TestClient
@@ -404,3 +405,40 @@ def test_process_render_job_records_gemini_free_usage_for_anonymous_job(monkeypa
         assert status.count == 1
     finally:
         _clear_overrides()
+
+
+def test_record_gemini_free_usage_rolls_back_session_on_failure(monkeypatch):
+    # 無料枠カウンタの記録失敗でトランザクションが中断されたままだと、同一セッションを使う
+    # 後続の履歴保存まで巻き添えで失敗する（本番で実際に発生した連鎖障害）。
+    import app.main as main_module
+
+    monkeypatch.setattr(
+        main_module, "record_gemini_free_usage", MagicMock(side_effect=RuntimeError("boom"))
+    )
+    session = MagicMock()
+
+    main_module._record_gemini_free_usage(session)
+
+    session.rollback.assert_called_once()
+
+
+def test_save_history_rolls_back_session_on_failure(monkeypatch):
+    from app.services.auth import SupabaseUser
+
+    import app.main as main_module
+
+    monkeypatch.setattr(main_module, "save_history", MagicMock(side_effect=RuntimeError("boom")))
+    session = MagicMock()
+
+    main_module._save_history(
+        session,
+        SupabaseUser(sub="user-123", email=None),
+        engine="hybrid",
+        html="<p></p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+    )
+
+    session.rollback.assert_called_once()

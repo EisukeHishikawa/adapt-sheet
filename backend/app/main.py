@@ -486,6 +486,11 @@ def _save_history(
         )
     except Exception:
         logger.warning("生成履歴の保存に失敗しました", exc_info=True)
+        # PostgreSQLは失敗したステートメントの後、rollbackするまで同一トランザクション上の
+        # 後続クエリを全てInFailedSqlTransactionにする。db_session_for_userは同じセッションを
+        # 複数の後処理（無料枠カウンタ更新・履歴保存）で使い回すため、ここで区切らないと
+        # 後続処理まで巻き添えで失敗する。
+        db_session.rollback()
 
 
 def _record_gemini_free_usage(db_session: Optional[Session]) -> None:
@@ -497,6 +502,8 @@ def _record_gemini_free_usage(db_session: Optional[Session]) -> None:
         record_gemini_free_usage(db_session)
     except Exception:
         logger.warning("Gemini無料枠の利用回数記録に失敗しました", exc_info=True)
+        # _save_history同様、同一セッションを使い回す後続処理を巻き添えにしないための区切り。
+        db_session.rollback()
 
 
 class GeminiFreeUsageResponse(BaseModel):

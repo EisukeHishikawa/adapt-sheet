@@ -75,6 +75,14 @@ class AIGenerationError(Exception):
     """AI生成の失敗。app/errors.pyのハンドラが502へ変換する（docs/spec.md 4章）。"""
 
 
+class AIServiceUnavailableError(AIGenerationError):
+    """Gemini側の高負荷（503 UNAVAILABLE）が全リトライで解消しなかった場合の失敗。
+
+    こちら側のバグではなく外部サービスの一時的な混雑であることをユーザーに伝えるため、
+    app/errors.pyのハンドラが通常のAI生成失敗（502）とは別の503・専用文言へ変換する。
+    """
+
+
 @dataclass
 class RenderResult:
     """AIクライアントの生成結果。app/main.pyのRenderResponseへ詰め替えて返却する。"""
@@ -424,7 +432,9 @@ class GeminiAIClient:
                 # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は
                 # Gemini側の一過性の混雑であり、待てば成功しうる。
                 if attempt == _RETRY_MAX_ATTEMPTS:
-                    raise AIGenerationError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
+                    raise AIServiceUnavailableError(
+                        f"Gemini API呼び出しに失敗しました: {exc}"
+                    ) from exc
                 time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
                 continue
             except genai_errors.APIError as exc:

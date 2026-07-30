@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.db import db_session_for_user, get_db_pinger, get_db_session, get_db_session_or_none
 from app.errors import (
     ai_generation_error_handler,
+    ai_service_unavailable_error_handler,
     build_error_payload,
     http_exception_handler,
     pdf_conversion_error_handler,
@@ -24,6 +25,7 @@ from app.services.auth import SupabaseUser, get_current_user
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
+    AIServiceUnavailableError,
     ALL_ENGINES,
     CONVERTER_ENGINES,
     GATED_ENGINES,
@@ -73,6 +75,7 @@ app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(PDFConversionError, pdf_conversion_error_handler)
 app.add_exception_handler(AIGenerationError, ai_generation_error_handler)
+app.add_exception_handler(AIServiceUnavailableError, ai_service_unavailable_error_handler)
 
 
 # response_modelを明示しないと、FastAPIが型を推論できずopenapi.json（フロントの型生成元）の
@@ -412,7 +415,12 @@ async def process_render_job(
         job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except (PDFConversionError, AIGenerationError) as exc:
-        status_code = 422 if isinstance(exc, PDFConversionError) else 502
+        if isinstance(exc, PDFConversionError):
+            status_code = 422
+        elif isinstance(exc, AIServiceUnavailableError):
+            status_code = 503
+        else:
+            status_code = 502
         logger.warning(
             "Render job failed: %s", exc, extra={"status_code": status_code, "job_id": payload.job_id}
         )

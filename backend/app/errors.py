@@ -34,6 +34,10 @@ _ERROR_CATALOG: dict[int, tuple[str, str]] = {
     422: ("PDF_CONVERSION_ERROR", "PDFの解析に失敗しました。ファイルの内容をご確認ください。"),
     429: ("RATE_LIMITED", "リクエストが混み合っています。しばらくしてから再度お試しください。"),
     502: ("AI_GENERATION_ERROR", "AIによる生成に失敗しました。しばらくしてから再度お試しください。"),
+    503: (
+        "AI_SERVICE_UNAVAILABLE",
+        "生成AIサービスが混雑しています。しばらく時間をおいて再度お試しください。",
+    ),
     500: ("INTERNAL_ERROR", "サーバーで想定外のエラーが発生しました。"),
 }
 
@@ -102,3 +106,7 @@ def _domain_error_handler(
 # HTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
 pdf_conversion_error_handler = _domain_error_handler(422, "PDF conversion failed")
 ai_generation_error_handler = _domain_error_handler(502, "AI generation failed")
+# AIServiceUnavailableErrorはAIGenerationErrorのサブクラスのため、Starletteの例外ハンドラ探索は
+# MRO順に一致するハンドラを探す。サブクラス専用にこちらを登録しておけば、登録順に関わらず
+# 常にこちらが優先して使われる。
+ai_service_unavailable_error_handler = _domain_error_handler(503, "AI service unavailable")

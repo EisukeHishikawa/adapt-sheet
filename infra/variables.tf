@@ -47,9 +47,9 @@ variable "docling_lambda_memory_size" {
 }
 
 variable "docling_lambda_timeout" {
-  description = "docling-service Lambdaのタイムアウト（秒）。backendは29秒で打ち切られるが、その時点で処理を止めても得るものがないため余裕を残す"
+  description = "docling-service Lambdaのタイムアウト（秒）。backend側のHTTPクライアントタイムアウト（120秒）・render-worker Lambdaのタイムアウト（180秒）以内に収める"
   type        = number
-  default     = 60
+  default     = 120
 }
 
 variable "docling_lambda_ephemeral_storage_size" {

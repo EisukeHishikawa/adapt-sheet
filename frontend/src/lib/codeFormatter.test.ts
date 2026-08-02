@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { formatCss, formatHtml, formatJson } from './codeFormatter'
+import { formatCss, formatHtml } from './codeFormatter'
 
 // 精密復元（pdf2htmlexエンジン）は自己完結HTMLを1行で返すことがあるため、
-// コードエディタのソース表示用に読みやすく整形するユーティリティを検証する。
-// CSS・JSONも同様に1行で入ってくることがあるため、同じ方針で整形する。
+// 描画結果を履歴・エディタへ積む時点（sheetStore.applySuccessfulRender）で
+// 自動的に読みやすく整形するユーティリティを検証する。CSSも同様に1行で入ってくることがある。
 describe('formatHtml', () => {
   it('1行のHTMLをタグ単位で改行・インデントする', () => {
     const html = '<div><p>a</p></div><div><p>b</p></div>'
@@ -44,20 +44,5 @@ describe('formatCss', () => {
 
   it('空文字は空文字のまま返す', () => {
     expect(formatCss('')).toBe('')
-  })
-})
-
-describe('formatJson', () => {
-  it('1行のJSONをキー単位で改行・インデント（2スペース）する', () => {
-    const json = '{"a":1,"b":{"c":2}}'
-    expect(formatJson(json)).toBe('{\n  "a": 1,\n  "b": {\n    "c": 2\n  }\n}')
-  })
-
-  it('不正なJSON（編集途中など）はプレビューを壊さないよう元の文字列のまま返す', () => {
-    expect(formatJson('{ invalid json')).toBe('{ invalid json')
-  })
-
-  it('空文字は空文字のまま返す', () => {
-    expect(formatJson('')).toBe('')
   })
 })

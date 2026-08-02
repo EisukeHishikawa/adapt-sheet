@@ -3,6 +3,7 @@ import { EDIT_SNAPSHOT_DELAY_MS, MAX_HISTORY_LENGTH, useSheetStore } from './she
 import { useAuthStore } from './authStore'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
+import { formatCss, formatHtml } from '@/lib/codeFormatter'
 
 const initialSheetState = {
   htmlContent: '',
@@ -69,8 +70,9 @@ describe('sheetStore（履歴スライド機能）', () => {
 
     expect(useSheetStore.getState().history).toHaveLength(1)
     expect(useSheetStore.getState().history[0]).toMatchObject({
-      html: dummyRenderResponse.html,
-      css: dummyRenderResponse.css,
+      // html/cssは履歴へ積む時点で自動整形される。
+      html: formatHtml(dummyRenderResponse.html),
+      css: formatCss(dummyRenderResponse.css),
       // history[].jsonはJSON入力エディタへ戻せる整形済みテキストとして保持する。
       json: JSON.stringify(dummyRenderResponse.json, null, 2),
     })
@@ -258,7 +260,7 @@ describe('sheetStore（編集内容の履歴登録）', () => {
     await useSheetStore.getState().fetchRender()
 
     const history = useSheetStore.getState().history
-    expect(history[0]).toMatchObject({ html: dummyRenderResponse.html, kind: 'render' })
+    expect(history[0]).toMatchObject({ html: formatHtml(dummyRenderResponse.html), kind: 'render' })
     expect(history[1]).toMatchObject({ html: '<p>editing</p>', kind: 'edit' })
   })
 })
@@ -506,6 +508,25 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
     expect(useSheetStore.getState().promptContent).toBe('請求書レイアウトにして')
   })
 
+  it('描画結果が1行のHTML/CSSでも、htmlContent/cssContentは改行付きに自動整形される（精密復元エンジン対策）', async () => {
+    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
+    server.use(
+      http.get('/api/render/jobs/:jobId', () =>
+        HttpResponse.json({
+          status: 'done',
+          ...dummyRenderResponse,
+          html: '<div><p>a</p></div><div><p>b</p></div>',
+          css: 'body { color: red; } .a { font-size: 12px; }',
+        }),
+      ),
+    )
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().htmlContent).toContain('\n')
+    expect(useSheetStore.getState().cssContent).toContain('\n')
+  })
+
   it('PDFを添付している場合はcurrent_html/current_jsonを送信しない（PDFの直接添付を正とする）', async () => {
     // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
     let capturedBody: Record<string, unknown> | undefined
@@ -687,7 +708,7 @@ describe('sheetStore（生成AIエンジンの非同期ジョブ・ポーリン�
     await fetchPromise
 
     expect(getCount).toBe(3)
-    expect(useSheetStore.getState().htmlContent).toBe(dummyRenderResponse.html)
+    expect(useSheetStore.getState().htmlContent).toBe(formatHtml(dummyRenderResponse.html))
     expect(useSheetStore.getState().successMessage).toBe(
       '描画が完了しました（Gemini無料枠 本日3/10回）',
     )

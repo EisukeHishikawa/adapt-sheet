@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
-import { CodeEditor, type CodeLanguage } from '@/components/CodeEditor'
-import { formatCss, formatHtml, formatJson } from '@/lib/codeFormatter'
+import { CodeEditor } from '@/components/CodeEditor'
 import { useSheetStore } from '@/store/sheetStore'
 
 // 右カラムのコード入力。HTML・CSS・JSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
@@ -9,44 +8,6 @@ import { useSheetStore } from '@/store/sheetStore'
 // <style>へ結合されるため、HTML本文の<style>とは別に独立したタブとして持つ。
 // 見出しは画面に出さないため、名前はtextareaのaria-labelで保持する（SizeControlsと同じ方針）。
 type EditorTab = 'html' | 'css' | 'json'
-
-type FormattableCodeEditorProps = {
-  id: string
-  ariaLabel: string
-  language: CodeLanguage
-  value: string
-  onChange: (value: string) => void
-  format: (value: string) => string
-}
-
-// 精密復元（pdf2htmlexエンジン）は1行の自己完結HTMLを返すことがあり、CSS/JSONも同様に
-// 1行で入ってくることがあるため、ソース表示だけ整形できるようにする。プレビュー描画・保存に
-// 使う実際の値（value/onChange）自体は変更しない。
-function FormattableCodeEditor({ id, ariaLabel, language, value, onChange, format }: FormattableCodeEditorProps) {
-  const [isFormatted, setIsFormatted] = useState(false)
-
-  return (
-    <>
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setIsFormatted((prev) => !prev)}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          {isFormatted ? '編集に戻る' : '整形表示'}
-        </button>
-      </div>
-      <CodeEditor
-        id={id}
-        ariaLabel={ariaLabel}
-        language={language}
-        value={isFormatted ? format(value) : value}
-        onChange={onChange}
-        readOnly={isFormatted}
-      />
-    </>
-  )
-}
 
 export function EditorPanel() {
   const htmlContent = useSheetStore((state) => state.htmlContent)
@@ -85,35 +46,14 @@ export function EditorPanel() {
       </div>
 
       {activeTab === 'html' && (
-        <FormattableCodeEditor
-          id="html-editor"
-          ariaLabel="HTML入力"
-          language="html"
-          value={htmlContent}
-          onChange={setHtmlContent}
-          format={formatHtml}
-        />
+        <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
       )}
       {activeTab === 'css' && (
-        <FormattableCodeEditor
-          id="css-editor"
-          ariaLabel="CSS入力"
-          language="css"
-          value={cssContent}
-          onChange={setCssContent}
-          format={formatCss}
-        />
+        <CodeEditor id="css-editor" ariaLabel="CSS入力" language="css" value={cssContent} onChange={setCssContent} />
       )}
       {activeTab === 'json' && (
         // JSON構文チェックはフロントで重複実装せず、バックエンドの400 VALIDATION_ERRORに委ねる。
-        <FormattableCodeEditor
-          id="json-editor"
-          ariaLabel="JSON入力"
-          language="json"
-          value={jsonContent}
-          onChange={setJsonContent}
-          format={formatJson}
-        />
+        <CodeEditor id="json-editor" ariaLabel="JSON入力" language="json" value={jsonContent} onChange={setJsonContent} />
       )}
     </div>
   )

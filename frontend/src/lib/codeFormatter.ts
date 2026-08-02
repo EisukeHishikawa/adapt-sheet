@@ -18,13 +18,3 @@ export function formatCss(css: string): string {
   if (!css) return css
   return beautify.css(css, CSS_FORMAT_OPTIONS)
 }
-
-export function formatJson(json: string): string {
-  if (!json) return json
-  try {
-    return JSON.stringify(JSON.parse(json), null, 2)
-  } catch {
-    // 編集途中などの不正なJSONはrenderTemplateと同じ「壊さず元の値を返す」方針にする。
-    return json
-  }
-}

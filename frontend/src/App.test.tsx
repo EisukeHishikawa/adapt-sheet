@@ -5,6 +5,7 @@ import App from './App'
 import { useSheetStore } from '@/store/sheetStore'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
+import { formatCss, formatHtml } from '@/lib/codeFormatter'
 
 // zustandのストアはモジュールスコープでシングルトンのため、テスト間で状態が漏れる。
 // 全フィールドを網羅した初期値を1箇所にまとめ、各describeブロックのbeforeEachから
@@ -101,13 +102,14 @@ describe('描画ボタン押下時のAPI疎通', () => {
     // PreviewPanelはHTMLのテンプレート変数 {{dummy}} をJSON値（sample）で置換したうえで、
     // 末尾にcssContentを<style>として付与する（renderTemplate / PreviewPanel.tsx参照）。
     // よってsrcDocには置換後HTML（{{dummy}}が消えsampleになったもの）とcssが含まれる。
-    const expectedRenderedHtml = dummyRenderResponse.html.replace('{{dummy}}', 'sample')
+    // htmlContent/cssContentは履歴へ積む時点で自動整形される（applySuccessfulRender）。
+    const expectedRenderedHtml = formatHtml(dummyRenderResponse.html).replace('{{dummy}}', 'sample')
     await waitFor(() => {
       expect(preview.srcdoc).toContain(expectedRenderedHtml)
       expect(preview.srcdoc).not.toContain('{{dummy}}')
-      expect(preview.srcdoc).toContain(dummyRenderResponse.css)
+      expect(preview.srcdoc).toContain(formatCss(dummyRenderResponse.css))
     })
-    expect(useSheetStore.getState().cssContent).toBe(dummyRenderResponse.css)
+    expect(useSheetStore.getState().cssContent).toBe(formatCss(dummyRenderResponse.css))
     // jsonContentはJSON入力エディタへ戻せる整形済みテキスト（htmlContentと同様、次の編集の
     // 起点になる）として保持するため、レスポンスのオブジェクトを文字列化して比較する。
     expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify(dummyRenderResponse.json, null, 2))
@@ -156,7 +158,7 @@ describe('PDFアップロード時のAPI疎通', () => {
     const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
     // 上と同様、テンプレート変数 {{dummy}} はJSON値（sample）へ置換されて反映される。
     await waitFor(() => {
-      expect(preview.srcdoc).toContain(dummyRenderResponse.html.replace('{{dummy}}', 'sample'))
+      expect(preview.srcdoc).toContain(formatHtml(dummyRenderResponse.html).replace('{{dummy}}', 'sample'))
     })
     expect(useSheetStore.getState().error).toBeNull()
   })

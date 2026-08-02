@@ -17,7 +17,7 @@ docling_image_tag    = "latest"
 pdf2htmlex_image_tag = "latest"
 
 docling_lambda_memory_size = 6144
-docling_lambda_timeout     = 60
+docling_lambda_timeout     = 120
 # MLモデルはイメージへ焼き込むが、torch/HuggingFaceの実行時キャッシュは/tmpへ書くため拡張する。
 docling_lambda_ephemeral_storage_size = 2048
 

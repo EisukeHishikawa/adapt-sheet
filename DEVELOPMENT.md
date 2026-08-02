@@ -79,16 +79,16 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] ローカル開発でAI生成のバリエーションを確認する第三の経路を検証したが、生成品質が実用水準に届かず不採用とした。
 
 #### ⬛ ステップ 11: Docker Composeによるローカル開発環境の構成
-- [x] `docker-compose.yml`と各Dockerfileでfrontend/backendをコンテナ化し、`docker compose up --build`で起動できる環境を構築（ADR-009）。非Docker実行のサポートは終了し、README.md/CLAUDE.mdの手順をDocker Compose前提に統一。E2E（Playwright）はMicrosoft公式イメージを使う独立サービス`e2e`（`profiles: [e2e]`）で実行。
+- [x] `docker-compose.yml`と各Dockerfileでfrontend/backendをコンテナ化し、`docker compose up --build`で起動できる環境を構築。非Docker実行のサポートは終了し、README.md/CLAUDE.mdの手順をDocker Compose前提に統一。E2E（Playwright）はMicrosoft公式イメージを使う独立サービス`e2e`（`profiles: [e2e]`）で実行。
 
 #### ⬛ ステップ 12: Git Worktreeによるmain専用ワークツリーの導入
-- [x] `docs-space`という名前でmainブランチ専用のワークツリーを作成し、プロジェクトルートにシンボリックリンクを配置（ADR-010）。
+- [x] `docs-space`という名前でmainブランチ専用のワークツリーを作成し、プロジェクトルートにシンボリックリンクを配置。
 
 #### ⬛ ステップ 13: 構造化ログ基盤の導入
-- [x] 標準`logging`ベースのJSON構造化ログと、リクエスト相関ID（`request_id`）付きミドルウェアを導入（ADR-011）。
+- [x] 標準`logging`ベースのJSON構造化ログと、リクエスト相関ID（`request_id`）付きミドルウェアを導入。
 
 #### ⬛ ステップ 14: API通信のエラー設計とフロント表示
-- [x] エラーレスポンスを`{"error": {code, message, request_id}}`の構造化エンベロープへ統一し、フロントは`message`を優先表示（ADR-012）。
+- [x] エラーレスポンスを`{"error": {code, message, request_id}}`の構造化エンベロープへ統一し、フロントは`message`を優先表示。
 
 #### ⬛ ステップ 15: バックエンドの「入口エンドポイント」と「Doclingコンテナ」への分離
 - [x] バックエンドを軽量な入口エンドポイント（`backend`）とDocling変換専用の内部サービス（`docling-service`）に分離し、HTTP経由で連携。
@@ -135,7 +135,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] 🧪 **テストコード追加:** SigV4署名の有無・エラー処理を検証する`backend/tests/test_remote_extractor.py`を追加（`docker compose exec backend pytest`相当、168件全パス）
 
 #### ⬛ ステップ 25: TerraformによるAWSインフラのコード化
-> ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは`mise.toml`で固定する（ADR-023）。Terraformは1.15.8、providerは`.terraform.lock.hcl`（コミット対象）で固定。
+> ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは`mise.toml`で固定する。Terraformは1.15.8、providerは`.terraform.lock.hcl`（コミット対象）で固定。
 - [x] ⚙️ **AWS認証情報の設定:** GitHub ActionsからのデプロイをOIDCで行うためのプロバイダとデプロイロールを`infra/modules/github_oidc`で定義（長期アクセスキーは発行しない。許可refは`main`のみ、IAM権限は`adapt-sheet-*`のロールに限定）
 - [x] TerraformによるCloudFront + S3、AWS Lambda + API Gateway（ステージ単位のスロットリングで過度なAPIコールを防ぐ。WAFは固定費が高いため不採用）、**ECR Private（Lambdaコンテナは同一リージョンのPrivateからのみ取得可。無料枠500MBの逼迫はライフサイクルで抑制）** をコード定義（`infra/`）。Lambdaのメモリは新規AWSアカウントのデフォルトクォータ上限（3008MB）に合わせている。APIキーはSecureStringのSSM Parameter Storeで管理し、Lambdaの実行ロールに`ssm:GetParameters`/`kms:Decrypt`を最小権限で付与。state土台は`infra/bootstrap`（S3+DynamoDB）
 - [x] 🧪 **ステージングテスト:** デプロイ済みの本番エンドポイント（CloudFront配信）に対し、ローカルから`GET /`・`POST /api/warmup`を実行し、フロント配信とbackend→docling/pdf2htmlex/DBの疎通を確認（`{"docling":"ok","pdf2htmlex":"ok","database":"ok"}`）
@@ -153,7 +153,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] ⚙️ **ローカル検証環境の準備:** Supabase Local CLI（`supabase start`）でAuth・PostgreSQLをローカルに起動し、クラウド環境を作らずに認証・DBを検証できる状態にする（`docs/supabase-local-cli-setup.md`）
 
 #### ⬛ ステップ 27: Supabase Authによる認証・認可の実装
-- [x] フロントにSupabase Auth SDK組み込み。バックにJWT認証ミドルウェアを実装（`@supabase/supabase-js`によるemail/passwordログイン、`app/services/auth.py`によるJWT検証。ADR-020）
+- [x] フロントにSupabase Auth SDK組み込み。バックにJWT認証ミドルウェアを実装（`@supabase/supabase-js`によるemail/passwordログイン、`app/services/auth.py`によるJWT検証）
 - [x] ⚙️ **モデル選択機能のゲート解除:** `app/main.py`の`GATED_ENGINES`判定を、未ログイン時のみ403を返すよう条件を差し替える（Gemini標準/Claude/OpenAIクライアント自体はステップ23で実装済み）
 - [x] 🧪 **テストコード追加:** 有効なトークンがある場合、ない場合でAPIの挙動が変わることを検証するテストを追加（`backend/tests/test_auth.py`・`backend/tests/test_render.py`・`frontend/src/store/authStore.test.ts`等）。GitHub上のCIで自動実行されることを確認
 
@@ -164,17 +164,17 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] 🚀 **本番デプロイ:** CD（`.github/workflows/cd.yml`）がOIDC認証→イメージビルド・push→`terraform apply`→フロント配信→スモークテストまで自動で成功することを確認しプロジェクト完了
 
 #### ⬛ ステップ 29: ログイン専用化とセキュリティ強化
-- [x] ⚙️ **ローカル検証環境の整備:** Supabase Local CLIを導入し、JWT検証をJWKS/ES256へ対応（`supabase/config.toml`・`app/services/auth.py`。ADR-020、`docs/supabase-local-cli-setup.md`）
-- [x] **新規登録の廃止:** 画面から新規登録導線を削除し、GoTrue側も`enable_signup = false`で自己登録を拒否。アカウント発行は`scripts/create_user.sh`（Admin API）に一本化（ADR-020）
-- [x] **Googleアカウントでのログイン:** `signInWithOAuth`と`[auth.external.google]`を追加。未登録アカウントは`enable_signup = false`により弾かれる（ADR-020）
-- [x] **セッション管理の改善:** PKCEフロー採用、`onAuthStateChange`の購読解除、復元完了までUIを保留して「チラつき」を防止（ADR-020）
-- [x] **XSS対策:** プレビューiframeの`sandbox=""`化（同一オリジン実行によるトークン窃取経路を遮断）、セッション保管を`sessionStorage`へ変更、ビルド成果物へCSPを注入（ADR-020）
-- [x] **RLS（行レベルセキュリティ）:** 生成履歴をSupabaseのPostgresへ統合し、`auth.uid()`ベースのポリシーを定義。アプリは`authenticator`→`authenticated`ロールで接続する（ADR-020）
+- [x] ⚙️ **ローカル検証環境の整備:** Supabase Local CLIを導入し、JWT検証をJWKS/ES256へ対応（`supabase/config.toml`・`app/services/auth.py`、`docs/supabase-local-cli-setup.md`）
+- [x] **新規登録の廃止:** 画面から新規登録導線を削除し、GoTrue側も`enable_signup = false`で自己登録を拒否。アカウント発行は`scripts/create_user.sh`（Admin API）に一本化
+- [x] **Googleアカウントでのログイン:** `signInWithOAuth`と`[auth.external.google]`を追加。未登録アカウントは`enable_signup = false`により弾かれる
+- [x] **セッション管理の改善:** PKCEフロー採用、`onAuthStateChange`の購読解除、復元完了までUIを保留して「チラつき」を防止
+- [x] **XSS対策:** プレビューiframeの`sandbox=""`化（同一オリジン実行によるトークン窃取経路を遮断）、セッション保管を`sessionStorage`へ変更、ビルド成果物へCSPを注入
+- [x] **RLS（行レベルセキュリティ）:** 生成履歴をSupabaseのPostgresへ統合し、`auth.uid()`ベースのポリシーを定義。アプリは`authenticator`→`authenticated`ロールで接続する
 - [x] 🧪 **テストコード追加:** `backend/tests/test_db_rls.py`、`frontend/src/store/authStore.test.ts`・`AuthPanel.test.tsx`の更新（新規登録の非提供・Googleログイン・チラつき防止・購読解除）
 
 #### ⬛ ステップ 30: ログイン手段のGoogleアカウント限定
-- [x] **パスワードログインの廃止:** `[auth.email] enable_signup = false`でGoTrueのメール認証を無効化し、`authStore.signInWithPassword`と`AuthPanel`の入力欄を削除。UIは「Googleでログイン」のみ（ADR-020）
-- [x] **アカウント作成のガード:** `scripts/create_user.sh`はGoogle OAuth未設定・`env(...)`未展開・GoTrue側でgoogle無効のいずれでも作成を拒否する。パスワードは設定しない（ADR-020）
+- [x] **パスワードログインの廃止:** `[auth.email] enable_signup = false`でGoTrueのメール認証を無効化し、`authStore.signInWithPassword`と`AuthPanel`の入力欄を削除。UIは「Googleでログイン」のみ
+- [x] **アカウント作成のガード:** `scripts/create_user.sh`はGoogle OAuth未設定・`env(...)`未展開・GoTrue側でgoogle無効のいずれでも作成を拒否する。パスワードは設定しない
 - [x] **ローカル検証手順の整備:** `.env`読み込み後に`supabase start`する順序を明示（`env(...)`展開のため必須）、Google Cloudでのクライアント発行手順を追加（`docs/supabase-local-cli-setup.md`）
 - [x] 🧪 **Googleログインの実動作確認:** 実際のGoogle Cloud OAuthクライアントでログインに成功。既存アカウント（`email` identity）へ`google` identityが自動連携されることも`auth.identities`で確認済み
 
@@ -184,7 +184,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 本番デプロイ後の実機検証で見つかった課題への対応。
 
 #### ⬛ ステップ 31: 生成AI描画のジョブ非同期化（API Gatewayの29秒制約回避）
-- [x] ⚙️ **非同期ジョブ基盤の構築:** S3（`infra/modules/job_bucket`、1日で自動失効、CORS設定込み）と、backendと同じイメージを再利用する`render-worker` Lambda（`infra/main.tf`の`module "lambda_render_worker"`、既存の`infra/modules/lambda`を再利用。API Gateway/Function URLなし、タイムアウト180秒）を追加（ADR-024）
+- [x] ⚙️ **非同期ジョブ基盤の構築:** S3（`infra/modules/job_bucket`、1日で自動失効、CORS設定込み）と、backendと同じイメージを再利用する`render-worker` Lambda（`infra/main.tf`の`module "lambda_render_worker"`、既存の`infra/modules/lambda`を再利用。API Gateway/Function URLなし、タイムアウト180秒）を追加
 - [x] **backend: 非同期エンドポイントの実装:** `POST /api/render/upload-url`・`POST /api/render/jobs`・`GET /api/render/jobs/{job_id}`・`POST /internal/render-jobs/process`を追加（`app/services/job_store.py`・`app/services/worker_invoker.py`）。既存の`POST /api/render`のAI生成ロジックは`_generate_ai_result`として抽出し、同期・非同期の両経路で共用する
 - [x] **frontend: ポーリング対応:** `sheetStore.fetchRender`を生成AI系engineと変換エンジンで分岐し、生成AI系はS3への直接アップロード→ジョブ起動→2秒間隔のポーリングへ変更（`lib/api.ts`）
 - [x] 🧪 **テストコード追加:** `backend/tests/test_job_store.py`・`test_worker_invoker.py`・`test_render_jobs.py`、`frontend/src/store/sheetStore.test.ts`のポーリングテスト（`vi.useFakeTimers`）を追加
@@ -201,7 +201,7 @@ ClaudeCodeをフル活用し、生成AIとPDF解析のロジックを本物に�
 - [x] フロント: 描画ボタン押下でgemini_free/hybrid描画が成功した際、成功メッセージへ「本日x/10回」を付加して表示する（`sheetStore.fetchRender`）。
 - [x] 🧪 **テストコード追加:** `backend/tests/test_gemini_usage.py`（カウンタのincrement/取得）、`backend/tests/test_render.py`・`test_render_jobs.py`（匿名利用でのincrement・hybridでもincrementすること・変換エンジンでは増えないこと・DB失敗時も描画は成功すること・エンドポイントの認証不要性）、`frontend/src/store/sheetStore.test.ts`（成功メッセージへの付加・hybridでも付加されること・取得失敗時のフォールバック）を追加。
 - [x] 🧪 **ローカルテスト実行:** `pytest`（backend 239件、全パス）・`ruff`・`Vitest`（frontend 171件、全パス）・`ESLint`・`vite build`がパス。ローカルSupabase（Docker Compose経由）に対しAlembicマイグレーションを適用し、`curl`で匿名リクエストによるカウンタ増分（0→1）を実機確認済み。
-- [x] **ローカルでの生成AI系engine検証環境の整備:** 上記の実機確認中に、生成AI系engine（ADR-024の非同期ジョブ経路）がローカルのdocker-compose環境では一切動作しない既存の制約が判明したため対応（ADR-024へ追記）。`docker-compose.yml`にS3互換のMinIO（`minio`/`minio-init`サービス）を追加し、`job_store.S3JobStore`にエンドポイントの上書き（`RENDER_JOBS_S3_ENDPOINT_URL`/`RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL`）を追加。`worker_invoker.py`にはrender-worker Lambdaの代わりにbackend自身へHTTP POSTする`LocalHttpWorkerInvoker`を追加し、`RENDER_WORKER_LOCAL_URL`設定時のみ使う。本番向けクラス（`S3JobStore`・`LambdaWorkerInvoker`）自体は無変更。
+- [x] **ローカルでの生成AI系engine検証環境の整備:** 上記の実機確認中に、生成AI系engineの非同期ジョブ経路がローカルのdocker-compose環境では一切動作しない既存の制約が判明したため対応。`docker-compose.yml`にS3互換のMinIO（`minio`/`minio-init`サービス）を追加し、`job_store.S3JobStore`にエンドポイントの上書き（`RENDER_JOBS_S3_ENDPOINT_URL`/`RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL`）を追加。`worker_invoker.py`にはrender-worker Lambdaの代わりにbackend自身へHTTP POSTする`LocalHttpWorkerInvoker`を追加し、`RENDER_WORKER_LOCAL_URL`設定時のみ使う。本番向けクラス（`S3JobStore`・`LambdaWorkerInvoker`）自体は無変更。
 - [x] 🧪 **テストコード追加:** `backend/tests/test_job_store.py`（エンドポイント上書き・path-styleアドレッシング切り替え・presign用クライアントの分離）、`backend/tests/test_worker_invoker.py`（`LocalHttpWorkerInvoker`のPOST送信・非ブロッキング起動・接続エラーの握りつぶし・ファクトリの選択）を追加。
 - [x] 🧪 **ローカルテスト実行:** `pytest`（backend 247件、全パス）・`ruff`がパス。ホストから実際にpresigned URLへPUTでPDFをアップロードし、`hybrid`エンジンの非同期ジョブが`status: "done"`まで完了することをブラウザと同じ経路（ホスト→MinIO直接PUT）で実機確認済み。
 - [x] **エラーメッセージの細分化:** PDF未添付（変換エンジン/`hybrid`）が一律400 VALIDATION_ERRORの汎用文言だったため、専用の`428 Precondition Required`/`PDF_REQUIRED`を新設し「このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。」を返すよう分離（`docs/spec.md` 4章のエラーカタログを更新）。

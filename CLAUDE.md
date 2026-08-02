@@ -19,7 +19,7 @@ adapt-sheet（帳票作成AI支援プラットフォーム）における Claude
 
 > フェーズ2以降、実装が進み次第このセクションを実コマンドで更新する。
 
-ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは、リポジトリ直下の [`mise.toml`](./mise.toml) で固定する（ADR-023）。`terraform`等をホストで実行する前に`mise install`を済ませること。バージョンを変更する場合は`mise.toml`を編集し、`node`/`python`は各`Dockerfile`のベースイメージと同じパッチバージョンに揃える。
+ホスト側で直接実行するツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは、リポジトリ直下の [`mise.toml`](./mise.toml) で固定する。`terraform`等をホストで実行する前に`mise install`を済ませること。バージョンを変更する場合は`mise.toml`を編集し、`node`/`python`は各`Dockerfile`のベースイメージと同じパッチバージョンに揃える。
 
 ```bash
 mise install    # mise.tomlのバージョンを一括インストール
@@ -36,10 +36,10 @@ mise ls         # 適用中のバージョンを確認
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
-docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力。ADR-005）
-docker compose exec backend alembic upgrade head          # 生成履歴用DB（backend/migrations）のマイグレーション適用。RLSも有効化される（ADR-020）
+docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力）
+docker compose exec backend alembic upgrade head          # 生成履歴用DB（backend/migrations）のマイグレーション適用。RLSも有効化される
 docker compose exec backend alembic revision --autogenerate -m "説明" # app/models.py変更時のマイグレーション作成
-scripts/create_user.sh user@example.com 'password123'      # アカウント作成（唯一の手段。画面からの新規登録は提供しない。ADR-020）
+scripts/create_user.sh user@example.com 'password123'      # アカウント作成（唯一の手段。画面からの新規登録は提供しない）
 ```
 
 ### Doclingサービス (Python / FastAPI、テキスト抽出専用)
@@ -75,10 +75,10 @@ docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" htt
 docker compose exec frontend npm run test          # Vitest（msw使用、実APIには接続しない）
 docker compose exec frontend npm run lint           # ESLint
 docker compose exec frontend npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側を先に実行しておく）
-docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス。ADR-009参照）
+docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス）
 ```
 
-### エディタ（Zed）向けLSP (ADR-009)
+### エディタ（Zed）向けLSP
 
 エディタ上の診断・整形もDocker内のruff / ESLintで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント規則の一次ソースは`backend/requirements.txt`と`frontend/eslint.config.js`のままである。ホストにruff/ESLintを追加導入しないこと。
 
@@ -117,7 +117,7 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 - PR作成時・main merge時に`.github/workflows/ci.yml`がフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）を自動実行する（DEVELOPMENT.md ステップ26）。この2ジョブはBranch Protectionの必須チェックであり、100%成功しなければマージできない。ブランチがmainより古い場合もマージ不可のため、`git fetch origin && git rebase origin/main` で追従させる。docling/pdf2htmlexはコア機能（AI生成・リアルタイムプレビュー）への影響が小さくCIには含めないため、変更時は`docker compose exec docling/pdf2htmlex pytest`で手動検証する。
 - レビュー承認必須（Require approvals）は、ソロ開発期間中は無効化している（PR作成者本人は自分のPRを承認できないGitHub仕様のため）。共同開発者が加わった時点で再度有効化を検討する。
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
-- **ブランチの切り方**: プライマリの作業ディレクトリで `main` を**チェックアウトしない**。`docs-space`（後述、ADR-010）が `main` を保持しており、Gitは同一ブランチを複数のワークツリーで同時にチェックアウトできないため、`git checkout main` は `fatal: 'main' is already used by worktree at ...` で失敗する。最新の`main`から直接ブランチを切ること。
+- **ブランチの切り方**: プライマリの作業ディレクトリで `main` を**チェックアウトしない**。`docs-space`（後述）が `main` を保持しており、Gitは同一ブランチを複数のワークツリーで同時にチェックアウトできないため、`git checkout main` は `fatal: 'main' is already used by worktree at ...` で失敗する。最新の`main`から直接ブランチを切ること。
 
   ```bash
   git fetch origin                                  # リモートの最新をローカルへ取り込む
@@ -133,7 +133,7 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
   ```
 
 - マージ済みのローカルブランチを見つけた場合は削除を提案する。
-- **`docs-space`では作業しない**: プロジェクトルート直下の `docs-space`（シンボリックリンク先 `/Users/mina/docs-space`）は `main` ブランチ専用のGit Worktreeであり、常時最新の`main`を読み取り専用で参照するためのものである（ADR-010）。実装作業・ブランチ作成・コミットはプライマリの作業ディレクトリ（このリポジトリ本体）側で行い、`main`をチェックアウトしている`docs-space`配下では行わない。
+- **`docs-space`では作業しない**: プロジェクトルート直下の `docs-space`（シンボリックリンク先 `/Users/mina/docs-space`）は `main` ブランチ専用のGit Worktreeであり、常時最新の`main`を読み取り専用で参照するためのものである。実装作業・ブランチ作成・コミットはプライマリの作業ディレクトリ（このリポジトリ本体）側で行い、`main`をチェックアウトしている`docs-space`配下では行わない。
 - **Git Worktree・ブランチは最小構成に保つ**: 定常状態のGit Worktreeは**プライマリ本体**と**`docs-space`（`main`参照専用）の2つだけ**に保つ。ローカル・リモートのブランチは、`main`と現在作業中のブランチ以外を残さない。
   - **`worktree-*`ブランチを残さない（マージと同時に片付ける）**: バックグラウンドジョブ（Claude Code）がジョブごとに `.claude/worktrees/` へ自動生成する一時Worktreeと `worktree-*` ブランチは、そのPRを `main` へマージしたら**その場で（マージと同時に）削除する**。セッション終了時まで持ち越さない。自分が動作中のWorktreeをマージした場合は、`ExitWorktree`（`remove`）で離脱と削除を行うか、本体側で `git worktree remove --force <path>` と `git branch -D worktree-*` を実行し、リモートも `git push origin --delete worktree-*` で削除する。定常状態で `.claude/worktrees/` は空にする。
   - **マージ済み・不要ブランチは掃除する**: マージ済みのローカルブランチ、およびPRがCLOSED（未マージ）で方針転換により不要になったブランチは、ローカル・リモートとも削除する。リモート削除（`git push --delete`）は「作業時の確認ルール」に従い事前確認する。

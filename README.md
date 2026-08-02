@@ -35,21 +35,21 @@ flowchart LR
 
 - **フロントエンド**: React / TypeScript / Vite / Zustand / shadcn/ui / TailwindCSS
 - **バックエンド**: Python / FastAPI / PyMuPDF / Docling / pdf2htmlEX / Gemini SDK / Anthropic SDK / OpenAI SDK / SQLAlchemy
-- **型同期**: openapi-typescript（FastAPIの`openapi.json`からフロント用TypeScript型を生成。ADR-005参照）
+- **型同期**: openapi-typescript（FastAPIの`openapi.json`からフロント用TypeScript型を生成）
 - **テスト**: Vitest + React Testing Library + MSW / pytest / Playwright
 - **インフラ**: Terraform / AWS (Lambda, CloudFront, S3, API Gateway) / GitHub Actions
-- **ツールバージョン管理**: mise（ホスト側で直接実行するツールを`mise.toml`で固定。ADR-023参照）
+- **ツールバージョン管理**: mise（ホスト側で直接実行するツールを`mise.toml`で固定）
 - **認証・DB**: Supabase（Auth + PostgreSQL）
 
 ## クイックスタート
 
-開発環境はDocker Composeのみを対象とする。ローカル（非Docker）での直接実行はサポートしない（[docs/decisions.md](./docs/decisions.md) ADR-009参照）。
+開発環境はDocker Composeのみを対象とする。ローカル（非Docker）での直接実行はサポートしない。
 
 ### 前提ツール
 
 - **Docker Desktop**（または互換のOCIランタイム）: アプリの起動に必須
 - **Homebrew**: `mise` の導入に使用（[brew.sh](https://brew.sh)）
-- **[mise](https://mise.jdx.dev)**: ホスト側で直接実行する開発ツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョン管理。バージョンはリポジトリ直下の [`mise.toml`](./mise.toml) で固定する（[docs/decisions.md](./docs/decisions.md) ADR-023参照）
+- **[mise](https://mise.jdx.dev)**: ホスト側で直接実行する開発ツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョン管理。バージョンはリポジトリ直下の [`mise.toml`](./mise.toml) で固定する
 
 ```bash
 brew install mise
@@ -59,14 +59,14 @@ mise install   # mise.toml のバージョンを一括インストール
 mise ls        # 適用中のバージョンを確認
 ```
 
-`mise install` が入れるツールは次のとおり。`node`/`python` は Docker イメージ（`node:20-alpine` / `python:3.9-slim`）と同じパッチバージョンに揃えてある。アプリ本体の実行はあくまで Docker Compose 側で行う（ADR-009）。
+`mise install` が入れるツールは次のとおり。`node`/`python` は Docker イメージ（`node:20-alpine` / `python:3.9-slim`）と同じパッチバージョンに揃えてある。アプリ本体の実行はあくまで Docker Compose 側で行う。
 
 | ツール | 用途 |
 |---|---|
 | terraform | `infra/` のAWSインフラ定義（stateを壊さないためパッチまで固定） |
 | node / python | ホストで補助コマンドを動かす場合の実行環境（コンテナと同バージョン） |
 | awscli | デプロイ・SSM Parameter Storeへのキー投入 |
-| supabase | ローカルのAuth/Postgres検証スタック（ADR-020） |
+| supabase | ローカルのAuth/Postgres検証スタック |
 | gh | リポジトリ操作・PR作成・Branch Protection設定。初回は `gh auth login` で認証 |
 
 ### 起動方法
@@ -82,7 +82,7 @@ docker compose up --build
 
 backend/frontend/docling/pdf2htmlexはそれぞれ`./backend`・`./frontend`・`./docling-service`・`./pdf2htmlex-service`をコンテナへバインドマウントしているため、ホスト側でのコード編集はホットリロードされる。AI生成は既定で`USE_MOCK_AI=true`（`MockAIClient`）を使う構成にしている。実Gemini APIを使いたい場合は`docker-compose.yml`の`backend.environment`を`USE_MOCK_AI=false`・`GEMINI_API_KEY`に上書きする。
 
-生成AI系エンジン（Gemini/Claude/OpenAI/精密復元）は本番同様に非同期ジョブ（ADR-024）で描画するため、S3の代わりにローカルではMinIO（`minio`/`minio-init`サービス）を使う。追加設定は不要で、`docker compose up --build`だけでブラウザから通しで試せる。
+生成AI系エンジン（Gemini/Claude/OpenAI/精密復元）は本番同様に非同期ジョブで描画するため、S3の代わりにローカルではMinIO（`minio`/`minio-init`サービス）を使う。追加設定は不要で、`docker compose up --build`だけでブラウザから通しで試せる。
 
 描画ボタンの隣（`EngineSelect`）で、7つの生成エンジンを選べる。
 
@@ -117,11 +117,11 @@ docker compose restart frontend
 
 ### ログイン機能をローカルで検証する（Supabase Local CLI）
 
-`docker compose up --build`だけではAuth関連の環境変数（`VITE_SUPABASE_URL`等）が未設定のため、ヘッダーのログインUI自体が表示されない（Supabaseプロジェクト未作成のローカル開発を壊さないための既定挙動）。実際にログインしてゲート対象エンジン（Gemini標準/Claude/OpenAI）や生成履歴（`GET /api/history`）を検証したい場合は、[`docs/supabase-local-cli-setup.md`](./docs/supabase-local-cli-setup.md)の手順でSupabase Local CLIのローカルスタックを起動し、`.env`にキーを設定する。生成履歴もこのSupabase Postgresへ保存され、行レベルセキュリティ（RLS）で他人の履歴には到達できない（ADR-020）。
+`docker compose up --build`だけではAuth関連の環境変数（`VITE_SUPABASE_URL`等）が未設定のため、ヘッダーのログインUI自体が表示されない（Supabaseプロジェクト未作成のローカル開発を壊さないための既定挙動）。実際にログインしてゲート対象エンジン（Gemini標準/Claude/OpenAI）や生成履歴（`GET /api/history`）を検証したい場合は、[`docs/supabase-local-cli-setup.md`](./docs/supabase-local-cli-setup.md)の手順でSupabase Local CLIのローカルスタックを起動し、`.env`にキーを設定する。生成履歴もこのSupabase Postgresへ保存され、行レベルセキュリティ（RLS）で他人の履歴には到達できない。
 
-**ログイン手段はGoogleアカウントのみ**で、メール＋パスワードでのログインは無効（ADR-020）。そのため、ローカル検証でもGoogle CloudのOAuthクライアント（client_id / secret）が必須になる。
+**ログイン手段はGoogleアカウントのみ**で、メール＋パスワードでのログインは無効。そのため、ローカル検証でもGoogle CloudのOAuthクライアント（client_id / secret）が必須になる。
 
-**アカウントの作成は次のコマンドのみ**で行う（画面からの新規登録は提供せず、Supabase側でも自己登録を拒否する。ADR-020）。ログインさせたいGoogleアカウントのメールアドレスを指定する。
+**アカウントの作成は次のコマンドのみ**で行う（画面からの新規登録は提供せず、Supabase側でも自己登録を拒否する）。ログインさせたいGoogleアカウントのメールアドレスを指定する。
 
 ```bash
 set -a; source .env; set +a          # SERVICE_ROLE_KEY と Google の認証情報を読み込む
@@ -151,7 +151,7 @@ docker compose exec frontend npm run test               # Vitest（msw使用、�
 docker compose exec frontend npm run lint                # ESLint
 ```
 
-E2E（Playwright）は、frontendの軽量な`node:20-alpine`イメージがブラウザバイナリに非対応（Alpine/musl libc）のため、Microsoft公式のPlaywrightイメージを使う独立サービス`e2e`から実行する（[docs/decisions.md](./docs/decisions.md) ADR-009参照）。常時起動しないよう`profiles`でopt-in化しているため、`--profile e2e`を付けて実行する。
+E2E（Playwright）は、frontendの軽量な`node:20-alpine`イメージがブラウザバイナリに非対応（Alpine/musl libc）のため、Microsoft公式のPlaywrightイメージを使う独立サービス`e2e`から実行する。常時起動しないよう`profiles`でopt-in化しているため、`--profile e2e`を付けて実行する。
 
 ```bash
 docker compose --profile e2e run --rm e2e
@@ -179,7 +179,7 @@ docker compose exec -T pdf2htmlex curl -sf -F "file=@/tmp/input.pdf" http://loca
   | python3 -c "import json,sys; sys.stdout.write(json.load(sys.stdin)['html'])" > "/path/to/pdf2htmlex-output.html"
 ```
 
-### エディタ（Zed）でリンター/フォーマッターを使う（ADR-009）
+### エディタ（Zed）でリンター/フォーマッターを使う
 
 ホストにPython・Node・ruff・ESLintを入れずに、エディタ上でも開発コンテナと同じリンター/フォーマッターを動かすための設定を`.zed/`に用意している。Zedでこのリポジトリを開くと、`scripts/zed-lsp.sh`経由でLSPサーバーがDocker内に起動する。
 
@@ -199,7 +199,7 @@ Prettierは導入していないため、TypeScript側の保存時整形はESLin
 
 ### 型同期
 
-バックエンドの`openapi.json`からフロント用TypeScript型（`frontend/src/types/api.ts`）を再生成する場合は以下を実行する（スキーマ変更時に都度実行する運用。ADR-005）。
+バックエンドの`openapi.json`からフロント用TypeScript型（`frontend/src/types/api.ts`）を再生成する場合は以下を実行する（スキーマ変更時に都度実行する運用）。
 
 ```bash
 docker compose exec backend python scripts/export_openapi.py
@@ -217,5 +217,5 @@ docker compose exec frontend npm run generate-types
 | [docs/architecture.md](./docs/architecture.md) | アーキテクチャ図 |
 | [docs/decisions.md](./docs/decisions.md) | アーキテクチャ決定記録 (ADR) |
 | [docs/deployment.md](./docs/deployment.md) | デプロイ手順・運用の手引き |
-| [docs/observability.md](./docs/observability.md) | ログの見方・相関のたどり方・アラーム対応（ADR-011） |
+| [docs/observability.md](./docs/observability.md) | ログの見方・相関のたどり方・アラーム対応 |
 | [docs/supabase-local-cli-setup.md](./docs/supabase-local-cli-setup.md) | Supabase Local CLIによるログイン機能のローカル検証手順 |

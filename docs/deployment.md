@@ -22,20 +22,20 @@
 | 変数名 | 説明 | 備考 |
 |---|---|---|
 | `GEMINI_API_KEY` | Gemini API（Google AI Studio）利用のためのAPIキー | `USE_MOCK_AI=false`のときのみ必須（[CLAUDE.md](../CLAUDE.md)参照） |
-| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す（ADR-006） |
+| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す |
 | `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う |
-| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない（ADR-011） |
+| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない |
 | `SSM_PARAMETER_PREFIX` | Parameter Storeから秘密情報を取得する際のパス接頭辞（例: `/adapt-sheet/prod`） | Lambda本番でのみ設定。設定時、コールドスタート時に`{prefix}/GEMINI_API_KEY`等を復号取得し`os.environ`へ展開する。取得対象は`app/secrets_loader.py`の`_SECRET_ENV_NAMES`（APIキー3種＋`SUPABASE_JWT_SECRET`＋`DATABASE_URL`）。実値未投入のダミー（`PLACEHOLDER_SET_OUT_OF_BAND`）は展開しない。ローカル/pytestでは未設定のため何もしない |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（Auth管理API用） | 現時点のバックエンドコードは未使用（JWT検証は`SUPABASE_JWT_SECRET`、DB接続は`DATABASE_URL`が担う）。管理APIを使う機能を追加する際に利用する想定 |
-| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`・`/api/history`のゲート判定に使用。未設定時は常に未ログイン扱い（fail-closed、ADR-020）。本番はParameter Store経由で渡す |
-| `SUPABASE_JWT_JWKS_URL` | SupabaseがES256（JWT Signing Keys）を使う場合の公開鍵配布URL | 公開情報のためParameter Storeではなく、Terraform変数`supabase_jwt_jwks_url`経由でLambda環境変数として渡す（ADR-020/028）。HS256方式なら未設定でよい |
+| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`・`/api/history`のゲート判定に使用。未設定時は常に未ログイン扱い（fail-closed）。本番はParameter Store経由で渡す |
+| `SUPABASE_JWT_JWKS_URL` | SupabaseがES256（JWT Signing Keys）を使う場合の公開鍵配布URL | 公開情報のためParameter Storeではなく、Terraform変数`supabase_jwt_jwks_url`経由でLambda環境変数として渡す。HS256方式なら未設定でよい |
 | `DATABASE_URL` | 生成履歴を保存するPostgreSQLの接続文字列（`postgresql+psycopg://...`） | `app/db.py`が使用。ローカルはdocker-composeの`db`サービス（Postgres）を指す既定値、本番はSupabaseプロジェクトのPostgres接続文字列をParameter Storeへ投入する。未設定時は`/api/render`の履歴保存を静かにスキップし、`/api/history`は500になる |
 
 ### フロントエンド
 
 | 変数名 | 説明 |
 |---|---|
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDK設定（`lib/supabaseClient.ts`）。未設定時はログインUI（`AuthPanel`）自体を非表示にする（ADR-020）。ビルド時に埋め込まれるため、値を変えたら再ビルド・再アップロードが必要 |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDK設定（`lib/supabaseClient.ts`）。未設定時はログインUI（`AuthPanel`）自体を非表示にする。ビルド時に埋め込まれるため、値を変えたら再ビルド・再アップロードが必要 |
 
 APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront）から配信し、`src/lib/api.ts`は相対パス`/api/...`のまま本番でも動く。
 
@@ -77,12 +77,12 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 - モジュール構成（`infra/modules/`）
   - `frontend`: CloudFront + S3（非公開バケット＋OAC、SPAフォールバック）
-  - `lambda`: Lambda関数の共通モジュール。`backend`（入口エンドポイント、メモリ4GB既定、SSM読み取り＋SSM経由KMS復号の最小権限）、`render-worker`（backendと同じイメージを再利用する生成AI系engine専用の非同期ワーカー。API Gateway/Function URLを持たず、backendからの`lambda:invoke`のみ受け付ける。タイムアウト180秒。ADR-024）、`docling`/`pdf2htmlex`（内部専用、AWS_IAM認証Function URL、backend・render-worker双方から呼び出し許可）の4関数で共用する
-  - `job_bucket`: 非同期レンダリングジョブのPDF・結果置き場となるS3バケット。1日で自動失効するライフサイクルルールと、ブラウザから署名付きURLへ直接PUTするためのCORS設定を持つ（ADR-024）
+  - `lambda`: Lambda関数の共通モジュール。`backend`（入口エンドポイント、メモリ4GB既定、SSM読み取り＋SSM経由KMS復号の最小権限）、`render-worker`（backendと同じイメージを再利用する生成AI系engine専用の非同期ワーカー。API Gateway/Function URLを持たず、backendからの`lambda:invoke`のみ受け付ける。タイムアウト180秒）、`docling`/`pdf2htmlex`（内部専用、AWS_IAM認証Function URL、backend・render-worker双方から呼び出し許可）の4関数で共用する
+  - `job_bucket`: 非同期レンダリングジョブのPDF・結果置き場となるS3バケット。1日で自動失効するライフサイクルルールと、ブラウザから署名付きURLへ直接PUTするためのCORS設定を持つ
   - `api_gateway`: REST API（REGIONAL）→ backend Lambdaプロキシ。docling/pdf2htmlex/render-workerはAPI Gatewayを経由しない。ステージ単位のスロットリング（`aws_api_gateway_method_settings`）で過度なAPIコールを防ぐ（WAFは使わない）
   - `ecr`: backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制。render-workerはbackendと同じECRリポジトリ・イメージを使う）
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
-  - `monitoring`: CloudWatchアラーム（Lambdaのエラー/スロットル、API Gatewayの4XX/5XX、アプリログのERRORメトリクスフィルタ）と通知先のSNSトピック（ADR-011）
+  - `monitoring`: CloudWatchアラーム（Lambdaのエラー/スロットル、API Gatewayの4XX/5XX、アプリログのERRORメトリクスフィルタ）と通知先のSNSトピック
 - state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
   - `github_oidc`: GitHub ActionsのOIDCプロバイダとCD用デプロイロール。長期の静的アクセスキーは発行せず、許可したリポジトリ・ブランチのワークフローだけがロールを引き受けられる
 - デプロイ後、ステージング環境のエンドポイントに対してローカルからAPIテストを実行し疎通を確認する。
@@ -126,7 +126,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 - **APIキーのローテーション**: Parameter Store（SecureString）の値を更新後、Lambdaの実行環境を入れ替える（新デプロイ or 再デプロイ）ことで、次のコールドスタート時に新しいキーが読み込まれる（キャッシュはコールドスタート単位）。
 - **レート制限**: WAFは使わず、API Gatewayのステージ単位スロットリング（全メソッド合算、認証有無を区別しない）で過度なAPIコールを防ぐ（[architecture.md](./architecture.md#5-セキュリティ概要図) 参照）。
 - **ロールバック**: Terraform管理下のため、問題発生時は直前のTerraform state / GitHub Actionsのデプロイ履歴から切り戻す。
-- **ログ・アラームの確認**: 障害時にどのログをどう引くかは [observability.md](./observability.md) に手順をまとめている。アラームはSNSトピック（`terraform output alarm_topic_arn`）へ集約され、`alarm_email` を設定した場合は**購読確認メールのリンクを踏むまで通知が届かない**点に注意（ADR-011）。
+- **ログ・アラームの確認**: 障害時にどのログをどう引くかは [observability.md](./observability.md) に手順をまとめている。アラームはSNSトピック（`terraform output alarm_topic_arn`）へ集約され、`alarm_email` を設定した場合は**購読確認メールのリンクを踏むまで通知が届かない**点に注意。
 - **ログの保持期間**: `log_retention_in_days`（既定30日）がLambda・API Gateway・CloudFrontのログへ一括で適用される。伸ばすほどCloudWatch Logs / S3の保管料が増える。
 
 ---

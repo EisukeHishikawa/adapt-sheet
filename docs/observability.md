@@ -1,6 +1,6 @@
 # ログ・可観測性（運用ガイド）
 
-設計判断の背景は [ADR-011](./decisions.md)（構造化ログ・ログ可観測性の設計）を参照。本ドキュメントは「障害・問い合わせが来たときにどこを見るか」の手順書。
+本ドキュメントは「障害・問い合わせが来たときにどこを見るか」の手順書。
 
 ## 1. どこに何が残るか
 
@@ -14,11 +14,11 @@
 | 分散トレース | AWS X-Ray | X-Ray既定 | backend→docling/pdf2htmlexのどこで時間を使ったか |
 | Supabase Auth / Postgres ログ | Supabaseダッシュボード（Logs） | **プラン依存・短期** | ログイン試行、RLS拒否、DB側のエラー |
 
-**一次ソースはCloudWatch**。Supabaseのログは保持期間が短くTerraform管理外のため、Supabase内部でしか起きない事象（ログイン失敗・RLS拒否）の調査に限って参照する（ADR-011）。
+**一次ソースはCloudWatch**。Supabaseのログは保持期間が短くTerraform管理外のため、Supabase内部でしか起きない事象（ログイン失敗・RLS拒否）の調査に限って参照する。
 
 ## 2. 相関のたどり方
 
-1. 画面に出たエラーには `request_id` が表示される（ADR-012）。レスポンスの `X-Request-ID` ヘッダーと同値。
+1. 画面に出たエラーには `request_id` が表示される。レスポンスの `X-Request-ID` ヘッダーと同値。
 2. その `request_id` でbackendのロググループを引く。同じIDが**内部サービス側のログにも付く**（backendが `X-Request-ID` ヘッダーで伝播している）。
 3. API Gatewayのアクセスログとの突き合わせは `xrayTraceId`（LambdaへはX-Amzn-Trace-Idとして渡る）で行う。
 
@@ -83,11 +83,11 @@ fields @timestamp, request_id, reason
 | `*-throttles` | Lambdaが同時実行数上限で絞られた | 同時アクセス増を疑う。メモリ設定と同時実行の見直し |
 | `*-api-5xx` | API Gatewayが5XXを返した | API Gatewayアクセスログの `integrationError` |
 | `*-api-4xx` | 4XXが5分で20件以上 | アクセスログで429か403かを確認。429ならAPI Gatewayのスロットリング閾値見直し |
-| `*-backend-app-errors` | アプリログにERRORが出た | ADR-012で500へ丸められた想定外例外。**Lambdaの`Errors`には出ない**ため、これが唯一の検知経路 |
+| `*-backend-app-errors` | アプリログにERRORが出た | 500へ丸められた想定外例外。**Lambdaの`Errors`には出ない**ため、これが唯一の検知経路 |
 
 ## 5. ログに載せてはいけないもの
 
-- APIキー・JWT本体・パスワード（ADR-011）
+- APIキー・JWT本体・パスワード
 - PDFのバイト列、リクエストボディ全文
 - 生成AIの入出力全文 — `LOG_AI_PAYLOAD` で切り替わる。帳票の業務データを含むため**本番では有効化しない**（ローカルの `docker-compose.yml` のみ `true`）
 - API Gatewayの `data_trace_enabled` は常に `false`。有効にするとリクエスト/レスポンス本文がロググループへ書き出される
@@ -96,7 +96,7 @@ fields @timestamp, request_id, reason
 
 ## 6. Supabase側のログ
 
-Supabaseのログ（Auth・Postgres・PostgREST）は**プラットフォーム管理**でTerraformの管理対象外、かつ保持期間がプラン依存（無料プランは短い）。**アプリの一次的な監査ログとして当てにしない**（ADR-011）。次の事象を調べるときだけ参照する。
+Supabaseのログ（Auth・Postgres・PostgREST）は**プラットフォーム管理**でTerraformの管理対象外、かつ保持期間がプラン依存（無料プランは短い）。**アプリの一次的な監査ログとして当てにしない**。次の事象を調べるときだけ参照する。
 
 | 見たいこと | 場所 |
 | --- | --- |

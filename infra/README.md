@@ -91,7 +91,7 @@ infra/
    docker push "${REGISTRY}/adapt-sheet-prod-backend:latest"
    ```
 
-   同一タグへpushしただけではLambdaは新しいイメージを引き直さないため、`aws lambda update-function-code --function-name adapt-sheet-prod-backend --image-uri ...` を実行する（またはタグを世代ごとに変えて`image_tag`変数を更新し`terraform apply`する）。**`render-worker`はbackendと同じイメージ（`image_tag`変数を共有）を使うため、backendコード（`backend/`配下）を変更した場合は`adapt-sheet-prod-render-worker`にも同じ`update-function-code`を実行する**（ADR-024）。CD（`.github/workflows/cd.yml`）は`terraform apply`経由で両方とも自動更新するため、この手動操作はローカルからの手動デプロイ時のみ必要。
+   同一タグへpushしただけではLambdaは新しいイメージを引き直さないため、`aws lambda update-function-code --function-name adapt-sheet-prod-backend --image-uri ...` を実行する（またはタグを世代ごとに変えて`image_tag`変数を更新し`terraform apply`する）。**`render-worker`はbackendと同じイメージ（`image_tag`変数を共有）を使うため、backendコード（`backend/`配下）を変更した場合は`adapt-sheet-prod-render-worker`にも同じ`update-function-code`を実行する**。CD（`.github/workflows/cd.yml`）は`terraform apply`経由で両方とも自動更新するため、この手動操作はローカルからの手動デプロイ時のみ必要。
 
 7. **フロントエンドの配置**
 

@@ -51,14 +51,14 @@ flowchart LR
 - フロントとAPIは同一オリジン（CloudFront配下の`/api/*`）で提供する。
 - 入口Lambdaは`FastAPI + Lambda Web Adapter`で動き、PyMuPDFによるレイアウト変換を内包する。
 - Docling/pdf2htmlEXの各Lambdaは内部専用で、API Gatewayを介さずAWS_IAM認証必須のFunction URLとして公開する。
-- 生成AI（Gemini/Claude/OpenAI/hybrid）はAPI Gatewayの統合タイムアウト（29秒固定）に収まらないことがあるため、`render-worker`Lambda（入口Lambdaと同じイメージ、タイムアウト180秒）へ`lambda:invoke`（`InvocationType=Event`）で非同期起動し、API Gatewayを介さない経路で処理する（ADR-024）。PDFはS3の署名付きURLへブラウザから直接アップロードし、入口Lambdaを経由しない。生成AIへはPDFをマルチモーダル入力として直接添付する。
+- 生成AI（Gemini/Claude/OpenAI/hybrid）はAPI Gatewayの統合タイムアウト（29秒固定）に収まらないことがあるため、`render-worker`Lambda（入口Lambdaと同じイメージ、タイムアウト180秒）へ`lambda:invoke`（`InvocationType=Event`）で非同期起動し、API Gatewayを介さない経路で処理する。PDFはS3の署名付きURLへブラウザから直接アップロードし、入口Lambdaを経由しない。生成AIへはPDFをマルチモーダル入力として直接添付する。
 - 変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は引き続き入口Lambda上で同期処理する（常に高速なため29秒制約を受けない）。
 
 ---
 
 ## 2. 開発環境の構成図
 
-`docker compose up --build` で起動する開発環境（`docker-compose.yml`、ADR-010）。ホストへ公開するのは frontend(5173) と backend(8000) のみで、変換系サービスはCompose内部ネットワークからのみ到達できる。
+`docker compose up --build` で起動する開発環境（`docker-compose.yml`）。ホストへ公開するのは frontend(5173) と backend(8000) のみで、変換系サービスはCompose内部ネットワークからのみ到達できる。
 
 ```mermaid
 flowchart LR
@@ -97,16 +97,16 @@ flowchart LR
 ```
 
 - 生成AIはpytest・ローカル開発とも既定でモック（`USE_MOCK_AI=true`）を経由し、実APIを叩かない。
-- `e2e` と `*-lsp` は `profiles` によるopt-inで、常時起動しない（ADR-010/024）。
+- `e2e` と `*-lsp` は `profiles` によるopt-inで、常時起動しない。
 - Docling用のMLモデルは名前付きボリュームへ永続化し、コンテナ再作成時の再ダウンロードを避ける。
-- ホスト側ツールのバージョンは `mise.toml` で固定する（ADR-023）。
+- ホスト側ツールのバージョンは `mise.toml` で固定する。
 - Supabase Local CLIも内部的にはDockerコンテナ（Postgres・GoTrue等）を起動するが、この`docker-compose.yml`とは別スタックのため図でも分けている（詳細手順は[`supabase-local-cli-setup.md`](./supabase-local-cli-setup.md)）。
 
 ---
 
 ## 3. 認証認可の仕組みの構成図
 
-認証はSupabase Auth（Google OAuth、認可コード＋PKCE）に委譲し、バックエンドはJWTを検証するだけでセッションを持たない（ADR-020/021）。
+認証はSupabase Auth（Google OAuth、認可コード＋PKCE）に委譲し、バックエンドはJWTを検証するだけでセッションを持たない。
 
 ```mermaid
 flowchart LR
@@ -138,10 +138,10 @@ flowchart LR
     DBConn -->|"auth.uid() で行を制限"| SBDB
 ```
 
-- トークンは `sessionStorage` に保持し、タブを閉じた時点で破棄する（ADR-020）。
-- 検証鍵は署名方式で切り替わる（`HS256`は共有シークレット、`ES256`/`RS256`はJWKS。ADR-020）。設定が無い場合は常に未ログイン扱い（fail-closed）。
-- 認可は2段構え。ゲート対象engine（`gemini`/`claude`/`openai`）は未ログインなら403 `FREE_ACCESS_FORBIDDEN`、履歴データはPostgreSQLのRLSで`auth.uid()`一致行のみに制限する（ADR-020）。
-- アカウント作成は `scripts/create_user.sh` のみで、画面からの新規登録は提供しない（ADR-020）。
+- トークンは `sessionStorage` に保持し、タブを閉じた時点で破棄する。
+- 検証鍵は署名方式で切り替わる（`HS256`は共有シークレット、`ES256`/`RS256`はJWKS）。設定が無い場合は常に未ログイン扱い（fail-closed）。
+- 認可は2段構え。ゲート対象engine（`gemini`/`claude`/`openai`）は未ログインなら403 `FREE_ACCESS_FORBIDDEN`、履歴データはPostgreSQLのRLSで`auth.uid()`一致行のみに制限する。
+- アカウント作成は `scripts/create_user.sh` のみで、画面からの新規登録は提供しない。
 
 ---
 
@@ -268,7 +268,7 @@ flowchart LR
 
 マイグレーションは`backend/migrations/`（Alembic）で管理する。
 
-## 8. ログ・可観測性の構成図（ADR-011）
+## 8. ログ・可観測性の構成図
 
 記録先はCloudWatch（＋CloudFrontログのS3）へ寄せ、Supabase側のログは二次ソースと位置づける。運用手順は [`observability.md`](./observability.md) を参照。
 

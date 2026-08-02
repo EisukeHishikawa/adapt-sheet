@@ -26,7 +26,7 @@ mise install    # mise.tomlのバージョンを一括インストール
 mise ls         # 適用中のバージョンを確認
 ```
 
-起動手順（`docker compose up --build`、ポート固定、既存起動時の再作成方法等）は [`README.md`](./README.md) の「クイックスタート」に一本化している。ClaudeCodeがアプリを起動・再起動する際は必ずそちらの手順に従うこと。以下は起動中のコンテナに対して実行するテスト・静的解析コマンド。
+起動手順（`docker compose up --build`、ポート固定、既存起動時の再作成方法等）は [`docs/quickstart.md`](./docs/quickstart.md) に一本化している。ClaudeCodeがアプリを起動・再起動する際は必ずそちらの手順に従うこと。以下は起動中のコンテナに対して実行するテスト・静的解析コマンド。
 
 ### バックエンド (Python / FastAPI、入口エンドポイント)
 

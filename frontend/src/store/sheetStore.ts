@@ -13,6 +13,7 @@ import {
 } from '@/lib/api'
 import type { HistoryItemResponse, RenderJobStatusResponse } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
+import { formatCss, formatHtml } from '@/lib/codeFormatter'
 
 // 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
 // グローバルストア。
@@ -366,8 +367,10 @@ function applySuccessfulRender(
   heightMm: number | null,
 ): void {
   const newEntry: HistoryEntry = {
-    html: result.html,
-    css: result.css,
+    // 精密復元（pdf2htmlexエンジン）は1行の自己完結HTML/CSSを返すことがあるため、
+    // エディタ・履歴へ積む時点で整形しておく。
+    html: formatHtml(result.html),
+    css: formatCss(result.css),
     // レスポンスのjsonはオブジェクトのため、JSON入力エディタへ戻せる整形済みテキストにする。
     json: JSON.stringify(result.json ?? {}, null, 2),
     widthMm,

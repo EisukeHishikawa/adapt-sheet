@@ -228,14 +228,28 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
+    subgraph Secrets["シークレット管理"]
+        SSM["SSM Parameter Store<br/>(SecureString)<br/>APIキー3種 / SUPABASE_JWT_SECRET / DATABASE_URL"]
+        Env["Lambda os.environ<br/>(イメージ/コードに焼き込まない)"]
+        SSM -->|"コールドスタート時のみ復号取得<br/>secrets_loader.py"| Env
+    end
+
     User["ユーザー"] --> APIGW["API Gateway<br/>(ステージ単位スロットリング)"]
     APIGW --> Router{"認証トークンあり?"}
 
     Router -->|なし| Public["未認証エリア<br/>・ステートレスな変換/生成のみ<br/>・DBアクセス不可<br/>・ステージ全体合算のスロットリング"]
-    Router -->|あり| SupabaseAuthCheck["Supabase AuthでJWT検証"]
-    SupabaseAuthCheck -->|有効| Private["認証エリア<br/>・Supabaseへの保存/閲覧許可<br/>・ステージ全体合算のスロットリング"]
-    SupabaseAuthCheck -->|無効| Reject["401/403エラー返却"]
+    Router -->|あり| JWTCheck{"JWT検証（alg判定）<br/>services/auth.py"}
+    Env -.->|SUPABASE_JWT_SECRET| JWTCheck
+    JWTCheck -->|HS256| Shared["共有シークレットで署名検証"]
+    JWTCheck -->|ES256/RS256| JWKS["SupabaseのJWKSを取得して署名検証<br/>(5秒タイムアウト、鍵セットをキャッシュ)"]
+    JWTCheck -->|"設定なし/検証失敗<br/>(fail-closed)"| Reject["401/403エラー返却"]
+    Shared --> Private
+    JWKS --> Private["認証エリア<br/>・Supabaseへの保存/閲覧許可<br/>・DB接続はRLSを迂回できないauthenticatorロール<br/>・行ごとにSET LOCAL ROLE authenticatedへ切替後、auth.uid()=user_idの行のみ読み書き可（RLS）<br/>・ステージ全体合算のスロットリング"]
 ```
+
+- **シークレットの保管**: 生成AIのAPIキー（Gemini/Claude/OpenAI）・JWT検証用の`SUPABASE_JWT_SECRET`・DB接続文字列`DATABASE_URL`はいずれもDockerイメージ/コードに含めず、AWS SSM Parameter StoreへSecureStringとして保管する。Lambdaのコールドスタート時（`secrets_loader.py`、モジュールのグローバルスコープで1回のみ実行）に復号取得して`os.environ`へ展開し、リクエスト処理中は追加のSSM呼び出しを行わない。未投入（プレースホルダ値のまま）の場合は該当キーを無視し、警告ログのみ残す。
+- **JWT検証（JWKS/共有シークレット）**: Supabaseプロジェクトの署名方式はJWTヘッダーの`alg`で判別する。`HS256`は`SUPABASE_JWT_SECRET`による共有シークレット検証、`ES256`/`RS256`はSupabaseのJWKSエンドポイントから取得した公開鍵で検証する（`PyJWKClient`、鍵セットをキャッシュしタイムアウト5秒）。対応する設定値が無い場合や検証に失敗した場合は例外を送出せず未ログイン扱いに倒す（fail-closed）。ログイン後の詳細な流れ（Google OAuth・トークン保管）は3章を参照。
+- **RLS（行レベルセキュリティ）**: `render_history`テーブルはRLSを有効化しており、アプリはRLSを迂回できる所有者ロールではなく`authenticator`ロールで接続する。リクエストごとにJWTの`sub`をトランザクションローカルなGUC（`request.jwt.claims`）へ設定してから`SET LOCAL ROLE authenticated`へ切り替える（PostgRESTと同じ方式）。`authenticated`ロール向けのポリシーは`auth.uid()::text = user_id`の行のみSELECT/INSERT/DELETEを許可するため、SQL側の`WHERE`句の書き忘れがあっても他ユーザーの行には到達できない。
 
 ---
 

@@ -237,6 +237,8 @@ flowchart TD
     SupabaseAuthCheck -->|無効| Reject["401/403エラー返却"]
 ```
 
+JWT検証（JWKS/共有シークレット）・RLSの仕組みは3章、決定理由は[`decisions.md`](./decisions.md)のADR-020を参照。シークレット（APIキー・DB接続文字列等）の保管方法は[`deployment.md`](./deployment.md)を参照。
+
 ---
 
 ## 6. CI/CD概要図

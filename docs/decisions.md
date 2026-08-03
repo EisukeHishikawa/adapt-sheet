@@ -143,7 +143,7 @@
 - **コンテキスト**: DEVELOPMENT.md ステップ14として追加。従来のエラー応答は`HTTPException(detail=...)`による文字列（`{"detail": "..."}`）で、`detail`にはバックエンドの生の例外メッセージ（英語・内部情報を含みうる）がそのまま載っていた。フロントエンドはHTTPステータスコードから静的な日本語文言へ丸めるだけで、バックエンドが持つ原因の粒度や、ログと突き合わせるための相関IDを画面へ反映できなかった。
 - **決定**: エラー応答を次の構造化エンベロープに統一する（docs/spec.md 4.1）。
   - 形式: `{"error": {"code": <機械可読識別子>, "message": <ユーザー向け安全文言>, "request_id": <相関ID>}}`
-  - `code`は例外種別に1対1対応（`VALIDATION_ERROR`=400 / `PAYLOAD_TOO_LARGE`=413 / `PDF_CONVERSION_ERROR`=422 / `RATE_LIMITED`=429 / `AI_GENERATION_ERROR`=502 / `INTERNAL_ERROR`=500）。
+  - `code`は例外種別に1対1対応する。現行の全コード・ステータス対応は[`spec.md`](./spec.md#4-エラーコード定義)を参照（フェーズ進行に伴い追加されるため、本ADRでは列挙しない）。
   - `message`はステータス／`code`ごとに固定の安全な日本語文言へ丸め、生の例外メッセージ・スタックトレースはレスポンスに含めずサーバーログ（ADR-011）にのみ残す。
   - `request_id`はADR-011で採番した相関IDで、`X-Request-ID`ヘッダーと同値。
   - 実装は、FastAPIの例外ハンドラ（`app.exception_handler`）で`PDFConversionError`/`AIGenerationError`/`HTTPException`/未捕捉`Exception`を捕捉し、上記エンベロープの`JSONResponse`へ変換する。

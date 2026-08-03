@@ -51,7 +51,7 @@ flowchart LR
 - フロントとAPIは同一オリジン（CloudFront配下の`/api/*`）で提供する。
 - 入口Lambdaは`FastAPI + Lambda Web Adapter`で動き、PyMuPDFによるレイアウト変換を内包する。
 - Docling/pdf2htmlEXの各Lambdaは内部専用で、API Gatewayを介さずAWS_IAM認証必須のFunction URLとして公開する。
-- 生成AI（Gemini/Claude/OpenAI/hybrid）はAPI Gatewayの統合タイムアウト（29秒固定）に収まらないことがあるため、`render-worker`Lambda（入口Lambdaと同じイメージ、タイムアウト180秒）へ`lambda:invoke`（`InvocationType=Event`）で非同期起動し、API Gatewayを介さない経路で処理する。PDFはS3の署名付きURLへブラウザから直接アップロードし、入口Lambdaを経由しない。生成AIへはPDFをマルチモーダル入力として直接添付する。
+- 生成AI（Gemini/Claude/OpenAI/hybrid）はAPI Gatewayの統合タイムアウト（29秒固定）に収まらないことがあるため、`render-worker`Lambda（入口Lambdaと同じイメージ、タイムアウト180秒）へ`lambda:invoke`（`InvocationType=Event`）で非同期起動し、API Gatewayを介さない経路で処理する。PDFはS3の署名付きURLへブラウザから直接アップロードし、入口Lambdaを経由しない。
 - 変換エンジン（Docling/pdf2htmlEX/PyMuPDF）は引き続き入口Lambda上で同期処理する（常に高速なため29秒制約を受けない）。
 
 ---
@@ -149,7 +149,7 @@ flowchart LR
 
 `POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。生成AI系engineの実際の処理（`_generate_ai_result`）はこの図の通りだが、フロントは「4.1 非同期レンダリングジョブ」の経路でこれを呼び出す。`POST /api/render`自体は変換エンジン向けの同期経路として引き続き提供する。
 
-エンジン選択（`engine`）により処理が3方向に分岐する。生成AI（Gemini/Claude/OpenAI/hybrid）はPDFをマルチモーダル入力として直接受け取り、PyMuPDF/Doclingによる事前変換は行わない（HTML/JSON/Doclingテキストは生成AIへ送らない）。Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果として返す。
+エンジン選択（`engine`）により処理が3方向に分岐する（各engineの入出力仕様は[`spec.md`](./spec.md#31-post-apirender)を参照）。
 
 ```mermaid
 sequenceDiagram
@@ -302,4 +302,4 @@ flowchart TD
     Supabase["Supabase (Auth / Postgres)"] -.->|"保持期間はプラン依存<br/>調査時の二次ソース"| Dashboard["Supabase ダッシュボード"]
 ```
 
-相関のたどり方: 画面のエラーに出る`request_id`（＝レスポンスの`X-Request-ID`）でbackend・docling・pdf2htmlexの3ロググループを横断検索できる。API Gatewayのアクセスログとの突き合わせは`xrayTraceId`で行う。`render-worker`は`lambda:invoke`（Event）による非同期起動のため独立したLambda実行コンテキストとなり、`X-Request-ID`は伝播しない。ジョブ単位の相関は`job_id`（`POST /api/render/jobs`のレスポンス、S3オブジェクトキー`uploads/{job_id}.pdf`・`results/{job_id}.json`と共通）で行う。
+相関のたどり方の手順は[`observability.md`](./observability.md#2-相関のたどり方)を参照。`render-worker`は`lambda:invoke`（Event）による非同期起動のため独立したLambda実行コンテキストとなり、`X-Request-ID`は伝播しない点に注意（ジョブ単位の相関は`job_id`＝`POST /api/render/jobs`のレスポンス、S3オブジェクトキー`uploads/{job_id}.pdf`・`results/{job_id}.json`と共通で行う）。

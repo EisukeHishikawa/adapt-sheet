@@ -24,8 +24,10 @@ __all__ = [
 # フォント名にこれらを含むスパンを太字とみなす。PDFは太字を別フォント（例: "...-Bold"）として
 # 埋め込むことが多く、CSSのfont-weightへ直接は写らないため名前から推定する。
 _BOLD_FONT_MARKERS = ("bold", "black", "heavy", "gothic")
-# サーバー環境にPDF埋め込みフォントが無くても字形が崩れないよう、Webフォントを最優先に指定する。
-_FONT_STACK = "'Noto Sans JP', sans-serif"
+# Google Fontsの<link rel="stylesheet">はrender-blockingで、到達不可なネットワーク環境では
+# プレビューiframe（sandbox=""でJS実行不可のため非同期読み込みの定石が使えない）全体の描画が
+# 止まってしまう。外部依存を持たず、主要OSに標準搭載のCJKフォントで完結させる。
+_FONT_STACK = "'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"
 
 # 一般的な請求書・帳票として過大にならないフォントサイズ上限（px）。役割（エリア）別に分ける。
 # PDFが大きめの字で作られていてもここで頭打ちにする。上限を超えない元の小さい字は縮めない（min）。
@@ -155,9 +157,6 @@ def _document_head(width: float, height: float) -> str:
 <head>
     <meta charset="UTF-8">
     <title>自動生成テンプレート</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after {{ box-sizing: border-box; }}
         body {{ margin: 0; padding: 20px; background-color: #f1f5f9; display: flex; justify-content: center; }}

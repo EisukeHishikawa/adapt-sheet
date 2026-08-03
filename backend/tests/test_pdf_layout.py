@@ -106,6 +106,19 @@ def test_capped_font_size_limits_by_area(size, expected):
     assert _capped_font_size(size) == expected
 
 
+def test_converter_has_no_external_font_dependency():
+    # Google FontsのCSS取得は<link rel="stylesheet">としてrender-blockingになるため、
+    # 到達できないネットワーク環境（社内FW等）ではプレビューiframe全体の描画が止まってしまう。
+    # プレビューiframeはsandbox=""でJS実行不可のため非同期読み込みの定石も使えず、システム
+    # フォントのみで完結させる。
+    converter = PyMuPDFLayoutConverter()
+    html = converter.convert_to_html("layout_sample.pdf", LAYOUT_PDF.read_bytes())
+
+    assert "fonts.googleapis.com" not in html
+    assert "fonts.gstatic.com" not in html
+    assert "Hiragino Sans" in html
+
+
 def test_converter_caps_font_sizes_below_title_max():
     # 生成HTMLのfont-sizeが役割別上限（最大でもタイトル上限）を超えないこと。
     converter = PyMuPDFLayoutConverter()

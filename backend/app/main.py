@@ -442,13 +442,11 @@ async def process_render_job(
         )
         return {"status": "error"}
 
-    job_store.write_status(
-        payload.job_id,
-        {"status": "done", "html": result.html, "css": result.css, "json": result.data},
-    )
-
     # gemini_free/hybridは未ログインでも使えるため、履歴保存（ログイン時のみ）とは別に
-    # user_idの有無に関わらずカウンタ更新が必要かどうかでセッションを開く。
+    # user_idの有無に関わらずカウンタ更新が必要かどうかでセッションを開く。カウンタ更新は
+    # 必ずjob_storeへの"done"書き込みより前に済ませる。フロントはジョブ完了を検知した
+    # 直後に無料枠利用回数を取得するため、順序が逆だとその取得がカウンタ更新に対して
+    # 早すぎて未反映の値（1回目の利用時なら0）を拾ってしまう。
     if payload.engine in GEMINI_FREE_QUOTA_ENGINES or payload.user_id is not None:
         with db_session_for_user(payload.user_id) as db_session:
             if payload.engine in GEMINI_FREE_QUOTA_ENGINES:
@@ -464,6 +462,11 @@ async def process_render_job(
                     width_mm=payload.width_mm,
                     height_mm=payload.height_mm,
                 )
+
+    job_store.write_status(
+        payload.job_id,
+        {"status": "done", "html": result.html, "css": result.css, "json": result.data},
+    )
 
     return {"status": "done"}
 

@@ -180,6 +180,20 @@ jobs:
             echo "app_url=$(terraform output -raw app_url)"
           } >> "$GITHUB_OUTPUT"
 
+      # Lambdaのイメージを差し替えた直後は各サービスがコールドスタートし、docling（ML推論の
+      # 初期化）だけで1分以上かかる。フロントのビルドと配信の裏で先に起こしておき、
+      # 最後のスモークテストがコールドスタートの完了を待つだけの時間を無くす。
+      # 失敗しても後続には影響しない（成否は最後のスモークテストが判定する）。
+      - name: Start warming up services
+        env:
+          APP_URL: ${{ steps.tf.outputs.app_url }}
+        run: |
+          nohup bash -c 'for _ in $(seq 1 20); do
+            curl -sSf -X POST "$APP_URL/api/warmup" >/dev/null 2>&1 && break
+            sleep 5
+          done' >/dev/null 2>&1 &
+          echo "ウォームアップをバックグラウンドで開始した: $APP_URL"
+
       # VITE_SUPABASE_*はビルド時に埋め込まれるため、配信前のここで注入する。
       # ローカル/CIと同じdocker-compose.ymlのfrontendサービスでビルドし、成果物を揃える。
       - name: Build frontend
@@ -208,18 +222,18 @@ jobs:
 
       # SPAが配信され、backendからdocling/pdf2htmlex/DBまで到達できることを確認する。
       # /api/warmupは各サービスの状態をJSONで返し、認証を要求しない。
-      # デプロイ直後はbackend/docling/pdf2htmlexが同時にコールドスタートし、
-      # docling（ML推論の初期化）だけでAPI Gatewayの29秒統合タイムアウトを超えることがあるためリトライする。
+      # 直前のウォームアップが間に合わなかった場合に備えてリトライは残す。待ち時間の
+      # 刻みを細かくして、起動済みなのに次の試行まで待つ無駄を減らす。
       - name: Smoke test
         env:
           APP_URL: ${{ steps.tf.outputs.app_url }}
         run: |
           set -euo pipefail
           curl -sSf -o /dev/null "$APP_URL/"
-          for i in 1 2 3 4 5; do
+          for _ in $(seq 1 15); do
             if curl -sSf -X POST "$APP_URL/api/warmup" | tee /dev/stderr | grep -q '"docling"'; then
               exit 0
             fi
-            sleep 10
+            sleep 5
           done
           exit 1

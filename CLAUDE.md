@@ -39,7 +39,7 @@ docker compose exec backend ruff check .                # 静的解析
 docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力）
 docker compose exec backend alembic upgrade head          # 生成履歴用DB（backend/migrations）のマイグレーション適用。RLSも有効化される
 docker compose exec backend alembic revision --autogenerate -m "説明" # app/models.py変更時のマイグレーション作成
-scripts/create_user.sh user@example.com 'password123'      # アカウント作成（唯一の手段。画面からの新規登録は提供しない）
+scripts/create_user.sh user@example.com      # アカウント作成（唯一の手段。ログインはGoogleアカウントのみのためパスワードは設定しない）
 ```
 
 ### Doclingサービス (Python / FastAPI、テキスト抽出専用)

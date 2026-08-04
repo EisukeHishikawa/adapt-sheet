@@ -1,6 +1,6 @@
 # infra — Terraform によるAWSインフラ定義（フェーズ4 ステップ25）
 
-`adapt-sheet` のAWSインフラ（ECR Private / Lambda / API Gateway / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
+AdaptSheet AIのAWSインフラ（ECR Private / Lambda / API Gateway / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
 
 > 本番デプロイの配線（SPAとAPIの同一オリジン化・バイナリ透過・秘密情報の受け渡し・doclingのモデル同梱）は整理済み。`terraform apply`の実施はユーザー承認後に行う。
 

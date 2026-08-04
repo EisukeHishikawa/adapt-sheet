@@ -1,4 +1,4 @@
-# adapt-sheet
+# AdaptSheet AI
 
 エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 

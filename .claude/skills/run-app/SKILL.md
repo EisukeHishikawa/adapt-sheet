@@ -1,9 +1,9 @@
 ---
 name: run-app
-description: adapt-sheetのバックエンド(FastAPI/uvicorn)とフロントエンド(Vite)をDocker Compose経由でバックグラウンドで起動・停止し、起動/停止できているかどうかのみを確認する。テスト実行は行わない。「起動して」「画面を確認したい」「アプリを閉じて/落として」等のリクエストで使用する。
+description: AdaptSheet AIのバックエンド(FastAPI/uvicorn)とフロントエンド(Vite)をDocker Compose経由でバックグラウンドで起動・停止し、起動/停止できているかどうかのみを確認する。テスト実行は行わない。「起動して」「画面を確認したい」「アプリを閉じて/落として」等のリクエストで使用する。
 ---
 
-# adapt-sheet 起動・停止手順（Docker Compose）
+# AdaptSheet AI 起動・停止手順（Docker Compose）
 
 バックエンド・フロントエンドを起動/停止し、**その状態確認のみ**を行う。
 pytest/vitest等のテストスイートは実行しない。

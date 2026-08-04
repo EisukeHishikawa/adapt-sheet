@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-adapt-sheet（帳票作成AI支援プラットフォーム）における ClaudeCode との協働ルール。背景・要件は [`planning/brainstorm.md`](./planning/brainstorm.md)、進め方は [`DEVELOPMENT.md`](./DEVELOPMENT.md) を参照。
+AdaptSheet AI（帳票作成AI支援プラットフォーム）における ClaudeCode との協働ルール。背景・要件は [`planning/brainstorm.md`](./planning/brainstorm.md)、進め方は [`DEVELOPMENT.md`](./DEVELOPMENT.md) を参照。
 
 ## 開発思想
 

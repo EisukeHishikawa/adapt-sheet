@@ -1,6 +1,6 @@
 # 要件仕様書
 
-`adapt-sheet` の要件定義・画面仕様・APIインターフェース・エラーコード定義をまとめる。背景・構想は [`../planning/brainstorm.md`](../planning/brainstorm.md) を参照。
+AdaptSheet AIの要件定義・画面仕様・APIインターフェース・エラーコード定義をまとめる。背景・構想は [`../planning/brainstorm.md`](../planning/brainstorm.md) を参照。
 
 ---
 

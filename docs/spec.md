@@ -6,7 +6,7 @@ AdaptSheet AIの要件定義・画面仕様・APIインターフェース・エ�
 
 ## 1. プロダクト概要
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI、PDFを直接読み取るマルチモーダル入力）と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI・精密復元。PDFを直接読み取るマルチモーダル入力）と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 
 ### 対象ユーザー
 
@@ -91,7 +91,7 @@ PDF・プロンプト・サイズ指定・生成エンジン選択を受け取�
 
 | フィールド | 型 | 必須 | 説明 |
 |---|---|---|---|
-| `pdf` | file | 任意 | ベースとなる既存PDF。`docling`/`pdf2htmlex`/`pymupdf`選択時は必須（無いと400） |
+| `pdf` | file | 任意 | ベースとなる既存PDF。`hybrid`/`docling`/`pdf2htmlex`/`pymupdf`選択時は必須（無いと428） |
 | `prompt` | string | 任意 | 生成方針の自然言語指示（生成AI選択時のみ使用） |
 | `width_mm` | number | 任意 | 帳票の横幅（mm） |
 | `height_mm` | number | 任意 | 帳票の縦幅（mm） |
@@ -264,7 +264,19 @@ pdf2htmlEX変換専用のサービスが公開する内部エンドポイント�
 
 上記のウォームアップ専用。PDF変換の依存には触れず`{"status": "ok"}`を即座に返す。
 
-### 3.6 型同期
+### 3.6 `GET /api/usage/gemini-free`
+
+Gemini無料枠（`gemini_free`・`hybrid`）の当日の利用回数を返す。認証不要。カウンタは全ユーザー共有で、実際のGemini無料枠がAPIキー単位の共有リソースであることに合わせている。JSTの日付が変わるとリセットされる。
+
+**レスポンス（200 OK）**
+
+```json
+{ "date": "2026-08-04", "count": 3, "limit": 10 }
+```
+
+上限に達しても`gemini_free`/`hybrid`の利用はブロックせず、画面には成功メッセージへ付加する形で表示するだけに留める。`DATABASE_URL`未設定の環境では常に`count: 0`を返す。
+
+### 3.7 型同期
 
 FastAPIが自動生成する `openapi.json` からフロントエンド用のTypeScript型定義を生成し、フロント・バック間でキー名の手書き一致を排除する（[CLAUDE.md](../CLAUDE.md) 参照）。
 
@@ -278,15 +290,15 @@ FastAPIが自動生成する `openapi.json` からフロントエンド用のTyp
 | HTTPステータス | `error.code` | ケース | 発生条件 |
 |---|---|---|---|
 | `400 Bad Request` | `VALIDATION_ERROR` | バリデーションエラー | 必須項目の欠如、サイズ指定の型不正、JSON構文エラーなど |
-| `403 Forbidden` | `FREE_ACCESS_FORBIDDEN` | 標準プランの生成AI利用不可 | `engine`が`gemini`/`claude`/`openai`（標準プラン）で、フェーズ5のアカウント登録機能導入前 |
+| `403 Forbidden` | `FREE_ACCESS_FORBIDDEN` | 標準プランの生成AI利用不可 | `engine`が`gemini`/`claude`/`openai`（標準プラン）で、未ログイン。`GET /api/history`への未ログインアクセスも同じ |
 | `413 Payload Too Large` | `PAYLOAD_TOO_LARGE` | ファイルサイズ超過 | PDFアップロードサイズが上限を超過 |
-| `428 Precondition Required` | `PDF_REQUIRED` | PDF未添付 | `engine`が変換エンジン（Docling/pdf2htmlEX/PyMuPDF）または`hybrid`で、PDFが添付されていない |
 | `422 Unprocessable Entity` | `PDF_CONVERSION_ERROR` | PDF解析エラー | PDFの構造が破損している、パスワード保護されている等でDocling/pdf2htmlEX/PyMuPDFによる変換に失敗 |
+| `428 Precondition Required` | `PDF_REQUIRED` | PDF未添付 | `engine`が変換エンジン（Docling/pdf2htmlEX/PyMuPDF）または`hybrid`で、PDFが添付されていない |
 | `429 Too Many Requests` | `RATE_LIMITED` | レート制限超過 | API Gatewayステージ全体（全利用者合算、認証有無に関わらず）のスロットリングに抵触 |
+| `500 Internal Server Error` | `INTERNAL_ERROR` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
+| `501 Not Implemented` | `AI_SERVICE_SUSPENDED` | 標準プランの利用停止 | gemini/claude/openai/hybridのAPIキーが未設定（標準プラン未提供） |
 | `502 Bad Gateway` | `AI_GENERATION_ERROR` | AI生成エラー | Gemini/Claude/OpenAI API呼び出し失敗、タイムアウト、不正なレスポンス形式 |
 | `503 Service Unavailable` | `AI_SERVICE_UNAVAILABLE` | 生成AIサービスの混雑 | Geminiが503 UNAVAILABLE（高負荷）を返し、リトライしても解消しなかった場合 |
-| `501 Not Implemented` | `AI_SERVICE_SUSPENDED` | 標準プランの利用停止 | gemini/claude/openai/hybridのAPIキーが未設定（標準プラン未提供） |
-| `500 Internal Server Error` | `INTERNAL_ERROR` | 想定外のサーバーエラー | 上記以外の未分類の例外 |
 
 各エラーは例外種別に応じたステータスコードを厳格に返す（[CLAUDE.md](../CLAUDE.md) のエラーハンドリング規約に準拠）。
 

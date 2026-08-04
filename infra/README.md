@@ -1,8 +1,6 @@
-# infra — Terraform によるAWSインフラ定義（フェーズ4 ステップ25）
+# infra — Terraform によるAWSインフラ定義
 
-AdaptSheet AIのAWSインフラ（ECR Private / Lambda / API Gateway / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。手順の詳細は [`../docs/deployment.md`](../docs/deployment.md) を参照。
-
-> 本番デプロイの配線（SPAとAPIの同一オリジン化・バイナリ透過・秘密情報の受け渡し・doclingのモデル同梱）は整理済み。`terraform apply`の実施はユーザー承認後に行う。
+AdaptSheet AIのAWSインフラ（ECR Private / Lambda / API Gateway / CloudFront+S3 / SSM Parameter Store）を Terraform で定義する。デプロイ手順・環境変数は [`../docs/deployment.md`](../docs/deployment.md) を参照。
 
 ## 構成
 
@@ -12,7 +10,8 @@ infra/
 ├── modules/
 │   ├── ecr/          # backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可）
 │   ├── ssm/          # APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
-│   ├── lambda/       # Lambda関数の共通モジュール。backend（SSM読み取り＋SSM経由KMS復号の最小権限）と、docling/pdf2htmlex（AWS_IAM認証Function URL、backendのみ呼び出し許可）で共用
+│   ├── lambda/       # Lambda関数の共通モジュール。backend / render-worker / docling / pdf2htmlex の4関数で共用
+│   ├── job_bucket/   # 非同期レンダリングジョブのPDF・結果置き場。1日で自動失効するライフサイクルとCORS設定を持つ
 │   ├── api_gateway/  # REST API（REGIONAL）→ backend Lambdaプロキシ。ステージ全体のスロットリングで過度なAPIコールを防ぐ（WAFは使わない）。アクセスログ（JSON）をCloudWatch Logsへ出す
 │   ├── monitoring/   # CloudWatchアラーム（Lambda・API Gateway・アプリログのERROR）と通知先SNSトピック
 │   ├── github_oidc/  # GitHub ActionsのOIDCプロバイダ＋CD用デプロイロール（長期アクセスキーを発行しない）
@@ -22,7 +21,7 @@ infra/
 └── terraform.tfvars.example
 ```
 
-## 使い方（apply は承認後に実施）
+## セットアップ手順
 
 > Terraformのバージョンはリポジトリ直下の [`../mise.toml`](../mise.toml) で固定する。以下のコマンドを実行する前に、リポジトリのルートで `mise install` を済ませ、`terraform version` が `mise.toml` の値と一致することを確認する。providerのバージョンは `.terraform.lock.hcl`（コミット対象）で固定されており、更新する場合は `terraform providers lock -platform=darwin_arm64 -platform=linux_amd64` で開発機とCIの両プラットフォーム分のチェックサムを記録する。
 

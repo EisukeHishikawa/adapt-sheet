@@ -96,12 +96,16 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 ### CDの流れ
 
-1. OIDCでデプロイロールを引き受け、ECRへログイン。
-2. `backend` / `docling` / `pdf2htmlex` の3イメージを`Dockerfile.lambda`からビルドし、コミットSHAのタグでECR Privateへpush。
-3. ビルドした`backend`イメージで`alembic upgrade head`を実行し、本番DBのスキーマを最新化する（デプロイ前に適用し、新しいコードが存在しないテーブルへアクセスする事故を防ぐ）。
-4. `terraform apply`（`image_tag`等にコミットSHAを渡す）でインフラを適用し、Lambdaを新しいイメージへ更新。
+`plan` → `build`（3サービス並列） → `deploy` の3ジョブで構成する。
+
+1. **plan**: 各サービスのイメージタグを決める。タグは「そのサービスのビルドコンテキスト（`backend` / `docling-service` / `pdf2htmlex-service`）を最後に変更したコミットのSHA」で、`git log -1 --format=%H -- <ctx>` で求める。
+2. **build**（3サービス並列）: そのタグのイメージがECRに既にあれば何もしない。無ければ`Dockerfile.lambda`からビルドしてECR Privateへpushする。
+3. **deploy**: `backend`イメージで`alembic upgrade head`を実行して本番DBのスキーマを最新化する（デプロイ前に適用し、新しいコードが存在しないテーブルへアクセスする事故を防ぐ）。
+4. `terraform apply`（`image_tag`等に手順1のタグを渡す）でインフラを適用し、Lambdaを新しいイメージへ更新。変更のなかったサービスはタグも変わらないためLambdaの更新自体が発生しない。
 5. フロントをビルドしてS3へ同期し、CloudFrontのキャッシュを無効化。`index.html`だけキャッシュさせず、ハッシュ付きアセットは長期キャッシュする。
 6. `POST /api/warmup` でbackend→docling/pdf2htmlex/DBの疎通をスモークテストする。
+
+> タグをデプロイ時のコミットSHAではなくサービス単位にしているのは、変更のないサービスのビルドとpushを丸ごと省くため。`pip install`等が生成するレイヤーはビルドのたびに別ダイジェストになり、中身が同じでもpushで数GBを再送してしまう（doclingのpushだけで約5分かかっていた）。使用中のイメージは常に各リポジトリの最新なので、ECRライフサイクル（最新5件保持）で消えることはない。
 
 ### CDに必要なGitHubリポジトリ設定
 

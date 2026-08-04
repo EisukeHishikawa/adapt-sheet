@@ -1,4 +1,4 @@
-# mainマージ後の本番デプロイ（DEVELOPMENT.md ステップ26）。
+# mainマージ後の本番デプロイ。
 # AWSの長期アクセスキーは持たず、OIDCで発行される短期認証情報でデプロイロール
 # （infra/modules/github_oidc）を引き受ける。
 #
@@ -27,9 +27,91 @@ env:
   TF_IN_AUTOMATION: "true"
 
 jobs:
-  deploy:
-    # AWS側の土台（infra/README.mdの手順1〜6）が未完了のうちは、認証で必ず落ちるだけなので走らせない。
+  # イメージのタグを決める。タグをコミットSHAではなく「そのサービスのビルドコンテキストを
+  # 最後に変更したコミット」にすることで、中身が変わっていないサービスは既存イメージを
+  # そのまま指し、ビルドとpushを丸ごと省ける（doclingのpushだけで5分近くかかるため）。
+  # このjobがスキップされると後続も連鎖してスキップされる。
+  plan:
     if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.tags.outputs.matrix }}
+      backend_tag: ${{ steps.tags.outputs.backend }}
+      docling_tag: ${{ steps.tags.outputs.docling }}
+      pdf2htmlex_tag: ${{ steps.tags.outputs.pdf2htmlex }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git logでパスごとの最終変更コミットを引くため全履歴が要る
+
+      - name: Resolve image tags
+        id: tags
+        run: |
+          set -euo pipefail
+          entries=""
+          for svc in backend docling pdf2htmlex; do
+            case "$svc" in
+              backend) ctx=backend ;;
+              docling) ctx=docling-service ;;
+              pdf2htmlex) ctx=pdf2htmlex-service ;;
+            esac
+            # Dockerfile.lambdaもコンテキスト内にあるため、この1パスの追跡で漏れは出ない。
+            tag="$(git log -1 --format=%H -- "$ctx")"
+            : "${tag:=${{ github.sha }}}"
+            echo "${svc}=${tag}" >> "$GITHUB_OUTPUT"
+            entries="${entries}{\"svc\":\"${svc}\",\"ctx\":\"${ctx}\",\"tag\":\"${tag}\"},"
+          done
+          echo "matrix={\"include\":[${entries%,}]}" >> "$GITHUB_OUTPUT"
+
+  # Lambdaのイメージは同一リージョンのECR Privateからのみ取得できる。3サービスを並列に
+  # 処理し、直列の合計ではなく最長のサービス（docling）の時間で済むようにする。
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      # 同じタグのイメージが既にあるなら中身も同一なので作り直さない。
+      # apt-get/pip installのレイヤーはビルドのたびに別ダイジェストになり、
+      # 中身が同じでもpushで数GBを再送してしまうため、ここで止める意味が大きい。
+      - name: Check existing image
+        id: check
+        env:
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          if aws ecr describe-images \
+              --repository-name "adapt-sheet-prod-${{ matrix.svc }}" \
+              --image-ids "imageTag=${TAG}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "adapt-sheet-prod-${{ matrix.svc }}:${TAG} は既にECRにあるためビルドを省略する"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push image
+        if: steps.check.outputs.exists == 'false'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ matrix.tag }}
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/adapt-sheet-prod-${{ matrix.svc }}:${TAG}"
+          docker build -f "${{ matrix.ctx }}/Dockerfile.lambda" -t "$image" "${{ matrix.ctx }}"
+          docker push "$image"
+
+  deploy:
+    needs: [plan, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,32 +124,13 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      # Lambdaのイメージは同一リージョンのECR Privateからのみ取得できる。タグはコミットSHAに
-      # 固定し、どのコミットが動いているかをLambdaのイメージURIから追えるようにする。
-      - name: Build and push images
-        env:
-          REGISTRY: ${{ steps.ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          for svc in backend docling pdf2htmlex; do
-            case "$svc" in
-              backend) ctx=backend ;;
-              docling) ctx=docling-service ;;
-              pdf2htmlex) ctx=pdf2htmlex-service ;;
-            esac
-            image="${REGISTRY}/adapt-sheet-prod-${svc}:${TAG}"
-            docker build -f "${ctx}/Dockerfile.lambda" -t "$image" "$ctx"
-            docker push "$image"
-          done
-
       # 本番マイグレーション未適用のままデプロイが進み、新しいコードが存在しないテーブルに
       # アクセスして落ちる事故を防ぐ。DDL・RLS設定には所有者権限が要るため、実行時用の
       # DATABASE_URL（authenticator/制限ロール）とは別にMIGRATION_DATABASE_URL（postgresロール）を使う。
       - name: Run database migrations
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          TAG: ${{ github.sha }}
+          TAG: ${{ needs.plan.outputs.backend_tag }}
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
         run: |
           docker run --rm --entrypoint alembic \
@@ -94,9 +157,9 @@ jobs:
       - name: Terraform apply
         working-directory: infra
         env:
-          TF_VAR_image_tag: ${{ github.sha }}
-          TF_VAR_docling_image_tag: ${{ github.sha }}
-          TF_VAR_pdf2htmlex_image_tag: ${{ github.sha }}
+          TF_VAR_image_tag: ${{ needs.plan.outputs.backend_tag }}
+          TF_VAR_docling_image_tag: ${{ needs.plan.outputs.docling_tag }}
+          TF_VAR_pdf2htmlex_image_tag: ${{ needs.plan.outputs.pdf2htmlex_tag }}
           TF_VAR_state_bucket_name: ${{ vars.TF_STATE_BUCKET }}
           TF_VAR_state_lock_table_name: ${{ vars.TF_STATE_LOCK_TABLE }}
           TF_VAR_github_repository: ${{ github.repository }}

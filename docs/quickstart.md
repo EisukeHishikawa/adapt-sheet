@@ -43,19 +43,20 @@ backend/frontend/docling/pdf2htmlexはそれぞれ`./backend`・`./frontend`・`
 
 生成AI系エンジン（Gemini/Claude/OpenAI/精密復元）は本番同様に非同期ジョブで描画するため、S3の代わりにローカルではMinIO（`minio`/`minio-init`サービス）を使う。追加設定は不要で、`docker compose up --build`だけでブラウザから通しで試せる。
 
-描画ボタンの隣（`EngineSelect`）で、7つの生成エンジンを選べる。
+描画ボタンの隣（`EngineSelect`）で、8つの生成エンジンを選べる。
 
 | エンジン | 種別 | 説明 |
 |---|---|---|
-| Gemini API（無料） | 生成AI | PDFを直接読み取り、無料枠モデルで整形。既定エンジン |
-| Gemini API | 生成AI（標準プラン） | フェーズ5まで自由アクセスのユーザーは利用不可（403） |
+| Gemini API（無料枠） | 生成AI | PDFを直接読み取り、無料枠モデルで整形。既定エンジン |
+| 精密復元 | 生成AI | PyMuPDF・Docling・Geminiの3つを組み合わせて元PDFを精密に再現する。PDF必須 |
+| Gemini API | 生成AI（標準プラン） | 未ログインユーザーは利用不可（403） |
 | Claude API | 生成AI（標準プラン） | 同上 |
 | OpenAI API | 生成AI（標準プラン） | 同上 |
 | Docling | 変換エンジン（AIなし） | PDFのテキスト・論理構造をHTML化し、そのまま描画結果にする |
 | pdf2htmlEX | 変換エンジン（AIなし） | PDFの見た目をフォント・画像埋め込みでそのままHTML化する |
 | PyMuPDF | 変換エンジン（AIなし） | PDFのレイアウト（座標・罫線・背景）を絶対座標のdivで再現する |
 
-生成AI（Gemini/Claude/OpenAI）はPDFをファイルとしてそのままマルチモーダル入力に添付する。PyMuPDF由来のHTMLやDocling由来のテキストを事前変換して渡すことはしない。Docling/pdf2htmlEX/PyMuPDFを選んだ場合はAIを一切呼ばず、各エンジンの変換結果をそのまま描画結果として返す。
+生成AIにはPDFをファイルのままマルチモーダル入力へ添付し、事前変換したHTML/テキストは渡さない（精密復元のみ例外で、PyMuPDF・Doclingの変換結果も併せて渡す）。変換エンジンを選んだ場合はAIを一切呼ばず、変換結果をそのまま描画結果として返す。
 
 実際にGeminiへ渡したプロンプト全文と、Geminiが返した出力全文はバックエンドのログで確認できる（`docker-compose.yml`で`LOG_AI_PAYLOAD=true`を設定済み）。ログは1行1レコードのJSONのため、`jq`で該当フィールドだけを取り出すと読みやすい。
 

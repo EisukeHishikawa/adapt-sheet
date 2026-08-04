@@ -13,7 +13,7 @@ GoTrue（Auth）等のスタックをDockerコンテナとしてローカルに�
 - **前提**: `docker compose up --build`でアプリ自体は起動済みであること。
 
 > **重要**: ローカルであってもGoogle CloudのOAuthクライアント（client_id / secret）が必須。
-> 手順は「3. Google OAuthクライアントの取得」を参照。
+> 手順は「2. Google OAuthクライアントの取得」を参照。
 
 ---
 
@@ -152,10 +152,10 @@ Google OAuthが未設定の場合、このスクリプトは**アカウントを
    入力欄も新規登録ボタンも存在しない）。手順6で登録したメールアドレスのGoogleアカウントを選ぶ。
 2. ログイン後、`EngineSelect`でGemini標準/Claude/OpenAIを選択して描画できる（未ログイン時は403
    `FREE_ACCESS_FORBIDDEN`になっていたことと比較する）。
-3. 描画に成功すると生成履歴が自動保存される。保存内容はAPIで確認できる（画面上の履歴閲覧UIは
-   未実装）。
+3. 描画に成功すると生成履歴が自動保存され、画面下部の履歴スライダーと`HistoryArchive`から閲覧できる。
 
-アクセストークンはブラウザのDevTools（Application → Session Storage → `sb-*-auth-token`）から取得できる。
+APIで直接確認する場合、アクセストークンはブラウザのDevTools（Application → Session Storage →
+`sb-*-auth-token`）から取得できる。
 
 ```bash
 TOKEN='<DevToolsで取得したaccess_token>'

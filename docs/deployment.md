@@ -60,7 +60,7 @@ APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront�
 
 ---
 
-## 3. バックエンドのコンテナ化（フェーズ4 ステップ24）
+## 3. バックエンドのコンテナ化
 
 1. 本番用`backend/Dockerfile.lambda`に`AWS Lambda Web Adapter`のバイナリを`COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:...`で追加（開発用`backend/Dockerfile`とは別ファイル。イメージ名は`aws-lambda-adapter`で`web`は付かない）。
 2. APIキーはイメージに焼き込まず、`SSM_PARAMETER_PREFIX`を設定してParameter Store（SecureString）から実行時に取得する。取得はLambdaのコールドスタート時（`app/secrets_loader.py`のグローバルスコープ呼び出し）に一度だけ行い、ハンドラ内では毎リクエストSSMを叩かない。
@@ -71,7 +71,7 @@ APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront�
 
 ---
 
-## 4. インフラのコード化（フェーズ4 ステップ25）
+## 4. インフラのコード化
 
 Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`infra/README.md`](../infra/README.md)）。
 
@@ -83,15 +83,14 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
   - `ecr`: backend/docling/pdf2htmlexそれぞれのコンテナイメージ用ECR Private（Lambdaは同一リージョンのPrivateからのみ取得可。ライフサイクルで容量抑制。render-workerはbackendと同じECRリポジトリ・イメージを使う）
   - `ssm`: APIキーのSecureString（枠のみ。実値はTerraform管理外で投入）
   - `monitoring`: CloudWatchアラーム（Lambdaのエラー/スロットル、API Gatewayの4XX/5XX、アプリログのERRORメトリクスフィルタ）と通知先のSNSトピック
-- state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
   - `github_oidc`: GitHub ActionsのOIDCプロバイダとCD用デプロイロール。長期の静的アクセスキーは発行せず、許可したリポジトリ・ブランチのワークフローだけがロールを引き受けられる
-- デプロイ後、ステージング環境のエンドポイントに対してローカルからAPIテストを実行し疎通を確認する。
+- state土台は `infra/bootstrap`（S3バケット＋ロック用DynamoDB）。chicken-egg回避のためローカルstateで最初にapplyする。
 
 ---
 
-## 5. CI/CDの構築（フェーズ4 ステップ26）
+## 5. CI/CD
 
-- **CI（構築済み）**: `.github/workflows/ci.yml` が、PR作成時・mainマージ時にフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）・docling/pdf2htmlex（pytest/ruff）をジョブ分割で自動実行する。ローカル開発と同じ`docker-compose.yml`のサービス定義を使い、ローカル/CIの実行結果を乖離させない。
+- **CI**: `.github/workflows/ci.yml` が、PR作成時・mainマージ時にフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）・docling/pdf2htmlex（pytest/ruff）をジョブ分割で自動実行する。ローカル開発と同じ`docker-compose.yml`のサービス定義を使い、ローカル/CIの実行結果を乖離させない。
 - 「CIが100%成功しなければマージ不可」はBranch Protection Ruleに設定済み（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。必須チェックは`backend` / `docling` / `pdf2htmlex` / `frontend` の4ジョブ。
 - **CD**: `.github/workflows/cd.yml` が、mainへのpush（＝マージ）と手動実行で本番へデプロイする。AWSの長期アクセスキーは持たず、OIDC（`infra/modules/github_oidc`）で発行される短期認証情報でデプロイロールを引き受ける。
 
@@ -131,9 +130,9 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 ---
 
-## 7. terraform apply実績（本番環境）
+## 7. 本番環境のリソース
 
-`ap-northeast-1`へ`infra/README.md`の手順（bootstrap → ECR先行apply → 本体apply）で実AWSリソースを作成済み。主な出力値（`terraform output`。AWSアカウントIDはリポジトリが公開のため`<account_id>`に置き換える）:
+リージョンは`ap-northeast-1`。`terraform output`の主な値（AWSアカウントIDはリポジトリが公開のため`<account_id>`に置き換える）:
 
 | 出力名 | 値 |
 |---|---|

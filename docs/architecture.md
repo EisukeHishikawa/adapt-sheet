@@ -147,9 +147,7 @@ flowchart LR
 
 ## 4. バックエンドAPI設計概要図
 
-`POST /api/render` の処理フロー（詳細仕様は [`spec.md`](./spec.md) 参照）。生成AI系engineの実際の処理（`_generate_ai_result`）はこの図の通りだが、フロントは「4.1 非同期レンダリングジョブ」の経路でこれを呼び出す。`POST /api/render`自体は変換エンジン向けの同期経路として引き続き提供する。
-
-エンジン選択（`engine`）により処理が3方向に分岐する（各engineの入出力仕様は[`spec.md`](./spec.md#31-post-apirender)を参照）。
+`engine`によって3方向に分岐する生成ロジック（入出力仕様は[`spec.md`](./spec.md#31-post-apirender)を参照）。変換エンジンはこの`POST /api/render`を同期で呼ぶが、生成AI系engineはフロントから直接呼ばず「4.1 非同期レンダリングジョブ」経由で同じロジック（`_generate_ai_result`）を実行する。
 
 ```mermaid
 sequenceDiagram
@@ -161,8 +159,8 @@ sequenceDiagram
     participant AI as Gemini/Claude/OpenAI
 
     FE->>API: PDF/プロンプト/サイズ/engine送信
-    alt engineが標準プラン（Gemini標準/Claude/OpenAI）
-        API-->>FE: 403（フェーズ5まで自由アクセス不可）
+    alt engineが標準プラン（Gemini標準/Claude/OpenAI）かつ未ログイン
+        API-->>FE: 403 FREE_ACCESS_FORBIDDEN
     else engineが変換エンジン（Docling/pdf2htmlEX/PyMuPDF）
         Note over API,Pdf2HtmlEx: いずれか1つをengineに応じて呼び出す。AIは介さない
         API->>Layout: PDF（pymupdf選択時）
@@ -172,9 +170,10 @@ sequenceDiagram
         Docling-->>API: HTML
         Pdf2HtmlEx-->>API: HTML
         API-->>FE: 200 OK { html, css: "", json: {} }
-    else engineがGemini（無料）
+    else engineが利用可能な生成AI
         API->>API: プロンプトを動的構築（PDFがあれば見た目の正として扱う指示）
         API->>AI: PDF（マルチモーダル添付、あれば）+ 指示
+        Note over API,AI: 精密復元（hybrid）のみ、PyMuPDF・Doclingの変換結果も併せて渡す
         AI-->>API: HTML/CSS/JSON
         API-->>FE: 200 OK { html, css, json }
     end
@@ -255,9 +254,13 @@ flowchart LR
 
 ---
 
-## 7. データベース（PostgreSQL、ステップ28）
+## 7. データベース（PostgreSQL）
 
-`render_history`テーブル（`backend/app/models.py`）のみ。登録ユーザーが`POST /api/render`を成功させるたびに1行追加される。`user_id`はSupabase Auth（`auth.users.id`）のUUIDをそのまま文字列で持つが、本DBは`auth`スキーマを所有しないため外部キー制約は張らない。
+テーブルは2つ（`backend/app/models.py`）。マイグレーションは`backend/migrations/`（Alembic）で管理する。
+
+### `render_history`
+
+登録ユーザーが`POST /api/render`を成功させるたびに1行追加される。`user_id`はSupabase Auth（`auth.users.id`）のUUIDをそのまま文字列で持つが、本DBは`auth`スキーマを所有しないため外部キー制約は張らない。RLSで`auth.uid()`一致行のみに制限する。
 
 | カラム | 型 | 説明 |
 |---|---|---|
@@ -268,7 +271,14 @@ flowchart LR
 | `width_mm` / `height_mm` | float, nullable | 帳票サイズ |
 | `created_at` | timestamptz | 保存日時 |
 
-マイグレーションは`backend/migrations/`（Alembic）で管理する。
+### `gemini_free_usage`
+
+Gemini無料枠（`gemini_free`/`hybrid`）の利用回数を数える、全ユーザー共有の日次カウンタ。個人データを持たないためRLSは適用せず、未ログイン用の`authenticator`ロールにも直接GRANTして匿名利用も計測対象にする。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `usage_date` | date (PK) | JST基準の日付。日付が変わると新しい行になり、実質的にリセットされる |
+| `count` | integer | その日の描画成功回数 |
 
 ## 8. ログ・可観測性の構成図
 

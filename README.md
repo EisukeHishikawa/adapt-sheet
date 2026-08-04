@@ -1,6 +1,6 @@
 # AdaptSheet AI
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI・精密復元）へPDFを直接読み取らせる生成と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 
 帳票作成という題材を通じて、**CI/CD・AWS・Supabase・生成AI・AI駆動開発（ClaudeCodeとの協働）の技術キャッチアップ**を目的に作られている。個人開発の範囲でも、コア機能の高速なイテレーションと、本番運用に耐えるインフラ・セキュリティ設計の両方を一通り経験することを狙う。
 
@@ -20,7 +20,7 @@
 
 ## システム構成
 
-一目でわかる概要のみ。非同期ジョブ経路・内部Lambda・DBスキーマ・ログ相関などの詳細は [`docs/architecture.md`](./docs/architecture.md) を参照。
+非同期ジョブ経路・内部Lambda・DBスキーマ・ログ相関などの詳細は [`docs/architecture.md`](./docs/architecture.md) を参照。
 
 ```mermaid
 flowchart LR
@@ -39,7 +39,7 @@ flowchart LR
 
 ## セキュリティ概要
 
-一目でわかる概要のみ。認証フロー・RLSポリシー・脅威モデル等の詳細は [`docs/architecture.md`](./docs/architecture.md#3-認証認可の仕組みの構成図) と [`docs/decisions.md`](./docs/decisions.md#adr-020-認証のセキュリティ強化jwt検証方式ログイン手段の限定rlsxss対策) を参照。
+認証フロー・RLSポリシー・脅威モデル等の詳細は [`docs/architecture.md`](./docs/architecture.md#3-認証認可の仕組みの構成図) と [`docs/decisions.md`](./docs/decisions.md#adr-020-認証のセキュリティ強化jwt検証方式ログイン手段の限定rlsxss対策) を参照。
 
 - **認証**: Supabase Auth（Google OAuthのみ、認可コード＋PKCE）。新規登録UIは提供せず、アカウント発行は`scripts/create_user.sh`に限定する。
 - **認可**: バックエンドはJWTをfail-closedで検証する（未設定・検証失敗は常に未ログイン扱い）。生成AI標準プラン（Gemini標準/Claude/OpenAI）は未ログインなら403、生成履歴はPostgreSQLの行レベルセキュリティ（RLS）で本人の行のみに制限する。
@@ -73,7 +73,11 @@ PRごとにフロント（Vitest/ESLint/vite build）・バック（pytest/ruff�
 
 ## クイックスタート
 
-開発環境の構築・起動手順は [`docs/quickstart.md`](./docs/quickstart.md) にまとめている。
+```bash
+docker compose up --build   # フロント: http://localhost:5173 / API: http://localhost:8000
+```
+
+前提ツールの導入・テスト実行・ログイン機能のローカル検証は [`docs/quickstart.md`](./docs/quickstart.md) を参照。
 
 ## ドキュメント一覧
 

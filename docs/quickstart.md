@@ -1,6 +1,6 @@
 # クイックスタート
 
-`adapt-sheet` のローカル開発環境の構築・起動手順をまとめる。プロジェクト概要・システム構成は [`README.md`](../README.md)、ビルド・テストコマンドの一次情報は [`CLAUDE.md`](../CLAUDE.md) を参照。
+AdaptSheet AIのローカル開発環境の構築・起動手順をまとめる。プロジェクト概要・システム構成は [`README.md`](../README.md)、ビルド・テストコマンドの一次情報は [`CLAUDE.md`](../CLAUDE.md) を参照。
 
 開発環境はDocker Composeのみを対象とする。ローカル（非Docker）での直接実行はサポートしない。
 

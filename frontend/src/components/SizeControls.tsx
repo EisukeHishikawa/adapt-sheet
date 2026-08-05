@@ -4,9 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
 import type { Orientation, SizePresetName } from '@/store/sheetStore'
 
-// docs/spec.md 2.2「定型サイズ自動入力」のUI。用紙の向きは「たて」「よこ」の文字ではなく、実寸mmの
-// 縦横比をそのまま反映した紙のイラスト（PaperSwatch）の形で表現する。視覚的な文字表記を持たない分、
-// アクセシブルネームはトリガー・各選択肢のaria-labelで保持する。
+// 用紙の向きは文字ではなく実寸の縦横比を持つ紙のイラスト（PaperSwatch）で表現する。
+// 文字表記を持たない分、アクセシブルネームはトリガー・各選択肢のaria-labelで保持する。
 const SIZE_ORDER: readonly { size: SizePresetName; orientation: Orientation }[] = [
   { size: 'A4', orientation: 'tate' },
   { size: 'A4', orientation: 'yoko' },
@@ -33,9 +32,8 @@ const SIZE_AREA_SCALE: Record<SizePresetName, number> = {
 
 const SWATCH_BASE_SIZE = 25
 
-// 「面積 = baseSize² × areaScale」を固定し、そこから縦横比に応じて幅・高さを逆算する。
-// aspect-ratioと高さだけを固定する方式では、同じ用紙でも「よこ」が「たて」より見かけの面積が
-// 大きくなってしまうため（同じ高さなら横長の方が面積が大きい）。
+// 高さだけを固定すると同じ用紙でも「よこ」が「たて」より大きく見えるため、面積の方を固定し、
+// 縦横比から幅・高さを逆算する。
 function swatchPixelSize(widthMm: number, heightMm: number, baseSize: number, areaScale = 1): { width: number; height: number } {
   const aspect = widthMm / heightMm
   const side = baseSize * Math.sqrt(areaScale)
@@ -50,8 +48,7 @@ function findMatchingPreset(widthMm: number | null, heightMm: number | null) {
   })
 }
 
-// 抽象的な四角アイコンではなく実寸の縦横比を持つ紙の形にすることで、何の用紙か・どちら向きかを
-// 文字なしで直感的に示す。labelを省略すると無地になる（プリセット非一致時にA4等の誤表記を出さないため）。
+// labelを省略すると無地になる（プリセット非一致時にA4等の誤表記を出さないため）。
 function PaperSwatch({
   widthMm,
   heightMm,

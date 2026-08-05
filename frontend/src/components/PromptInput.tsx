@@ -1,8 +1,7 @@
 import { useSheetStore } from '@/store/sheetStore'
 
-// promptはそのままGeminiへの動的プロンプトに埋め込まれるため、プロンプトインジェクション・
-// トークン濫用への対策としてバックエンド（app/main.pyのForm(max_length=100)）と同じ上限を設け、
-// 二重に制限する。
+// promptはそのまま生成AIへのプロンプトに埋め込まれるため、プロンプトインジェクション・
+// トークン濫用の対策としてバックエンドと同じ上限を二重に設ける。
 const MAX_PROMPT_LENGTH = 100
 
 // 生成方針の自然言語指示。見出しは画面に出さずプレースホルダで用途を示すため、名前はaria-labelで保持する。

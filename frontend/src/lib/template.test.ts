@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderTemplate } from './template'
 
-// docs/spec.md 2.2「リアルタイム双方向プレビュー」/ CLAUDE.md「固定情報と業務データの分離」の検証。
+// 固定テキストと業務データの分離、およびJSON編集の即時反映を検証する。
 // プレビューはHTML内のテンプレート変数 {{key}} を、JSON入力の値で置換して表示する。
 // 置換対象・非対象・不正JSON時のフォールバックを、バックエンドの_PLACEHOLDER_PATTERNと
 // 同じ {{key}} 契約に沿って固定する。

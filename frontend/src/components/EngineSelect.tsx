@@ -9,9 +9,8 @@ type EngineDefinition = {
   label: string
   description: string
   icon: ComponentType<{ className?: string }>
-  // フェーズ5（Supabase Auth導入）まで自由アクセスのユーザーは利用できない標準プランの生成AI。
-  // 選択自体は許可し、実際に描画を押した時点でバックエンドが403を返しメッセージを表示する
-  // （フロント側で無効化すると、フェーズ5解禁時にフロントの変更が必要になってしまうため）。
+  // 未ログインでは使えない標準プランの生成AI。判定をバックエンドに一本化するため、選択自体は
+  // 許可し、描画を押した時点の403をメッセージとして表示する。
   gated: boolean
 }
 
@@ -78,9 +77,7 @@ const ENGINES: readonly EngineDefinition[] = [
 
 const ENGINE_BY_ID = new Map(ENGINES.map((engine) => [engine.id, engine]))
 
-// 描画ボタンの隣に置く、生成エンジン選択のSelect。SizeControlsと同じ
-// 「Selectの項目をアイコン化する」パターンを踏襲し、各項目にはアイコン・ラベルに加えて
-// 1行の説明文を添えて選び分けやすくする。
+// 生成エンジン選択のSelect。項目にはアイコン・ラベルに加えて1行の説明文を添える。
 export function EngineSelect() {
   const engine = useSheetStore((state) => state.engine)
   const setEngine = useSheetStore((state) => state.setEngine)

@@ -15,11 +15,7 @@ import type { HistoryItemResponse, RenderJobStatusResponse } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { formatCss, formatHtml } from '@/lib/codeFormatter'
 
-// 左（入力・プレビュー）と右（コード入力）の2カラムを、propsのバケツリレーなしに連動させるための
-// グローバルストア。
-//
-// 用紙寸法の表（docs/spec.md 2.2「定型サイズ自動入力」）。仕様書のカラム見出し「たて (mm)」
-// 「よこ (mm)」をそのままキー名にして1対1で追えるようにする。tateは長辺、yokoは短辺。
+// 定型サイズの用紙寸法。tateは長辺、yokoは短辺。
 export const SIZE_PRESETS = {
   A4: { tate: 297, yoko: 210 },
   A5: { tate: 210, yoko: 148 },
@@ -30,10 +26,7 @@ export type SizePresetName = keyof typeof SIZE_PRESETS
 export type Orientation = 'tate' | 'yoko'
 export type Dimensions = { widthMm: number; heightMm: number }
 
-// モデル選択（EngineSelect）の8エンジン。gemini_free/gemini/claude/openai/hybridは
-// 生成AI（LLMがHTML/CSS/JSONを作る）、docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン
-// （変換結果をそのまま描画結果にする）。hybridはPyMuPDF・Docling・Gemini（VLM）を組み合わせる
-// 生成AIで、PDF添付必須。アイコン・説明文などの表示情報はEngineSelect.tsx側が持つ。
+// backendのRenderEngineと同じ値。アイコン・説明文などの表示情報はEngineSelect.tsxが持つ。
 export type RenderEngineId =
   | 'gemini_free'
   | 'gemini'
@@ -44,10 +37,8 @@ export type RenderEngineId =
   | 'pdf2htmlex'
   | 'pymupdf'
 
-// 生成AIエンジン（backendのGATED_ENGINES + gemini_free/hybrid）。Gemini API自体が
-// 20〜60秒以上かかることがあり、API Gatewayの29秒固定タイムアウトを受けないよう、
-// この集合のengineのみ非同期ジョブ（POST /api/render/jobs→ポーリング）で描画する。
-// docling/pdf2htmlex/pymupdfは常に高速なため対象外（既存のrenderSheetのまま）。
+// 生成AIは20〜60秒以上かかることがあり、API Gatewayの29秒固定タイムアウトを受けるため、
+// この集合のengineだけ非同期ジョブ＋ポーリングで描画する。変換エンジンは高速なため対象外。
 const AI_ENGINES: ReadonlySet<RenderEngineId> = new Set([
   'gemini_free',
   'gemini',
@@ -56,8 +47,7 @@ const AI_ENGINES: ReadonlySet<RenderEngineId> = new Set([
   'hybrid',
 ])
 
-// hybridはgemini_freeと同じ無料枠モデルを使うため（backend/app/services/gemini_usage.py
-// GEMINI_FREE_QUOTA_ENGINES参照）、同じ共有カウンタの表示対象にする。
+// hybridもgemini_freeと同じ無料枠モデルを使うため、同じ共有カウンタの表示対象にする。
 const GEMINI_FREE_QUOTA_ENGINES: ReadonlySet<RenderEngineId> = new Set(['gemini_free', 'hybrid'])
 
 // ポーリング間隔。warmupStoreと同じ発想でテスト側はvi.useFakeTimersでスキップする。
@@ -91,12 +81,11 @@ export type HistoryEntry = {
 // 時系列で混在させ、HistorySlider側で見た目を分ける。
 export type HistoryKind = 'render' | 'edit'
 
-// seqは履歴ごとの通し番号。古い履歴が消えても振り直さず単調増加させる（ユーザー要望）。
-// serverIdはログイン時にサーバーへ保存した行のID。同じ編集中スナップショットを上書きするために持つ。
+// seqは古い履歴が消えても振り直さない通し番号。serverIdは同じ編集中スナップショットを
+// サーバー側で上書きするための行ID。
 export type HistoryItem = HistoryEntry & { seq: number; kind: HistoryKind; serverId?: string }
 
-// docs/spec.md 2.2「履歴スライド機能」の上限。描画結果と編集中スナップショットで枠を共有し、
-// 超過分はseqが最小＝最古のものから削除する。
+// 履歴の上限。描画結果と編集中スナップショットで枠を共有し、超過分は最古から削除する。
 export const MAX_HISTORY_LENGTH = 10
 
 // 編集を止めてからスナップショットを積むまでの待ち時間。1打鍵ごとに積むと履歴が即座に
@@ -148,9 +137,8 @@ function fromHistoryResponse(row: HistoryItemResponse): HistoryEntry {
   }
 }
 
-// バックエンドが構造化エラーの安全文言を返すため通常はそちらを表示する。これは
-// バックエンド不達・非JSONレスポンスでその文言が得られない場合のフォールバックで、
-// バックエンド（app/errors._ERROR_CATALOG）と同じ文言に揃える（docs/spec.md 4章）。
+// バックエンド不達・非JSONレスポンスで構造化エラーの文言が得られない場合のフォールバック。
+// backendのapp/errors._ERROR_CATALOGと同じ文言に揃える。
 function messageForStatus(status: number): string {
   switch (status) {
     case 400:
@@ -209,9 +197,7 @@ type SheetState = {
   setEngine: (engine: RenderEngineId) => void
   applySizePreset: (size: SizePresetName, orientation: Orientation) => void
   restoreFromHistory: (index: number) => void
-  // ログイン確定時・リロード後などhistoryが空のタイミングで、DB保存済みの履歴を取り直して
-  // 最大MAX_HISTORY_LENGTH件をhistoryへ反映する（セッションが切れてメモリ上のhistoryが
-  // 失われても、再ログイン後に描画・編集の履歴を表示し直すため）。
+  // historyはメモリ上のみのため、ログイン確定時・リロード後にDB保存済みの履歴から復元する。
   hydrateHistoryFromServer: () => Promise<void>
   // HistoryArchive（MAX_HISTORY_LENGTH件の枠外にある過去データ一覧）から選んだ内容をエディタへ復元する。
   restoreFromServerEntry: (row: HistoryItemResponse) => void
@@ -294,11 +280,10 @@ function syncEditSnapshotToServer(seq: number, entry: HistoryEntry, engine: Rend
 
 type RenderResultLike = { html: string; css: string; json?: Record<string, unknown> | null }
 
-// job_store.write_status(status="error")のmessageを画面のerrorへそのまま出す（backendの
-// _generate_ai_result由来の安全文言のため、messageForStatusのようなステータス別変換は不要）。
+// ジョブ失敗時のmessageはbackendが用意した安全文言のため、そのまま画面へ出す。
 class RenderJobFailedError extends Error {}
 
-// 変換エンジン（docling/pdf2htmlex/pymupdf）向けの既存の同期経路。挙動は変更しない。
+// 変換エンジン（docling/pdf2htmlex/pymupdf）向けの同期経路。
 async function runRenderSync(): Promise<RenderResultLike> {
   const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } =
     useSheetStore.getState()
@@ -317,10 +302,8 @@ async function runRenderSync(): Promise<RenderResultLike> {
   )
 }
 
-// 生成AIエンジン向けの非同期経路。PDFがある場合のみ先にS3へ直接アップロードし、
-// そのjob_idを描画ジョブでも使い回す。ジョブ起動後はstatusがpendingでなくなるまで
-// 一定間隔でポーリングする（API Gatewayの29秒制約を受けないため、Gemini自体が
-// 20〜60秒以上かかっても待ちきれる）。
+// 生成AIエンジン向けの非同期経路。PDFがある場合のみ先にS3へ直接アップロードし、そのjob_idを
+// 描画ジョブでも使い回す。API Gatewayの29秒制約を受けないため長時間の生成でも待ちきれる。
 async function runRenderJob(): Promise<RenderResultLike> {
   const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } =
     useSheetStore.getState()
@@ -367,8 +350,7 @@ function applySuccessfulRender(
   heightMm: number | null,
 ): void {
   const newEntry: HistoryEntry = {
-    // 精密復元（pdf2htmlexエンジン）は1行の自己完結HTML/CSSを返すことがあるため、
-    // エディタ・履歴へ積む時点で整形しておく。
+    // pdf2htmlEXは1行の自己完結HTML/CSSを返すことがあるため、積む時点で整形しておく。
     html: formatHtml(result.html),
     css: formatCss(result.css),
     // レスポンスのjsonはオブジェクトのため、JSON入力エディタへ戻せる整形済みテキストにする。
@@ -525,9 +507,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
 
       applySuccessfulRender(result, widthMm, heightMm)
 
-      // Gemini無料枠は全ユーザー共有・日次リセットの共有カウンタのため、描画ボタンを押して
-      // 成功した都度、最新の利用回数を取得して成功メッセージへ付加する。取得に失敗しても
-      // 描画自体は成功しているため、既定の成功メッセージのまま表示する。
+      // 無料枠カウンタは全ユーザー共有のため、成功の都度サーバーから取り直して表示する。
       if (GEMINI_FREE_QUOTA_ENGINES.has(engine)) {
         try {
           const usage = await getGeminiFreeUsage()

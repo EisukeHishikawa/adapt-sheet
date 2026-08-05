@@ -1,7 +1,6 @@
 """DoclingによるPDF→HTMLテキスト抽出レイヤー。
 
-DoclingはMarkdownではなくHTMLを返す。Docling/pdf2htmlEX/PyMuPDFの3エンジンは
-AIを介さない単独の変換結果として直接プレビューされるため、出力形式をHTMLに揃えている。
+変換結果はAIを介さずそのままプレビューされるため、出力形式を他の変換エンジンとHTMLで揃える。
 """
 
 from __future__ import annotations
@@ -15,11 +14,8 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.exceptions import ConversionError
 from docling_core.types.io import DocumentStream
 
-# OCR・表構造認識（TableFormer）モデルの初期化・推論コストがLambdaの限られたCPUで
-# 合計40秒超（実測）になり、API Gatewayの統合タイムアウト（29秒）は元よりdocling自身の
-# Lambdaタイムアウトにも収まらなくなったため両方無効化する。レイアウト解析は維持する。
-# ほとんどのPDFは埋め込みテキストを持ちOCR不要で、表は罫線を含むレイアウトとしては
-# 抽出されるが列/行の構造化はされなくなる。
+# OCR・表構造認識はLambdaのCPUでは合計40秒超（実測）かかりタイムアウトするため無効化する。
+# ほとんどのPDFは埋め込みテキストを持ちOCR不要で、表も罫線を含むレイアウトとしては残る。
 _PDF_FORMAT_OPTION = PdfFormatOption(
     pipeline_options=PdfPipelineOptions(do_ocr=False, do_table_structure=False)
 )
@@ -37,9 +33,7 @@ class PDFConverter(Protocol):
 
 class DoclingPDFConverter:
     def __init__(self, converter: object = None) -> None:
-        # モデルのロードは初回convert時に行われるため、ここは軽量なインスタンス生成のみ。
-        # converterはテスト側がDocumentConverter.convertの戻り値（status等）をフェイクへ
-        # 差し替えられるようにするための注入口（ai_client.py等と同じDI方針）。
+        # converterはテストがフェイクへ差し替えるための注入口。
         self._converter = converter or DocumentConverter(
             format_options={InputFormat.PDF: _PDF_FORMAT_OPTION}
         )

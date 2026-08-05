@@ -20,17 +20,15 @@ class Base(DeclarativeBase):
 
 
 class RenderHistory(Base):
-    """登録ユーザーの生成履歴（docs/spec.md「登録ユーザー」）。描画成功ごとに1行保存する。"""
+    """登録ユーザーの生成履歴。描画成功ごとに1行保存する。"""
 
     __tablename__ = "render_history"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    # SupabaseのJWT `sub`（auth.users.id）。本DBはSupabaseのauth schemaを所有しないため
-    # 外部キー制約は張らない。
+    # SupabaseのJWT `sub`。本DBはauth schemaを所有しないため外部キー制約は張らない。
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     engine: Mapped[str] = mapped_column(String(32), nullable=False)
-    # "render"（描画結果）か "edit"（描画前の編集中スナップショット）か。編集中も履歴として
-    # 残すため、一覧で両者を区別できる種別を持つ。既存行は "render" とみなす。
+    # "render"（描画結果）か "edit"（描画前の編集中スナップショット）か。
     kind: Mapped[str] = mapped_column(
         String(16), nullable=False, default="render", server_default="render"
     )

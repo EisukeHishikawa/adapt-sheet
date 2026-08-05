@@ -30,9 +30,8 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # 認証依存（app/services/auth.py）はFastAPIによりスレッドプールで実行されうるため、
-        # contextvarでは相関できない。同一のscope dictを共有するstate経由でuser_idを受け取る。
-        # Starletteが設定する前に読む可能性を避けるためここで初期化する。
+        # 認証依存はスレッドプールで実行されうるためcontextvarでは相関できない。scopeを共有する
+        # state経由でuser_idを受け取る。Starletteの設定より先に読みうるのでここで初期化する。
         scope.setdefault("state", {})
 
         request_id = str(uuid.uuid4())
@@ -55,8 +54,8 @@ class RequestContextMiddleware:
             try:
                 await self.app(scope, receive, send_wrapper)
             except Exception:
-                # 登録済み例外ハンドラ（app/errors.py）で捕捉されなかった想定外例外。FastAPIの500
-                # ハンドラはこのミドルウェアの外側で動き相関IDを扱えないため、ここで自前に500へ変換する。
+                # FastAPIの500ハンドラはこのミドルウェアの外側で動き相関IDを扱えないため、
+                # 捕捉漏れの想定外例外はここで500へ変換する。
                 logger.exception(
                     "Unhandled exception during request",
                     extra={"method": method, "path": path, "request_id": request_id},

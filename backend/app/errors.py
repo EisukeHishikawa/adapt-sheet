@@ -18,9 +18,8 @@ from app.request_context import get_request_id
 
 logger = logging.getLogger("app.errors")
 
-# docs/spec.md 4章のエラーコード定義と1対1で対応させる。ステータス→(code, 安全な日本語文言)。
-# 文言はフロントの静的フォールバック（frontend/src/store/sheetStore.ts）と揃え、バックエンドを
-# 一次ソースとしつつ齟齬が出ないようにする。
+# ステータス→(code, 安全な日本語文言)。文言はフロントの静的フォールバック
+# （frontend/src/store/sheetStore.ts）と揃え、バックエンドを一次ソースとする。
 _ERROR_CATALOG: dict[int, tuple[str, str]] = {
     400: ("VALIDATION_ERROR", "リクエスト内容に誤りがあります。入力値をご確認ください。"),
     403: (
@@ -28,8 +27,7 @@ _ERROR_CATALOG: dict[int, tuple[str, str]] = {
         "現在、この生成AIは登録ユーザーのみご利用いただけます。アカウント機能の追加までお待ちください。",
     ),
     413: ("PAYLOAD_TOO_LARGE", "PDFファイルのサイズが上限を超えています。"),
-    # 変換エンジン（Docling/pdf2htmlEX/PyMuPDF）とhybridはPDF添付が必須のため、
-    # 未添付をVALIDATION_ERROR（400）とは区別し専用のコード・文言にする。
+    # PDF未添付は入力誤り一般（400）と区別し、対処が分かる専用の文言にする。
     428: ("PDF_REQUIRED", "このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。"),
     422: ("PDF_CONVERSION_ERROR", "PDFの解析に失敗しました。ファイルの内容をご確認ください。"),
     429: ("RATE_LIMITED", "リクエストが混み合っています。しばらくしてから再度お試しください。"),
@@ -47,13 +45,13 @@ _FALLBACK = ("HTTP_ERROR", "エラーが発生しました。")
 
 
 def build_error_payload(status_code: int) -> dict:
-    """ステータスコードから構造化エラーボディを組み立てる（docs/spec.md 4.1）。"""
+    """ステータスコードから構造化エラーボディを組み立てる。"""
     code, message = _ERROR_CATALOG.get(status_code, _FALLBACK)
     return {
         "error": {
             "code": code,
             "message": message,
-            # 相関IDはミドルウェアがcontextvarへ設定済み。リクエスト外の万一のケースでは空文字にする。
+            # リクエスト外（ミドルウェア未通過）から呼ばれた場合は空文字にする。
             "request_id": get_request_id() or "",
         }
     }
@@ -76,8 +74,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """リクエストバリデーション失敗を400へ寄せる。
 
-    FastAPI既定は422だが、本APIでは422をDocling解析エラー専用に割り当てているため
-    （docs/spec.md 4章）、入力バリデーションは400 VALIDATION_ERRORへ統一する。
+    FastAPI既定は422だが、本APIでは422をPDF解析エラー専用に割り当てているため、
+    入力バリデーションは400 VALIDATION_ERRORへ統一する。
     """
     logger.warning(
         "RequestValidationError",
@@ -89,7 +87,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 def _domain_error_handler(
     status_code: int, log_message: str
 ) -> Callable[[Request, Exception], Awaitable[JSONResponse]]:
-    """ドメイン例外→構造化エラーのハンドラを生成する（docs/spec.md 4章のステータス対応）。
+    """ドメイン例外→構造化エラーのハンドラを生成する。
 
     例外種別ごとの違いはステータスとログ文言だけなので、ハンドラ本体を型ごとに書き分けない。
     """
@@ -103,12 +101,10 @@ def _domain_error_handler(
     return handler
 
 
-# app/main.pyがPDFConversionError / AIGenerationErrorに対して登録する。ドメイン例外はmain.py内で
-# HTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
+# ドメイン例外はmain.py内でHTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
 pdf_conversion_error_handler = _domain_error_handler(422, "PDF conversion failed")
 ai_generation_error_handler = _domain_error_handler(502, "AI generation failed")
-# AIServiceUnavailableError/AIServiceSuspendedErrorはAIGenerationErrorのサブクラスのため、
-# Starletteの例外ハンドラ探索はMRO順に一致するハンドラを探す。サブクラス専用にこちらを
-# 登録しておけば、登録順に関わらず常にこちらが優先して使われる。
+# AIGenerationErrorのサブクラス専用のハンドラ。Starletteの探索はMRO順のため、
+# 登録順に関わらずこちらが優先される。
 ai_service_unavailable_error_handler = _domain_error_handler(503, "AI service unavailable")
 ai_service_suspended_error_handler = _domain_error_handler(501, "AI service suspended")

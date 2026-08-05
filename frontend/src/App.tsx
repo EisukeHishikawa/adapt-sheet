@@ -15,30 +15,25 @@ import { useAuthStore } from '@/store/authStore'
 import { useWarmupStore } from '@/store/warmupStore'
 import { useTheme } from '@/lib/useTheme'
 
-// 2カラム構成。左：サイズ操作・描画ボタン・PDF・プロンプト・プレビュー / 右：HTML/JSONのコード入力。
 // 各パネルはpropsで繋がず、それぞれがZustandストア（sheetStore）を参照して連動する。
 function App() {
-  // 拡大表示中は左カラム上部（操作系・プロンプト）を隠し、プレビューだけを左カラムいっぱいに広げる。
-  // 状態はここで一元管理し、PreviewPanelはトグルの発火のみ担う。
+  // 拡大状態はここで一元管理し、PreviewPanelはトグルの発火のみ担う。
   const [previewExpanded, setPreviewExpanded] = useState(false)
 
-  // 起動時に一度だけSupabaseの既存セッション（永続化分）を取り込み、以後のログイン状態変化も
-  // 購読する（authStore.init）。initが返す解除関数をクリーンアップで呼び、StrictModeの二重実行で
-  // リスナーが二重登録されたままにならないようにする。
+  // initが返す解除関数をクリーンアップで呼び、StrictModeの二重実行でリスナーが
+  // 二重登録されたままにならないようにする。
   useEffect(() => {
     const unsubscribe = useAuthStore.getState().init()
     return unsubscribe
   }, [])
 
-  // 画面を開いた時点で、コールドスタートしがちなdocling/pdf2htmlexのLambdaとSupabaseを
-  // 起こしておく。docling側は準備完了までRenderButtonを無効化するため、状態をストアで追跡する。
+  // コールドスタートしがちなLambdaとSupabaseを、画面を開いた時点で起こしておく。
   useEffect(() => {
     void useWarmupStore.getState().run()
   }, [])
 
-  // ログインが確定した時点でhistoryが空なら、DB保存済みの履歴を取り直して表示する。sheetStoreは
-  // メモリ上のみでリロード等では保持されないため、セッションが切れて履歴が見えなくなっても
-  // 再ログイン後にここで復元される。既にhistoryがある間は上書きしない（進行中の編集を守るため）。
+  // sheetStoreはメモリ上のみのため、ログイン確定時にDB保存済みの履歴から復元する。
+  // 進行中の編集を守るため、既にhistoryがある間は上書きしない。
   const session = useAuthStore((state) => state.session)
   useEffect(() => {
     if (!session) return
@@ -47,8 +42,7 @@ function App() {
   }, [session])
 
   return (
-    // md未満（モバイル）はh-screen固定を外してページ全体を縦スクロールさせ、2カラムを縦積みにする。
-    // md以上は1画面完結（h-screen＋各パネル内スクロール）を維持する。
+    // md未満は縦積み＋ページ全体スクロール、md以上は1画面完結（h-screen）にする。
     <main className="relative flex min-h-screen w-full flex-col bg-background text-foreground md:h-screen md:w-screen">
       <AppHeader />
 
@@ -82,13 +76,9 @@ function App() {
   )
 }
 
-// 縦幅を作業領域へ譲るため、ヘッダーは通常オーバーレイとして画面上端へ隠しておき、上端付近に
-// マウスを寄せた時だけスライドで現れる。空の領域が下のUI操作をブロックしないよう、コンテナは
-// pointer-events-noneにして、ホバー検知帯・ヘッダー本体だけをpointer-events-autoで有効化する。
-// タッチデバイスにはホバーが存在せずヘッダー（ログインボタン等）を開く手段が無いため、
-// pointer-coarseでは常時表示に固定する。absoluteのままだとコンテンツに重なって隠してしまうため、
-// pointer-coarseではstickyにしてドキュメントフローへ戻し、コンテンツ側の表示領域を確保する。
-// ホバー専用の検知帯・ハンドルもタッチデバイスでは意味を持たないため非表示にする。
+// 縦幅を作業領域へ譲るため、ヘッダーは画面上端へ隠し、上端付近へマウスを寄せた時だけ現れる。
+// コンテナをpointer-events-noneにするのは、空の領域が下のUI操作をブロックしないため。
+// ホバーの無いタッチデバイス（pointer-coarse）では開く手段が無いので、sticky＋常時表示にする。
 function AppHeader() {
   return (
     <div className="group pointer-events-none absolute inset-x-0 top-0 z-30 pointer-coarse:sticky!">
@@ -113,8 +103,8 @@ function AppHeader() {
   )
 }
 
-// favicon.svgと同じモチーフをインラインSVGで再現し、画面内でもタブアイコンと同じ識別性を持たせる。
-// currentColorではなくグラデーション固定色にして、ライト/ダークどちらの背景でもブランド色を保つ。
+// favicon.svgと同じモチーフ。currentColorではなくグラデーション固定色にして、
+// ライト/ダークどちらの背景でもブランド色を保つ。
 function BrandMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" fill="none" aria-hidden="true" className={className}>
@@ -151,13 +141,11 @@ function ThemeToggle() {
   )
 }
 
-// isLoading/fetchRenderの購読をこの小さなコンポーネントに閉じ込め、描画状態の変化で
-// Appのレイアウト全体が再レンダリングされないようにする。
+// 描画状態の変化でAppのレイアウト全体が再レンダリングされないよう、購読をここへ閉じ込める。
 function RenderButton() {
   const isLoading = useSheetStore((state) => state.isLoading)
   const fetchRender = useSheetStore((state) => state.fetchRender)
-  // doclingのモデルパイプライン初期化（warmupStore）が終わるまで、初回アップロードが
-  // コールドスタート＋初期化を兼ねてタイムアウトしやすい状態を避けるため描画を待たせる。
+  // 初回アップロードがdoclingの初期化を兼ねてタイムアウトしないよう、完了まで描画を待たせる。
   const isWarmingUp = useWarmupStore((state) => state.status === 'pending')
   return (
     <Button onClick={() => fetchRender()} disabled={isLoading || isWarmingUp}>
@@ -178,9 +166,8 @@ function RenderButton() {
   )
 }
 
-// PDFアップロード時のDocling解析は十数秒かかることがあり、進捗が見えないと「固まっている」と
-// 誤解されるため経過秒数を出す。isLoadingの間だけマウントされる設計により、
-// 秒数のリセットをuseEffect内のsetStateで行う必要がない（アンマウントで自然に0へ戻る）。
+// 描画は十数秒かかることがあり、進捗が見えないと「固まっている」と誤解されるため経過秒数を出す。
+// isLoadingの間だけマウントすることで、秒数のリセットを自前で書かずに済ませる。
 function RenderingProgress() {
   const [seconds, setSeconds] = useState(0)
   useEffect(() => {

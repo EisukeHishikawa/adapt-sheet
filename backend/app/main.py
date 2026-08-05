@@ -67,18 +67,15 @@ warmup_logger = logging.getLogger("app.warmup")
 # アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする。
 configure_logging()
 
-# Lambdaのコールドスタート時（このモジュールのimport）に一度だけParameter StoreからAPIキーを
-# os.environへ展開する。ハンドラ内で毎リクエストSSMを叩かないための鉄則。
+# ハンドラ内で毎リクエストSSMを叩かないよう、コールドスタート時の1回だけ展開する。
 # SSM_PARAMETER_PREFIX未設定のローカル/pytestでは no-op。
 load_secrets_into_env()
 
 app = FastAPI()
 
-# リクエスト相関ID採番・アクセスログ・想定外例外の500化を行うミドルウェア。
 app.add_middleware(RequestContextMiddleware)
 
-# 例外→構造化エラーレスポンスの整形はハンドラへ集約する。StarletteHTTPExceptionで
-# 登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
+# StarletteHTTPExceptionで登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(PDFConversionError, pdf_conversion_error_handler)
@@ -133,22 +130,18 @@ def _validate_render_params(
 
 @app.post("/api/render", response_model=RenderResponse, response_model_by_alias=True)
 async def render(
-    # セキュリティ対策: promptはプロンプトインジェクションの温床になり得る自由入力のため、
-    # フロント（PromptInput.tsxのmaxLength）と合わせて長さを二重に制限する。超過時は
-    # RequestValidationError経由でapp/errors.pyが400 VALIDATION_ERRORへ変換する。
+    # promptはプロンプトインジェクションの温床になり得る自由入力のため、フロント側の
+    # maxLengthと合わせて長さを二重に制限する。
     prompt: str = Form("", max_length=100),
     width_mm: Optional[float] = Form(None),
     height_mm: Optional[float] = Form(None),
-    # フロント（EngineSelect）が選択した生成エンジン。7値のいずれか。
     engine: str = Form("gemini_free"),
     pdf: Optional[UploadFile] = File(None),
-    # PDFが無い生成AIリクエストで、現在画面に表示中のHTML/CSSとJSONを送るための項目
-    # （build_promptがhas_pdf=False時にのみ使う。ai_client.build_prompt参照）。
+    # 画面に表示中のHTML/CSSとJSON。PDFが無い生成AIリクエストでのみ使う。
     current_html: str = Form(""),
     current_json: str = Form(""),
-    # Dependsで注入することで、テスト側がdependency_overridesにより成功/失敗や高速なフェイクへ
-    # 差し替えられるようにする。ai_client_factoryはengineがリクエスト時にしか
-    # 決まらないため、AIClientインスタンスではなく関数を注入する。
+    # テストがdependency_overridesでフェイクへ差し替えられるようにする。engineはリクエスト時
+    # にしか決まらないため、AIClientインスタンスではなくそれを作る関数を注入する。
     ai_client_factory: Callable[[str], AIClient] = Depends(get_ai_client_factory),
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
     html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
@@ -159,13 +152,11 @@ async def render(
         get_shared_db_session_opener
     ),
 ) -> RenderResponse:
-    # engine・PDF添付有無のパラメータチェックはPDF読み込み・AI呼び出しより前に行い、
-    # 無駄な処理を避ける。
+    # 無駄なPDF読み込み・AI呼び出しを避けるため、パラメータは先に確認する。
     _validate_render_params(engine, current_user, has_pdf=pdf is not None)
 
     if engine in CONVERTER_ENGINES:
-        # Docling/pdf2htmlEX/PyMuPDFはAIを介さず、変換結果をそのまま描画結果にする。PDF必須
-        # （上のバリデーションで既に確認済み）。
+        # PDF必須は上のバリデーションで確認済み。
         content = await pdf.read()
         filename = pdf.filename or "uploaded.pdf"
         html = await _convert_with_engine(
@@ -183,8 +174,8 @@ async def render(
         )
         return RenderResponse(html=html, css="", json_={})
 
-    # 生成AI（hybrid/gemini_free。gemini/claude/openaiは上記ゲートにより未ログインでは
-    # 到達しない）。PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う。
+    # PDFConversionError・AIGenerationErrorはここで捕捉せず、送出のみ行う
+    # （app/errors.pyのハンドラが一元的にレスポンスへ整形する）。
     pdf_bytes: Optional[bytes] = None
     filename = "uploaded.pdf"
     if pdf is not None:
@@ -244,8 +235,8 @@ async def _generate_ai_result(
     （PyMuPDF/Docling経由の事前変換はhybrid以外では行わない）。
     """
     if engine == "hybrid":
-        # PyMuPDF（正確なフォントサイズ・位置）とDocling（表・段落構造）の変換結果を、
-        # PDF本体と一緒にGemini（VLM）へ渡して1つのHTML/CSS/JSONへ統合させる。PDF添付必須。
+        # PyMuPDF（フォントサイズ・位置）とDocling（表・段落構造）の変換結果を、PDF本体と
+        # 一緒にGeminiへ渡して1つのHTML/CSS/JSONへ統合させる。
         if pdf_bytes is None:
             raise HTTPException(status_code=428)
         pymupdf_html, docling_html = await asyncio.gather(
@@ -408,8 +399,7 @@ async def process_render_job(
     呼び出せない（docling/pdf2htmlexと異なりresource-based policyは不要）。
     """
     try:
-        # ゲート判定（GATED_ENGINES）は起動元のcreate_render_jobで既に行っているため、
-        # ここではengine自体の妥当性・PDF添付有無のみをPDF取得（重い処理）より前に確認する。
+        # ゲート判定は起動元のcreate_render_jobで済んでいるため、ここでは行わない。
         _validate_engine(payload.engine)
         _validate_pdf_requirement(payload.engine, payload.has_pdf)
         pdf_bytes = job_store.fetch_uploaded_pdf(payload.job_id) if payload.has_pdf else None
@@ -455,9 +445,8 @@ async def process_render_job(
         )
         return {"status": "error"}
 
-    # 共有カウンタは必ずjob_storeへの"done"書き込みより前に済ませる。フロントはジョブ完了を
-    # 検知した直後に無料枠利用回数を取得するため、順序が逆だとその取得がカウンタ更新に対して
-    # 早すぎて未反映の値（1回目の利用時なら0）を拾ってしまう。
+    # フロントはジョブ完了を検知した直後に利用回数を取得するため、"done"の書き込みより前に
+    # カウンタを更新しないと未反映の値を拾われる。
     if payload.engine in GEMINI_FREE_QUOTA_ENGINES:
         with open_shared_session() as shared_session:
             _record_gemini_free_usage(shared_session)
@@ -514,10 +503,8 @@ def _save_history(
         )
     except Exception:
         logger.warning("生成履歴の保存に失敗しました", exc_info=True)
-        # PostgreSQLは失敗したステートメントの後、rollbackするまで同一トランザクション上の
-        # 後続クエリを全てInFailedSqlTransactionにする。db_session_for_userは同じセッションを
-        # 複数の後処理（無料枠カウンタ更新・履歴保存）で使い回すため、ここで区切らないと
-        # 後続処理まで巻き添えで失敗する。
+        # PostgreSQLはrollbackするまで同一トランザクションの後続クエリを全て失敗させる。
+        # セッションは他の後処理と共用するため、ここで区切らないと巻き添えで失敗する。
         db_session.rollback()
 
 
@@ -611,7 +598,6 @@ def get_history(
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Session = Depends(get_db_session),
 ) -> list[HistoryItemResponse]:
-    # /api/renderのGATED_ENGINESと同じ判定（未ログインは403 FREE_ACCESS_FORBIDDEN）。
     if current_user is None:
         raise HTTPException(status_code=403)
 

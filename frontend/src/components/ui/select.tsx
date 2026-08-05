@@ -3,10 +3,8 @@ import { Check, ChevronDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-// docs/spec.md 2.2「定型サイズ自動入力」のUIを、1つのSelect（トリガー+ドロップダウン）に
-// 統合するための土台。shadcn/uiのBase UI版Selectと同じ、標準的なRoot/Trigger/Content/Item
-// 構成で、ポップアップの位置・見た目もBase UIの既定に従う（独自の重ね合わせ配置は保守性が
-// 落ちるため採用しない）。中身（紙のスウォッチアイコン）はSizeControls側で渡す。
+// shadcn/uiのBase UI版Selectと同じRoot/Trigger/Content/Item構成の土台。位置・見た目も
+// Base UIの既定に従う（独自の重ね合わせ配置は保守性が落ちるため採用しない）。
 
 const Select = SelectPrimitive.Root
 

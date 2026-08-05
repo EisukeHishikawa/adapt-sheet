@@ -1,8 +1,7 @@
 import { CircleAlert, CircleCheck } from 'lucide-react'
 import { useSheetStore } from '@/store/sheetStore'
 
-// docs/spec.md 2.2「インテリジェントメッセージ表示」のUI。表示文言の決定はストア側に集約し、
-// このコンポーネントは「どう見せるか」だけに責務を絞る。
+// 表示文言の決定はストア側に集約し、このコンポーネントは「どう見せるか」だけに責務を絞る。
 export function MessageToast() {
   const error = useSheetStore((state) => state.error)
   const successMessage = useSheetStore((state) => state.successMessage)

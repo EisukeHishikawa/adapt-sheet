@@ -3,10 +3,8 @@ import { FileText, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react'
 import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
 import { composePreviewDocument, renderTemplate } from '@/lib/template'
 
-// リアルタイムプレビュー（docs/spec.md 2.1「HTMLプレビュー表示エリア」）。
-// iframeを使うのは、生成HTML/CSSを親ページのスタイルから隔離して帳票の見た目をそのまま確認するため。
-// iframeは常に「用紙の実寸px」で組版し、表示領域に収まるようページ全体をscaleする。枠だけ変えて中身を
-// 流し込み直すのではなくページごとズームすることで、用紙サイズ変更や拡大に中身の比率が追従する。
+// iframeを使うのは、生成HTML/CSSを親ページのスタイルから隔離するため。用紙の実寸pxで組版した
+// ページ全体をscaleすることで、用紙サイズ変更や拡大に中身の比率が追従する。
 type PreviewPanelProps = {
   expanded: boolean
   onToggleExpand: () => void
@@ -29,8 +27,7 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
   const widthMm = useSheetStore((state) => state.widthMm)
   const heightMm = useSheetStore((state) => state.heightMm)
 
-  // JSON入力の編集が（再描画APIを待たずに）プレビューへ即時反映される
-  // （docs/spec.md 2.2「リアルタイム双方向プレビュー」）。
+  // 再描画APIを待たず、JSON入力の編集をその場でプレビューへ反映する。
   const srcDoc = composePreviewDocument(renderTemplate(htmlContent, jsonContent), cssContent)
 
   const paperWidthMm = widthMm ?? DEFAULT_DIMENSIONS.widthMm
@@ -38,9 +35,8 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
   const pageWidthPx = paperWidthMm * PX_PER_MM
   const pageHeightPx = paperHeightMm * PX_PER_MM
 
-  // 縮小時にズームを1へ戻す（拡大時のズーム状態を持ち越すと、次に開いたとき用紙の一部しか見えず戸惑うため）。
-  // useEffect内でのsetStateはreact-hooks/set-state-in-effectが警告する再レンダーの連鎖になるため、
-  // Reactが推奨する「レンダー中の調整」パターンを使う。
+  // ズーム状態を持ち越すと次に拡大したとき用紙の一部しか見えないため、縮小時に1へ戻す。
+  // useEffect内のsetStateは再レンダーの連鎖になるため「レンダー中の調整」パターンを使う。
   const [zoomLevel, setZoomLevel] = useState(1)
   const [prevExpanded, setPrevExpanded] = useState(expanded)
   if (expanded !== prevExpanded) {
@@ -117,9 +113,8 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
           <iframe
             title="プレビュー"
             srcDoc={srcDoc}
-            // sandbox未指定のsrcDocは親と同一オリジンで動くため、AI生成HTMLや復元した履歴に
-            // <script>が混ざるとsessionStorageのアクセストークンを読み出せてしまう。空指定で
-            // 一意オリジン＋スクリプト実行禁止にする（帳票は静的なHTML/CSSのみで成立する）。
+            // sandbox未指定だと親と同一オリジンで動き、生成HTMLに紛れた<script>がアクセス
+            // トークンを読み出せてしまう。空指定で一意オリジン＋スクリプト実行禁止にする。
             sandbox=""
             tabIndex={-1}
             className="pointer-events-none border-0 bg-white"

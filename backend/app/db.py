@@ -4,10 +4,14 @@
 リクエストごとに作り直さず、モジュールスコープで1つだけ生成してキャッシュする（Sessionのみ
 リクエストごとに新規発行する）。
 
-接続先はSupabaseのPostgresで、render_historyにはRLSが有効化されている。アプリは
+接続先はSupabaseのPostgresで、publicスキーマの全テーブルにRLSが有効化されている。アプリは
 RLSを迂回しない`authenticator`ロールで接続し、リクエストごとにログイン中ユーザーのJWT `sub`を
 トランザクションローカルなGUCへ設定してから`authenticated`ロールへ切り替える（PostgRESTと同じ
 方式）。これによりWHERE句の書き忘れやSQLインジェクションがあっても他人の行へ到達できない。
+
+ユーザーに紐づかない共有テーブル（gemini_free_usage）だけは例外で、ロールを切り替えず
+`authenticator`のまま扱う（get_shared_db_session_opener）。PostgRESTは必ず`anon`/`authenticated`
+へ切り替えてから問い合わせるため、権限を`authenticator`だけに絞ればData API経由で触れなくなる。
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from contextlib import contextmanager
-from typing import Callable, Iterator, Optional
+from typing import Callable, ContextManager, Iterator, Optional
 
 from fastapi import Depends
 from sqlalchemy import Engine, create_engine, text
@@ -168,3 +172,16 @@ def get_db_session_or_none(
 ) -> Iterator[Optional[Session]]:
     with db_session_for_user(current_user.sub if current_user is not None else None) as session:
         yield session
+
+
+def get_shared_db_session_opener() -> Callable[[], ContextManager[Optional[Session]]]:
+    """全ユーザー共有テーブル（gemini_free_usage）用のセッションを開く関数を返す。
+
+    ログイン中でもロールを切り替えず`authenticator`のまま使う。このテーブルは
+    PostgRESTが切り替える`anon`/`authenticated`から触れない権限設計にしており、
+    ロールを切り替えるとアプリ自身が権限不足になる。
+
+    共有テーブルへ触らないリクエストで無駄に接続を張らないよう、セッションそのものでは
+    なく開く関数を返す。テスト側はdependency_overridesで差し替える。
+    """
+    return lambda: db_session_for_user(None)

@@ -1,8 +1,8 @@
 """PyMuPDF（fitz）によるレイアウトHTML生成。
 
 PDFの1ページ目を、テキスト・罫線・背景色を絶対座標のdivへ写した1枚のHTMLに変換する。
-出力の唯一の宛先はGeminiのプロンプトであり、Geminiがこれを「見た目の正」として読み、
-保守しやすいHTML/CSSへ作り替える（テキストの正はDocling由来のMarkdown）。
+出力はengine=pymupdfの描画結果としてそのまま返すほか、hybridでは文字サイズ・位置の基準
+としてGeminiへ渡す。
 """
 
 from __future__ import annotations
@@ -24,14 +24,11 @@ __all__ = [
 # フォント名にこれらを含むスパンを太字とみなす。PDFは太字を別フォント（例: "...-Bold"）として
 # 埋め込むことが多く、CSSのfont-weightへ直接は写らないため名前から推定する。
 _BOLD_FONT_MARKERS = ("bold", "black", "heavy", "gothic")
-# Google Fontsの<link rel="stylesheet">はrender-blockingで、到達不可なネットワーク環境では
-# プレビューiframe（sandbox=""でJS実行不可のため非同期読み込みの定石が使えない）全体の描画が
-# 止まってしまう。外部依存を持たず、主要OSに標準搭載のCJKフォントで完結させる。
+# Webフォントはrender-blockingで、到達不可な環境ではプレビューiframe全体の描画が止まる
+# （sandbox=""でJS実行不可のため非同期読み込みも使えない）。OS標準のCJKフォントで完結させる。
 _FONT_STACK = "'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"
 
-# 一般的な請求書・帳票として過大にならないフォントサイズ上限（px）。役割（エリア）別に分ける。
-# PDFが大きめの字で作られていてもここで頭打ちにする。上限を超えない元の小さい字は縮めない（min）。
-# GeminiはこのHTMLを見た目の参照にするため、入力段階で過大なサイズを抑えると出力も過大になりにくい。
+# 帳票として過大にならないフォントサイズ上限（px）。元が大きい字だけを頭打ちにする（min）。
 _MAX_FONT_PX_TITLE = 22.0    # 帳票名・大見出し
 _MAX_FONT_PX_HEADING = 14.0  # セクション見出し・ラベル
 _MAX_FONT_PX_BODY = 11.0     # 明細・本文・その他

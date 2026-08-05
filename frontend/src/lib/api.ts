@@ -1,29 +1,23 @@
 import type { components } from '@/types/api'
 
-// バックエンドのopenapi.jsonから自動生成した型。フロント側でキー名を手書きしないため、
-// /api/renderのレスポンスはこの型を経由してのみ扱う。
+// openapi.jsonから自動生成した型。キー名を手書きしないため、必ずこの型を経由して扱う。
 export type RenderResponse = components['schemas']['RenderResponse']
 
-// 生成AI系エンジンの非同期ジョブ（POST /api/render/upload-url・POST /api/render/jobs・
-// GET /api/render/jobs/{job_id}）用の型。API Gatewayの29秒タイムアウトを避けるため、
-// PDFはS3へ直接アップロードし、描画本体はジョブとして起動してポーリングで結果を取る。
+// 生成AI系エンジンの非同期ジョブ用の型。API Gatewayの29秒タイムアウトを避けるため、PDFはS3へ
+// 直接アップロードし、描画本体はジョブとして起動してポーリングで結果を取る。
 export type UploadUrlResponse = components['schemas']['UploadUrlResponse']
 export type RenderJobResponse = components['schemas']['RenderJobResponse']
 export type RenderJobStatusResponse = components['schemas']['RenderJobStatusResponse']
 
-// 編集中スナップショットの保存リクエスト（POST /api/history/edit）。ログイン済みユーザーのみ
-// 呼び出せる（未ログインはバックエンドが403）。
+// 編集中スナップショットの保存リクエスト。未ログインではバックエンドが403を返す。
 export type HistoryEditRequest = components['schemas']['HistoryEditRequest']
 export type HistoryItemResponse = components['schemas']['HistoryItemResponse']
 
-// GET /api/usage/gemini-freeのレスポンス。gemini_free（無料枠）の当日利用回数（全ユーザー共有・
-// JST日次リセット）。認証不要（匿名利用もカウント対象のため）。
+// 無料枠の当日利用回数（全ユーザー共有・JST日次リセット）。匿名利用もカウントするため認証不要。
 export type GeminiFreeUsageResponse = components['schemas']['GeminiFreeUsageResponse']
 
-// docs/spec.md 3.1の契約に沿ったリクエスト項目。
-// cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提）。
-// current_html/current_jsonは、PDFを添付しない生成AIリクエストでのみ意味を持つ
-// （PDFがある場合はPDFファイルの直接添付を正とし、backendがこの2項目を無視する）。
+// cssは持たない（既存CSSはhtml側の<style>に埋め込まれている前提）。current_html/current_jsonは
+// PDFを添付しない生成AIリクエストでのみ意味を持ち、PDFがある場合はbackendが無視する。
 export type RenderRequestFields = {
   prompt?: string
   pdf?: File
@@ -31,8 +25,6 @@ export type RenderRequestFields = {
   current_json?: string
   width_mm?: number
   height_mm?: number
-  // EngineSelectで選択した生成エンジン。gemini_free/gemini/claude/openai/hybrid/
-  // docling/pdf2htmlex/pymupdfのいずれか。
   engine?: string
 }
 
@@ -45,8 +37,7 @@ export type RenderErrorInfo = {
   requestId: string | null
 }
 
-// ステータスコードをmessage文字列に埋め込むと呼び出し側の判定が文字列パースに頼ることになるため、
-// docs/spec.md 4章のエラーコード判定用に専用のエラー型として分離する。
+// 呼び出し側がステータスを文字列パースせずに判定できるよう、専用のエラー型として分離する。
 export class RenderApiError extends Error {
   readonly status: number
   readonly code: string | null
@@ -87,9 +78,8 @@ async function parseErrorBody(response: Response): Promise<RenderErrorInfo | und
   return info
 }
 
-// multipart/form-dataが要求されるため、pdfも同じ関数で扱えるようFormDataを使う。
-// accessTokenはauthStoreのsession.access_token。未ログイン時はundefinedのままAuthorization
-// ヘッダーを付けず、ゲート対象engineはバックエンドが403を返す。
+// pdfを同じ関数で扱えるようFormDataで送る。accessTokenが無い場合はAuthorizationヘッダーを
+// 付けず、ゲート対象engineに対してバックエンドが403を返す。
 export async function renderSheet(
   fields: RenderRequestFields,
   accessToken?: string,
@@ -118,8 +108,7 @@ export async function renderSheet(
   }
 }
 
-// POST /api/render/jobsのリクエストボディ。RenderRequestFieldsと異なりPDFファイルそのものは
-// 含まない（先にrequestUploadUrl→PUTでS3へ直接アップロード済みの前提）。
+// PDFファイル自体は含まない（先にrequestUploadUrl→PUTでS3へアップロード済みの前提）。
 export type RenderJobRequestFields = {
   prompt?: string
   width_mm?: number
@@ -131,8 +120,7 @@ export type RenderJobRequestFields = {
   has_pdf?: boolean
 }
 
-// S3へPDFを直接アップロードするための署名付きURLを発行する。job_idは後続の
-// startRenderJob/PUTアップロードで同一ジョブを指すために使い回す。
+// S3への直接アップロード用の署名付きURLを発行する。job_idは後続の呼び出しで使い回す。
 export async function requestUploadUrl(): Promise<UploadUrlResponse> {
   const response = await fetch('/api/render/upload-url', { method: 'POST' })
 
@@ -156,8 +144,7 @@ export async function uploadPdfToPresignedUrl(uploadUrl: string, pdf: File): Pro
   }
 }
 
-// 生成AI系エンジンの描画ジョブを起動する。API Gatewayの29秒制約を受けないよう、
-// backendは受理してjob_idを返すだけで、実処理は非同期起動したworker Lambda側で行う。
+// 描画ジョブを起動する。backendは受理してjob_idを返すだけで、実処理はworker Lambdaが行う。
 export async function startRenderJob(
   fields: RenderJobRequestFields,
   accessToken?: string,
@@ -178,8 +165,7 @@ export async function startRenderJob(
   return (await response.json()) as RenderJobResponse
 }
 
-// ジョブの状態を1回分取得する。呼び出し側（sheetStore）がstatus: "pending"の間、
-// 一定間隔でこの関数を呼び直す。
+// ジョブの状態を1回分取得する。ポーリングの間隔・打ち切りは呼び出し側が持つ。
 export async function getRenderJobStatus(jobId: string): Promise<RenderJobStatusResponse> {
   const response = await fetch(`/api/render/jobs/${encodeURIComponent(jobId)}`)
 

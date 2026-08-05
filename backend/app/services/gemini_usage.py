@@ -17,8 +17,7 @@ from app.models import GeminiFreeUsage
 
 GEMINI_FREE_DAILY_LIMIT = 10
 
-# hybridはPyMuPDF・Doclingの抽出結果とPDFをgemini_freeと同じ無料枠モデルへ渡すため
-# （app/services/ai_client.pyのAI_ENGINES定義コメント参照）、同じ無料枠カウンタの対象にする。
+# hybridもgemini_freeと同じ無料枠モデルを使うため、同じカウンタの対象にする。
 GEMINI_FREE_QUOTA_ENGINES: frozenset = frozenset({"gemini_free", "hybrid"})
 
 _JST = ZoneInfo("Asia/Tokyo")

@@ -65,9 +65,8 @@ class RemoteHtmlExtractor:
         self._client = client or httpx.Client()
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
-        # コンテナ起動直後の初回変換ではモデルのダウンロード（Doclingで実測60秒超）が発生しうるため、
-        # 通常の推論時間（数秒〜十数秒）より大きめのタイムアウトを取る。
-        # 署名対象の最終バイト列を確定させるため、送信前にRequestを構築してから必要に応じて署名する。
+        # 初回変換ではモデルのダウンロード（Doclingで実測60秒超）が起こりうるため長めに取る。
+        # 署名対象の最終バイト列を確定させるため、送信前にRequestを構築してから署名する。
         request = self._client.build_request(
             "POST",
             f"{self._base_url}/convert",

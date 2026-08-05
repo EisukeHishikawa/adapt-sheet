@@ -5,14 +5,11 @@
 （app/services/worker_invoker.py）。本モジュールはbackend/render-worker間の受け渡しに使う
 S3バケット（uploads/{job_id}.pdf・results/{job_id}.json）を扱う。
 
-RENDER_JOBS_BUCKET未設定のローカル/pytestでは想定利用者（POST /api/render/jobs等）が
-無いため、S3JobStoreの構築時点で例外を送出する（remote_extractor.py等と同じ
-「本番専用機能はモジュールスコープでboto3を遅延import」方針を踏襲する）。
+RENDER_JOBS_BUCKET未設定のローカル/pytestでは想定利用者が無いため、S3JobStoreの構築時点で
+例外を送出する。boto3は本番でのみ必要なため遅延importする。
 
-エンドポイントはRENDER_JOBS_S3_ENDPOINT_URL/RENDER_JOBS_S3_PUBLIC_ENDPOINT_URLで
-上書きできる。ローカル開発（docker-compose.yml）ではS3互換のMinIOを指すが、これは設定値の
-違いに過ぎずクラスを分けない。未設定時（本番）は従来どおり実AWS S3のリージョナルエンドポイントを
-使うため、本番の挙動はこの変更の前後で変わらない。
+エンドポイントはRENDER_JOBS_S3_ENDPOINT_URL/RENDER_JOBS_S3_PUBLIC_ENDPOINT_URLで上書きできる。
+ローカル開発ではS3互換のMinIOを指すが、設定値の違いに過ぎないためクラスは分けない。
 """
 
 from __future__ import annotations
@@ -120,10 +117,8 @@ class S3JobStore:
     def _build_client(self, endpoint_url: str):
         import boto3  # 遅延import: 本番のみ必要（secrets_loader.py等と同じ方針）
 
-        # region_nameのみ指定するとgenerate_presigned_urlは既定でグローバルエンドポイント
-        # （s3.amazonaws.com）のURLを生成し、実際のアクセス時にリージョナルエンドポイントへの
-        # 307リダイレクトが発生する。ブラウザのfetchはこのクロスオリジンリダイレクトを
-        # 正しく扱えずCORSエラーになるため、endpoint_urlを明示してリダイレクト自体を無くす。
+        # region_nameのみだとpresigned URLがグローバルエンドポイント宛になり、アクセス時の
+        # 307リダイレクトをブラウザのfetchが扱えずCORSエラーになる。
         kwargs = {"region_name": self._region, "endpoint_url": endpoint_url}
         if self._use_path_style:
             from botocore.config import Config

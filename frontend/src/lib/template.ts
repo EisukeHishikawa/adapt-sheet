@@ -1,8 +1,7 @@
-// プレビュー用にHTMLを組み立てるユーティリティ。CLAUDE.md「固定情報と業務データの分離」規約に対応し、
-// 固定テキストはHTMLへ直書き、業務データ（{{key}}）のみJSONと連動させる。
+// プレビュー用にHTMLを組み立てるユーティリティ。固定テキストはHTMLへ直書きし、
+// 業務データ（{{key}}）のみJSONと連動させる。
 
-// バックエンドのai_client._PLACEHOLDER_PATTERNと同一にして、「何をテンプレート変数とみなすか」の
-// 定義をフロント・バックで一致させる。前後の空白（{{ key }}）は手入力の揺れとして許容する。
+// バックエンドのai_client._PLACEHOLDER_PATTERNと同一にする。前後の空白は手入力の揺れとして許容する。
 const PLACEHOLDER_PATTERN = /\{\{\s*(\w+)\s*\}\}/g
 
 // 業務データはテキストとして表示する想定のため、タグや引用符を解釈させない（XSS・レイアウト崩れの防止）。
@@ -45,8 +44,7 @@ export function renderTemplate(html: string, jsonText: string): string {
   })
 }
 
-// プレビューiframeのsrcDoc。cssは<style>として末尾に足すだけで<head>の有無に関わらず適用されるため、
-// html側の構造を解析・書き換えする必要がない。プレビュー本体と履歴サムネイルで同じ合成規則を使う。
+// cssを<style>として末尾へ足すだけなら、html側の構造を解析・書き換えせずに済む。
 export function composePreviewDocument(html: string, css: string): string {
   return css ? `${html}\n<style>${css}</style>` : html
 }

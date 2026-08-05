@@ -3,9 +3,8 @@ import { FileText, UploadCloud, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSheetStore } from '@/store/sheetStore'
 
-// docs/spec.md 2.1「ファイル操作」のPDFアップロードエリア。<input type="file">自体を透明にして
-// ドロップ先に重ねることで、クリックでのファイル選択とドラッグ＆ドロップを単一要素・単一の
-// aria-labelで扱える（キーボード・スクリーンリーダーからも迷わずアクセスできる）。
+// <input type="file">自体を透明にしてドロップ先に重ねることで、クリックでのファイル選択と
+// ドラッグ＆ドロップを単一要素・単一のaria-labelで扱える。
 export function PdfDropzone() {
   const pdfFileName = useSheetStore((state) => state.pdfFileName)
   const setPdfFile = useSheetStore((state) => state.setPdfFile)
@@ -24,7 +23,7 @@ export function PdfDropzone() {
     event.preventDefault()
     setIsDragging(false)
     const file = event.dataTransfer.files[0]
-    // docs/spec.md 3.1のpdfフィールドはPDF専用のため、PDF以外は無視する。
+    // APIはPDF専用のため、PDF以外は無視する。
     if (file && file.type === 'application/pdf') {
       setPdfFile(file)
     }

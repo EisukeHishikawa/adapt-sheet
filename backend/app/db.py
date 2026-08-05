@@ -37,11 +37,8 @@ _session_factory: Optional[sessionmaker] = None
 
 _DB_CONNECT_TIMEOUT_SECONDS = 5
 _DB_CLOSE_TIMEOUT_SECONDS = 3
-# session.close()はネットワーク越しの切断処理（ROLLBACK送信等）を伴い、コネクション
-# プーラー（Supabase Transaction Pooler等）側の事情でクライアントの読み取りが返らず
-# ハングすることがある。connect_timeoutは接続確立にしか効かないため別途保護する。
-# クローズがハングしても該当スレッドは残り続けるが、Lambda 1台あたりの同時実行数は
-# 小さいため実害は限定的という前提で妥協している。
+# session.close()はROLLBACK送信を伴い、コネクションプーラー側の事情でハングしうる。
+# connect_timeoutは接続確立にしか効かないため、クローズは別スレッドで時間を区切る。
 _close_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db-session-close")
 
 
@@ -59,8 +56,7 @@ def _get_session_factory() -> sessionmaker:
         url = os.getenv("DATABASE_URL", "").strip()
         if not url:
             raise RuntimeError("DATABASE_URL is not set")
-        # connect_timeout未指定だと接続先が詰まった場合にLambdaのタイムアウトまで
-        # /api/renderごとブロックしてしまうため、短めに切って早期に失敗させる。
+        # 未指定だと接続先が詰まったときLambdaのタイムアウトまでブロックしてしまう。
         _engine = create_engine(
             url, pool_pre_ping=True, connect_args={"connect_timeout": _DB_CONNECT_TIMEOUT_SECONDS}
         )
@@ -73,7 +69,7 @@ def _set_rls_context(connection: Connection, claims: str) -> None:
     connection.execute(
         text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims}
     )
-    # 切り替え後はRLSの対象になる。ロール名は固定値のためリテラルで埋める。
+    # authenticatorのままではRLSの対象にならない。ロール名は固定値のためリテラルで埋める。
     connection.execute(text("SET LOCAL ROLE authenticated"))
 
 
@@ -97,8 +93,7 @@ def apply_rls_context(session: Session, user_id: str) -> None:
     def _reapply(_session: Session, _transaction, connection: Connection) -> None:
         _set_rls_context(connection, claims)
 
-    # 既にトランザクションが始まっているセッションを渡された場合は、その分を今設定する
-    # （after_beginは次のトランザクションからしか呼ばれないため）。
+    # after_beginは次のトランザクションからしか呼ばれないため、開始済みの分は今設定する。
     if session.in_transaction():
         _set_rls_context(session.connection(), claims)
 

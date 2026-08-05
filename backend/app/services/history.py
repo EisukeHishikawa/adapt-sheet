@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import RenderHistory
 
-# GET /api/historyが返す件数の上限。フロントのHistorySlider（クライアント側・最大10件）とは
-# 別物で、DB側の一覧取得も際限なく返さないよう上限を設ける。
+# 一覧取得が際限なく行を返さないための上限。フロントの表示件数とは別物。
 MAX_HISTORY_ITEMS = 50
 
 

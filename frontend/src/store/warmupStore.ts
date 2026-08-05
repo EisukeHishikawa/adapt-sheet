@@ -1,11 +1,8 @@
 import { create } from 'zustand'
 import { pingSupabase, warmupBackendServices } from '@/lib/warmup'
 
-// docling-serviceはリクエストごとの新規モデルパイプライン構築を避けるため、backendの
-// POST /api/warmupはGET /healthではなく実際にダミーPDFで一度POST /convertまで叩く
-// （backend/app/services/docling_client.py参照）。この初期化が終わるまで描画ボタンを
-// 無効化し、利用者の最初のPDFアップロードがコールドスタート＋モデル構築を兼ねてしまい、
-// 後続のAI生成に残せる時間がAPI Gatewayの統合タイムアウトに収まらなくなる事態を避ける。
+// docling-serviceのモデル構築が終わるまで描画ボタンを無効化し、利用者の最初のアップロードが
+// コールドスタートを兼ねて大きく待たされることを避ける。
 const MAX_ATTEMPTS = 6
 const RETRY_DELAY_MS = 5000
 

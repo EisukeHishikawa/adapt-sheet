@@ -7,10 +7,8 @@ import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { formatCss, formatHtml } from '@/lib/codeFormatter'
 
-// zustandのストアはモジュールスコープでシングルトンのため、テスト間で状態が漏れる。
-// 全フィールドを網羅した初期値を1箇所にまとめ、各describeブロックのbeforeEachから
-// 共通で使うことで、フィールド追加時にリセット漏れ（一部のdescribeブロックだけ
-// 新フィールドが未リセットのまま残る）が起きないようにする。
+// zustandのストアはシングルトンでテスト間に状態が漏れるため、全フィールドを網羅した初期値を
+// 1箇所にまとめ、フィールド追加時のリセット漏れを防ぐ。
 const initialSheetState = {
   htmlContent: '',
   cssContent: '',
@@ -62,7 +60,7 @@ describe('App（2カラム最小画面）', () => {
   })
 
   // HTMLのテンプレート変数がJSONの値で置換され、JSONを編集するとプレビューが即時に
-  // 追従することを検証する（CLAUDE.md「固定情報と業務データの分離」）。
+  // 追従することを検証する。
   it('JSON入力を編集すると、HTMLのテンプレート変数が置換されてプレビューにリアルタイム反映される', () => {
     render(<App />)
 
@@ -99,10 +97,8 @@ describe('描画ボタン押下時のAPI疎通', () => {
     await user.click(screen.getByRole('button', { name: '描画' }))
 
     const preview = screen.getByTitle('プレビュー') as HTMLIFrameElement
-    // PreviewPanelはHTMLのテンプレート変数 {{dummy}} をJSON値（sample）で置換したうえで、
-    // 末尾にcssContentを<style>として付与する（renderTemplate / PreviewPanel.tsx参照）。
-    // よってsrcDocには置換後HTML（{{dummy}}が消えsampleになったもの）とcssが含まれる。
-    // htmlContent/cssContentは履歴へ積む時点で自動整形される（applySuccessfulRender）。
+    // srcDocには置換後のHTML（{{dummy}}がsampleになったもの）とcssが含まれる。
+    // htmlContent/cssContentは履歴へ積む時点で自動整形される。
     const expectedRenderedHtml = formatHtml(dummyRenderResponse.html).replace('{{dummy}}', 'sample')
     await waitFor(() => {
       expect(preview.srcdoc).toContain(expectedRenderedHtml)
@@ -110,15 +106,13 @@ describe('描画ボタン押下時のAPI疎通', () => {
       expect(preview.srcdoc).toContain(formatCss(dummyRenderResponse.css))
     })
     expect(useSheetStore.getState().cssContent).toBe(formatCss(dummyRenderResponse.css))
-    // jsonContentはJSON入力エディタへ戻せる整形済みテキスト（htmlContentと同様、次の編集の
-    // 起点になる）として保持するため、レスポンスのオブジェクトを文字列化して比較する。
+    // jsonContentはJSON入力エディタへ戻せる整形済みテキストとして保持する。
     expect(useSheetStore.getState().jsonContent).toBe(JSON.stringify(dummyRenderResponse.json, null, 2))
     expect(useSheetStore.getState().error).toBeNull()
   })
 
   it('APIがエラーを返した場合はエラーメッセージが表示され、ストアの内容は変更されない', async () => {
-    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ起動側を500エラーに差し替える
-    // （既定のダミーレスポンスは他テストに影響させない）。
+    // 既定engine（hybrid）は非同期ジョブ経路のため、ジョブ起動側を500エラーに差し替える。
     server.use(http.post('/api/render/jobs', () => new HttpResponse(null, { status: 500 })))
 
     const user = userEvent.setup()
@@ -126,17 +120,14 @@ describe('描画ボタン押下時のAPI疎通', () => {
 
     await user.click(screen.getByRole('button', { name: '描画' }))
 
-    // エラー文言はステータスコードに対応するユーザー向けメッセージに丸められる
-    // （500は想定外エラー扱い。sheetStore.messageForStatus参照）。
+    // エラー文言はステータスコードに対応するユーザー向けメッセージに丸められる。
     expect(await screen.findByRole('alert')).toHaveTextContent('サーバーで想定外のエラーが発生しました。')
     expect(useSheetStore.getState().htmlContent).toBe('')
   })
 })
 
-// リクエストにpdfフィールドが正しく含まれることの検証は、MSW（Node環境）がFile入りの
-// FormDataをHTTPボディへエンコードする際にjsdomのFileとundiciのFile実装がかみ合わず
-// 例外になる既知の制約があるため、ここでは行わずlib/api.test.tsのfetch呼び出し引数の
-// 直接検証に委ねる。本テストではUIの一連の流れ（ドロップ→描画→反映）のみを確認する。
+// pdfフィールドの検証は、MSWがFile入りFormDataをエンコードできない既知の制約のため
+// lib/api.test.tsに委ね、ここではUIの流れ（ドロップ→描画→反映）のみ確認する。
 describe('PDFアップロード時のAPI疎通', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)

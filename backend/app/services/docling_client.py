@@ -20,9 +20,7 @@ __all__ = [
     "get_html_extractor",
 ]
 
-# 変換すら通れば十分なため中身は空でよい、1ページだけの最小構成のPDF（MediaBoxのみ）。
-# docling-serviceのDocumentConverterはOCR/レイアウト/表構造のモデルパイプラインを
-# 初回convert時に構築する（数秒〜十数秒）ため、GET /healthだけでは温まらない。
+# ウォームアップ用の最小PDF。変換が通れば十分なため中身は空でよい。
 _WARMUP_PDF = (
     b"%PDF-1.1\n"
     b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
@@ -43,19 +41,15 @@ class RemoteDoclingHtmlExtractor(RemoteHtmlExtractor):
     # Lambda本番はIAM認証必須のFunction URLとして公開するため、terraformがこの環境変数に
     # "aws_sigv4"を設定してSigV4署名を有効化する。
     _auth_env_var = "DOCLING_SERVICE_AUTH"
-    # ローカルdocker-compose環境はdoclingコンテナが常時起動済みでLambdaのような
-    # コールドスタートが存在しないため、この環境変数がtrueの間は実convertを叩かず
-    # 即座にOK扱いにする（docker-compose.ymlが明示設定する）。
+    # コールドスタートの無いdocker-compose環境では実convertを叩かずOK扱いにする。
     _skip_warmup_env_var = "DOCLING_SERVICE_SKIP_WARMUP"
 
     def warmup(self) -> bool:
         """最小PDFを実際に`POST /convert`へ送り、モデルパイプラインまで温める。
 
-        基底クラスのGET /healthはLambda実行環境（プロセス）を起こすだけで、
-        DocumentConverterのモデルパイプライン構築（初回convert時、数秒〜十数秒）には
-        触れない。ここを素通りすると、ユーザーの実際のPDFアップロードが初回convertを
-        兼ねてしまい、後続のAI生成に残せる時間がAPI Gatewayの統合タイムアウト
-        （29秒）内で不足する。
+        基底クラスのGET /healthはプロセスを起こすだけで、DocumentConverterのモデル
+        パイプライン構築（初回convert時、数秒〜十数秒）には触れない。ここを素通りすると
+        ユーザーの最初のアップロードがその構築を兼ねてしまい、大きく待たせることになる。
         """
         if os.environ.get(self._skip_warmup_env_var, "").strip().lower() == "true":
             return True

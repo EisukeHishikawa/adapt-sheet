@@ -3,9 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { EditorPanel } from './EditorPanel'
 import { useSheetStore } from '@/store/sheetStore'
 
-// EditorPanelはHTML・CSS・JSON入力を「タブ切り替え」で表示する右カラム専用コンポーネント。
-// ここではタブ切り替えとストア連動を検証する。
-// 見出しテキストは非表示にする方針のため、検証は表示ラベルではなくtextareaのaria-labelとタブ（role=tab）に対して行う。
+// タブ切り替えとストア連動を検証する。見出しテキストは非表示のため、検証はtextareaの
+// aria-labelとタブ（role=tab）に対して行う。
 describe('EditorPanel（HTML/CSS/JSONタブ切り替え）', () => {
   beforeEach(() => {
     useSheetStore.setState({ htmlContent: '', cssContent: '', jsonContent: '', promptContent: '' })

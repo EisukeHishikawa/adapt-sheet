@@ -30,8 +30,7 @@ class PDFConverter(Protocol):
 
 class Pdf2HtmlExConverter:
     def __init__(self, run: Optional[Callable[..., subprocess.CompletedProcess]] = None) -> None:
-        # runはテスト側がsubprocess.run自体をフェイクへ差し替え、タイムアウト・異常終了等を
-        # 実バイナリなしで検証できるようにするための注入口（ai_client.py等と同じDI方針）。
+        # runはテストが実バイナリなしでタイムアウト・異常終了を再現するための注入口。
         self._run = run or subprocess.run
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
@@ -44,8 +43,7 @@ class Pdf2HtmlExConverter:
                 result = self._run(
                     [
                         _PDF2HTMLEX_BIN,
-                        # フォント・画像・CSS・JavaScript・アウトラインを1つのHTMLへ埋め込み、
-                        # 自己完結ファイルにする（外部アセットを別途配信する必要をなくす）。
+                        # 外部アセットの配信を不要にするため、全て1つのHTMLへ埋め込む。
                         "--embed-css",
                         "1",
                         "--embed-font",

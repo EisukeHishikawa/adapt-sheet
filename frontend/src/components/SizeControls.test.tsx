@@ -3,10 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { SizeControls } from './SizeControls'
 import { useSheetStore } from '@/store/sheetStore'
 
-// docs/spec.md 2.2「定型サイズ自動入力」: 1つのSelect（トリガー+ドロップダウン）で
-// 6択（A4たて/A4よこ/B5たて/B5よこ/A5たて/A5よこ）を縦一列に提供する。
-// 「たて」「よこ」の文字・mm表記は画面上に出さず、方向は紙の縦横比のみで表現する
-// （視覚的な文字が無くてもaria-labelでアクセシブルネームは維持する）。
+// 1つのSelectで6択（A4/B5/A5 × たて/よこ）を提供する。「たて」「よこ」の文字・mm表記は
+// 画面へ出さず紙の縦横比だけで表現するため、名前はaria-labelで検証する。
 describe('SizeControls（1つのSelect・縦一列・紙イラストへのラベル内包）', () => {
   beforeEach(() => {
     useSheetStore.setState({ widthMm: 297, heightMm: 210 })

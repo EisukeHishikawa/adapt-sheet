@@ -6,7 +6,7 @@ Parameter Store を呼び出し、取得したAPIキーを os.environ へ展開�
 SSMのレート制限（GetParameters）の双方を回避する。
 
 APIキーはDockerイメージにもコードにもハードコードせずSecureStringパラメータとして保管し、
-実行時に復号取得する（CLAUDE.md セキュリティ）。SSM_PARAMETER_PREFIX が未設定のローカル/pytestでは
+実行時に復号取得する。SSM_PARAMETER_PREFIX が未設定のローカル/pytestでは
 何もしない（no-op）ため、開発時に boto3 やAWS認証情報を必要としない。
 """
 
@@ -18,11 +18,8 @@ from typing import Callable, Optional
 
 logger = logging.getLogger("app.secrets")
 
-# Parameter Store から取得して os.environ へ展開する環境変数名。いずれも実行時にのみ必要な
-# 秘密情報であり、イメージには一切含めない。既に env に存在するものは取得対象から外す
-# （ローカルの .env 等で明示設定した値を尊重し、SSM呼び出しも省く）。
-# JWT検証鍵とDB接続文字列もAPIキーと同格の秘密情報のため、Lambdaの環境変数（コンソールで平文表示
-# される）ではなくここから展開する。
+# os.environ へ展開する秘密情報。JWT検証鍵とDB接続文字列もAPIキーと同格のため、平文表示される
+# Lambdaの環境変数ではなくここから展開する。既に env にある値は尊重して取得対象から外す。
 _SECRET_ENV_NAMES = (
     "GEMINI_API_KEY",
     "ANTHROPIC_API_KEY",
@@ -31,9 +28,8 @@ _SECRET_ENV_NAMES = (
     "DATABASE_URL",
 )
 
-# infra/modules/ssm が実値投入前の枠として入れるダミー値。これをそのまま env へ展開すると、
-# 特にDATABASE_URLでcreate_engineが失敗し「未設定なら静かにスキップ」の設計が壊れるため、
-# 未投入とみなして無視する。値はinfra/modules/ssm/main.tfと一致させる。
+# terraformが実値投入前の枠として入れるダミー値。展開すると「未設定なら静かにスキップ」の設計が
+# 壊れるため未投入とみなす。値はinfra/modules/ssm/main.tfと一致させる。
 PLACEHOLDER_VALUE = "PLACEHOLDER_SET_OUT_OF_BAND"
 
 

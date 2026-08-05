@@ -29,8 +29,7 @@ export function HistoryArchive() {
   const [error, setError] = useState<string | null>(null)
   const [items, setItems] = useState<HistoryItemResponse[]>([])
 
-  // GET /api/historyはログイン必須（backend/app/main.py get_history）のため、未ログイン時は
-  // 押しても403になるだけの導線を出さない。
+  // GET /api/historyはログイン必須のため、未ログイン時は導線を出さない。
   if (!isAuthAvailable || !session) return null
 
   const handleOpenChange = (open: boolean) => {

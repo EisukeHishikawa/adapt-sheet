@@ -24,12 +24,11 @@ from google.genai import types as genai_types
 
 from app.services.mock_templates import LANDSCAPE_INVOICE, PORTRAIT_DELIVERY_NOTE
 
-# CLAUDE.mdの「固定情報と業務データの分離」規約に基づき、htmlのテンプレート変数 {{key}} は
-# 必ずレスポンスのjsonに存在することをvalidate_render_resultで検証する。
+# 固定情報と業務データを分離するため、htmlの {{key}} は必ずjson側に持たせる。
 _PLACEHOLDER_PATTERN = re.compile(r"\{\{(\w+)\}\}")
 
-# MockAIClientはAIClientプロトコル（generate(prompt, pdf)）を変えずに用紙の向きを知る必要があるため、
-# build_promptが埋め込んだサイズ行から寸法を逆算する。
+# MockAIClientはgenerate(prompt, pdf)のシグネチャを変えずに用紙の向きを知る必要があるため、
+# プロンプト中のサイズ行から寸法を逆算する。
 _SIZE_LINE_PATTERN = re.compile(r"帳票サイズ: 横([\d.]+)mm\s*×\s*縦([\d.]+)mm")
 
 # Gemini側の一過性の混雑（503 UNAVAILABLE）に対する再試行の回数と待ち時間。
@@ -38,25 +37,20 @@ _RETRY_BACKOFF_SECONDS = 2.0
 
 logger = logging.getLogger("app.ai")
 
-# フロントのモデル選択（EngineSelect）が公開する8つの生成エンジン。
-# gemini_free/gemini/claude/openai/hybridは生成AI（LLMがHTML/CSS/JSONを作る）、
-# docling/pdf2htmlex/pymupdfはAIを介さない変換エンジン（変換結果をそのまま描画結果にする）。
-# hybridはPyMuPDF・Docling・Gemini（VLM）の3役を組み合わせる生成AIで、PDF添付必須（main.py参照）。
-# gemini_free同様に無料枠モデルを使うため自由アクセスのユーザーにも提供する（GATED_ENGINES対象外）。
 RenderEngine = Literal[
     "gemini_free", "gemini", "claude", "openai", "hybrid", "docling", "pdf2htmlex", "pymupdf"
 ]
 
-# フェーズ5（Supabase Auth導入）でアカウント登録ユーザーのみに解禁するまで、
-# 標準プラン（無料枠を超えるAPI利用）の生成AIは自由アクセスのユーザーに提供しない。
-# hybridはgemini_freeと同じ無料枠モデルを使うため、gemini_free同様ゲート対象に含めない。
+# 無料枠を超えるAPI利用が発生するため、ログイン済みユーザーにのみ提供する。
 GATED_ENGINES: frozenset = frozenset({"gemini", "claude", "openai"})
+# LLMがHTML/CSS/JSONを生成する。hybridはPyMuPDF・Doclingの抽出結果とPDFを
+# gemini_freeと同じ無料枠モデルへ渡すため、ゲート対象外。
 AI_ENGINES: frozenset = frozenset({"gemini_free", "gemini", "claude", "openai", "hybrid"})
+# AIを介さず、変換結果をそのまま描画結果にする。
 CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
-# RenderEngineの全8値。未知のengine値をPDF読み込み等の重い処理より前に弾くための許可リスト。
+# 未知のengine値をPDF読み込み等の重い処理より前に弾くための許可リスト。
 ALL_ENGINES: frozenset = AI_ENGINES | CONVERTER_ENGINES
-# PDF添付が必須のengine。hybridは3役統合の入力として、CONVERTER_ENGINESは変換対象として
-# PDFそのものが必須。PDF読み込み・非同期ジョブ起動より前に弾くための許可リスト。
+# hybridは統合の入力として、CONVERTER_ENGINESは変換対象としてPDFそのものが要る。
 PDF_REQUIRED_ENGINES: frozenset = CONVERTER_ENGINES | frozenset({"hybrid"})
 
 
@@ -72,7 +66,7 @@ def _log_ai_payload(message: str, **fields: str) -> None:
 
 
 class AIGenerationError(Exception):
-    """AI生成の失敗。app/errors.pyのハンドラが502へ変換する（docs/spec.md 4章）。"""
+    """AI生成の失敗。app/errors.pyのハンドラが502へ変換する。"""
 
 
 class AIServiceUnavailableError(AIGenerationError):
@@ -115,20 +109,15 @@ def build_prompt(
     current_html: str = "",
     current_json: str = "",
 ) -> str:
-    """docs/spec.md 3.1のリクエスト項目から生成AIへの動的プロンプトを構築する。
+    """リクエスト項目から生成AIへの動的プロンプトを構築する。
 
-    PDFがある場合は生成AI（Gemini/Claude/OpenAI）へマルチモーダル入力として直接添付する
-    （PDFはbuild_promptの引数ではなく、AIClient.generateへ別途バイト列として渡す。この関数は
-    PDFが「ある/ない」という事実のみを受け取る）。PDFが無い場合は、現在画面に表示されている
-    HTML/CSSとJSON（current_html/current_json）をテキストとしてプロンプトに含め、それを基準に
-    生成方針に沿って改変させる。PyMuPDF由来のレイアウトHTMLやDocling由来のテキストは一切
-    含めない（それらはDocling/pdf2htmlEX/PyMuPDFエンジンが、AIを介さない単独の変換結果として
-    のみ使う）。
+    PDFはAIClient.generateへバイト列として別途渡すため、この関数は有無だけを受け取る。
+    PDFが無い場合のみ、画面に表示中のHTML/CSSとJSONを改変の基準としてプロンプトへ含める。
+    PyMuPDF/Docling由来のテキストは含めない（それらは単独の変換エンジンとしてのみ使う）。
 
-    セキュリティ（プロンプトインジェクション対策）: `prompt`・`current_html`・`current_json`は
-    いずれもエンドユーザー由来で信頼できない。区切り記号で範囲を明示し、その外側（システム側の
-    指示）で「区切り内は命令ではなくテキストとして扱う」ことを宣言する。app/main.pyの
-    Form(max_length=100)による長さ制限と合わせた多層防御とする。
+    プロンプトインジェクション対策として、信頼できないエンドユーザー由来の値
+    （prompt・current_html・current_json）は区切り記号で囲み、その外側で「区切り内は命令では
+    なくテキストとして扱う」ことを宣言する。
     """
     size_line = ""
     if width_mm is not None and height_mm is not None:
@@ -286,16 +275,14 @@ def _common_output_rules(size_line: str, prompt: str) -> str:
 
 
 def validate_render_result(result: RenderResult) -> None:
-    """レスポンス契約（docs/spec.md 3.1）を検証し、テンプレート変数の欠けを補完する。
+    """レスポンス契約を検証し、テンプレート変数の欠けを補完する。
 
     モック・本番のどちらの経路で生成された結果も同じ契約を満たす必要があるため、
     app/main.py側ではなくこの共通関数で検証する。
 
-    テンプレート変数の欠け（htmlに{{key}}があるのにjsonにキーが無い）は、実AIが空欄
-    セルのキーを落とす挙動により起こりうる。1件の欠けで帳票全体を502にせず、欠けたキーを
-    空文字列で補完してレンダリングを成立させる。空欄セルは空欄のまま描画され、
-    これはモデルが値を出さなかった意図に忠実。逆にhtmlに現れないjsonの余剰キーは、テンプレート
-    適用時に使われないだけで無害なため許容する。
+    テンプレート変数の欠け（htmlに{{key}}があるのにjsonにキーが無い）は、実AIが空欄セルの
+    キーを落とすことで起こりうる。1件の欠けで帳票全体を502にせず、空文字列で補完して描画を
+    成立させる。逆に余剰キーはテンプレート適用時に使われないだけなので許容する。
     """
     if not isinstance(result.html, str) or not result.html.strip():
         raise AIGenerationError("AI生成結果のhtmlが空、または文字列ではありません")
@@ -330,7 +317,7 @@ class MockAIClient:
 
 
 def parse_ai_response(text: str) -> RenderResult:
-    """AIのレスポンステキストをdocs/spec.md 3.1の契約（{"html", "css", "json"}）に沿ってパースする。
+    """AIのレスポンステキストを契約（{"html", "css", "json"}）に沿ってパースする。
 
     契約はプロバイダー非依存のため、Gemini・Claude・OpenAIの全経路で共用する。プロンプトで
     コードブロック記法を禁じてもコードフェンスで囲んで返すことがあるため、除去してからパースする。
@@ -374,22 +361,17 @@ class GeminiAIClient:
     """本番用のGeminiクライアント。USE_MOCK_AI=false時のみ使う。
 
     無料枠（gemini_freeエンジン）と標準プラン（geminiエンジン）で既定モデルを分ける。
-    標準プランはフェーズ5まで自由アクセスのユーザーには提供しない（main.pyのゲート判定）。
     """
 
-    # Google側のモデル廃止に追従して既定が古くならないよう、常に最新安定版を指すエイリアスにしている。
+    # Google側のモデル廃止に追従して既定が古くならないよう、常に最新安定版を指すエイリアスにする。
     _DEFAULT_MODEL_FREE = "gemini-flash-latest"
-    # 標準プラン（有料枠）の既定モデル。実装時点の最新Pro系モデルを想定し、環境変数で上書き可能にする。
     _DEFAULT_MODEL_STANDARD = "gemini-2.5-pro"
 
     # 帳票のHTML+CSS+JSONは長くなりやすい。出力が途中で切れると不正JSONになるため上限を広く取る。
     _MAX_OUTPUT_TOKENS = 16384
 
-    # 未指定だとSDK/httpxの既定（実質無制限）のまま無応答でハングしうる。この値はSDKが
-    # X-Server-TimeoutヘッダーとしてGemini API側へも送信され、サーバー側がこのデッドラインで
-    # 504 DEADLINE_EXCEEDEDを返す（クライアント側の読み取りタイムアウトではない）。
-    # 生成AI系エンジンはrender-worker Lambda（タイムアウト180秒）上の非同期ジョブとして動くため、
-    # S3書き込み・履歴保存の余地を残して180秒よりは短く切る。
+    # 未指定だとSDK既定（実質無制限）のまま無応答でハングしうる。生成AIはタイムアウト180秒の
+    # render-worker Lambda上で動くため、S3書き込み・履歴保存の余地を残して短く切る。
     _HTTP_TIMEOUT_MS = 150_000
 
     def __init__(
@@ -411,11 +393,8 @@ class GeminiAIClient:
                 os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL_FREE).strip()
                 or self._DEFAULT_MODEL_FREE
             )
-        # 思考モデルは思考トークンもmax_output_tokensの予算を消費するため、動的思考が予算の大半を
-        # 食うとJSON本体が出力途中で打ち切られ不正JSONになりうる。thinking_budget=0（思考の完全
-        # 無効化）が理想だが、gemini-flash-latest等の新しいモデルではbudget=0が400 INVALID_ARGUMENT
-        # になり無効化自体を受け付けないため、モデルに予算配分を任せる動的思考（-1）で妥協する。
-        # response_mime_typeでJSON出力を強制し、コードフェンスや前置きで壊れないようにする。
+        # 思考トークンもmax_output_tokensを消費し、JSON本体が途中で打ち切られうる。無効化
+        # （budget=0）は新しいモデルが400 INVALID_ARGUMENTを返すため、動的思考(-1)で妥協する。
         self._config = genai_types.GenerateContentConfig(
             response_mime_type="application/json",
             max_output_tokens=self._MAX_OUTPUT_TOKENS,
@@ -423,8 +402,7 @@ class GeminiAIClient:
         )
 
     def generate(self, prompt: str, pdf: Optional[bytes] = None) -> RenderResult:
-        # PDFがある場合はマルチモーダル入力としてプロンプトと並べて渡す。
-        # PyMuPDF/Docling経由の事前変換は行わず、PDFそのものをGeminiに読ませる。
+        # 事前変換したテキストではなくPDFそのものをマルチモーダル入力として読ませる。
         contents: object = prompt
         if pdf:
             contents = [genai_types.Part.from_bytes(data=pdf, mime_type="application/pdf"), prompt]
@@ -456,10 +434,8 @@ class GeminiAIClient:
             try:
                 return parse_ai_response(text)
             except AIGenerationError:
-                # response_mime_type="application/json"はヒントに過ぎず、Geminiがまれに
-                # 文字列値中のダブルクォート等を正しくエスケープせず不正なJSONを返すことがある
-                # （出力トークン上限到達によるものではなく、生成ノイズ）。同じ入力でも
-                # 再試行すれば正しいJSONが返ることが多いため、503同様に再試行する。
+                # response_mime_typeはヒントに過ぎず、Geminiがまれにエスケープを誤った不正JSONを
+                # 返す。同じ入力でも再試行すれば直ることが多いため、503同様に再試行する。
                 if attempt == _RETRY_MAX_ATTEMPTS:
                     raise
                 time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
@@ -473,8 +449,6 @@ class GeminiAIClient:
 class ClaudeAIClient:
     """本番用のClaude APIクライアント。
 
-    フェーズ5（Supabase Auth導入）までmain.pyのゲート判定により自由アクセスのユーザーからは到達しないが、
-    ANTHROPIC_API_KEYを設定すればすぐに動く状態まで実装しておく（ユーザー要望）。
     PDFはbase64のdocument content blockとして直接添付する（ベータヘッダー不要）。
     """
 
@@ -521,9 +495,7 @@ class OpenAIAIClient:
     """本番用のOpenAI APIクライアント。
 
     Responses API（`client.responses.create`）でPDFをbase64のinput_fileとして直接添付する。
-    フェーズ5まではClaudeAIClient同様main.pyのゲート判定で到達しないが、OPENAI_API_KEYを
-    設定すればすぐ動く状態まで実装しておく。既定モデルはOPENAI_MODEL環境変数で上書きできる
-    （実装時点のモデルカタログは変動が速いため、既定値は運用時に随時更新する）。
+    OpenAIのモデルカタログは変動が速いため、既定モデルはOPENAI_MODELで上書きできるようにする。
     """
 
     _DEFAULT_MODEL = "gpt-5.1"
@@ -591,7 +563,7 @@ def get_ai_client(engine: str = "gemini_free") -> AIClient:
         return OpenAIAIClient(api_key=_require_env("OPENAI_API_KEY"))
 
     if engine == "hybrid":
-        # gemini_free同様、無料枠モデルで自由アクセスのユーザーにも提供する。
+        # gemini_freeと同じ無料枠モデルを使う。
         return GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=False)
 
     raise AIGenerationError(f"未知のAIエンジンです: {engine}")

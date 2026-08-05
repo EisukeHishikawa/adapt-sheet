@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import date
-from typing import Callable, Optional
+from typing import Callable, ContextManager, Optional
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.db import db_session_for_user, get_db_pinger, get_db_session, get_db_session_or_none
+from app.db import (
+    db_session_for_user,
+    get_db_pinger,
+    get_db_session,
+    get_db_session_or_none,
+    get_shared_db_session_opener,
+)
 from app.errors import (
     ai_generation_error_handler,
     ai_service_suspended_error_handler,
@@ -149,6 +155,9 @@ async def render(
     pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Optional[Session] = Depends(get_db_session_or_none),
+    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(
+        get_shared_db_session_opener
+    ),
 ) -> RenderResponse:
     # engine・PDF添付有無のパラメータチェックはPDF読み込み・AI呼び出しより前に行い、
     # 無駄な処理を避ける。
@@ -197,7 +206,8 @@ async def render(
     )
 
     if engine in GEMINI_FREE_QUOTA_ENGINES:
-        _record_gemini_free_usage(db_session)
+        with open_shared_session() as shared_session:
+            _record_gemini_free_usage(shared_session)
 
     _save_history(
         db_session,
@@ -387,6 +397,9 @@ async def process_render_job(
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
     html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
     job_store: JobStore = Depends(get_job_store),
+    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(
+        get_shared_db_session_opener
+    ),
 ) -> dict:
     """render-workerが処理する非同期レンダリングジョブの実体。
 
@@ -442,26 +455,25 @@ async def process_render_job(
         )
         return {"status": "error"}
 
-    # gemini_free/hybridは未ログインでも使えるため、履歴保存（ログイン時のみ）とは別に
-    # user_idの有無に関わらずカウンタ更新が必要かどうかでセッションを開く。カウンタ更新は
-    # 必ずjob_storeへの"done"書き込みより前に済ませる。フロントはジョブ完了を検知した
-    # 直後に無料枠利用回数を取得するため、順序が逆だとその取得がカウンタ更新に対して
+    # 共有カウンタは必ずjob_storeへの"done"書き込みより前に済ませる。フロントはジョブ完了を
+    # 検知した直後に無料枠利用回数を取得するため、順序が逆だとその取得がカウンタ更新に対して
     # 早すぎて未反映の値（1回目の利用時なら0）を拾ってしまう。
-    if payload.engine in GEMINI_FREE_QUOTA_ENGINES or payload.user_id is not None:
+    if payload.engine in GEMINI_FREE_QUOTA_ENGINES:
+        with open_shared_session() as shared_session:
+            _record_gemini_free_usage(shared_session)
+
+    if payload.user_id is not None:
         with db_session_for_user(payload.user_id) as db_session:
-            if payload.engine in GEMINI_FREE_QUOTA_ENGINES:
-                _record_gemini_free_usage(db_session)
-            if payload.user_id is not None:
-                _save_history(
-                    db_session,
-                    SupabaseUser(sub=payload.user_id, email=None),
-                    engine=payload.engine,
-                    html=result.html,
-                    css=result.css,
-                    json_data=result.data,
-                    width_mm=payload.width_mm,
-                    height_mm=payload.height_mm,
-                )
+            _save_history(
+                db_session,
+                SupabaseUser(sub=payload.user_id, email=None),
+                engine=payload.engine,
+                html=result.html,
+                css=result.css,
+                json_data=result.data,
+                width_mm=payload.width_mm,
+                height_mm=payload.height_mm,
+            )
 
     job_store.write_status(
         payload.job_id,
@@ -511,14 +523,17 @@ def _save_history(
 
 def _record_gemini_free_usage(db_session: Optional[Session]) -> None:
     """gemini_free描画成功時にカウンタを更新する。未ログインでもカウント対象のため
-    current_userの有無は問わない。DB保存の失敗は描画結果のレスポンスへ波及させない。"""
+    current_userの有無は問わない。DB保存の失敗は描画結果のレスポンスへ波及させない。
+
+    渡されるのは共有テーブル専用のセッション（get_shared_db_session_opener）で、
+    ログイン中でもauthenticatorロールのまま使う。"""
     if db_session is None:
         return
     try:
         record_gemini_free_usage(db_session)
     except Exception:
         logger.warning("Gemini無料枠の利用回数記録に失敗しました", exc_info=True)
-        # _save_history同様、同一セッションを使い回す後続処理を巻き添えにしないための区切り。
+        # 失敗したトランザクションを抱えたままセッションを返さないための区切り。
         db_session.rollback()
 
 
@@ -530,18 +545,21 @@ class GeminiFreeUsageResponse(BaseModel):
 
 @app.get("/api/usage/gemini-free", response_model=GeminiFreeUsageResponse)
 def get_gemini_free_usage_status(
-    db_session: Optional[Session] = Depends(get_db_session_or_none),
+    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(
+        get_shared_db_session_opener
+    ),
 ) -> GeminiFreeUsageResponse:
     """Gemini無料枠（gemini_free）の当日利用回数。認証不要（匿名利用も対象のため）。"""
-    if db_session is None:
-        return GeminiFreeUsageResponse(
-            date=date.today().isoformat(), count=0, limit=GEMINI_FREE_DAILY_LIMIT
-        )
+    with open_shared_session() as db_session:
+        if db_session is None:
+            return GeminiFreeUsageResponse(
+                date=date.today().isoformat(), count=0, limit=GEMINI_FREE_DAILY_LIMIT
+            )
 
-    status = get_gemini_free_usage(db_session)
-    return GeminiFreeUsageResponse(
-        date=status.date.isoformat(), count=status.count, limit=status.limit
-    )
+        status = get_gemini_free_usage(db_session)
+        return GeminiFreeUsageResponse(
+            date=status.date.isoformat(), count=status.count, limit=status.limit
+        )
 
 
 class HistoryItemResponse(BaseModel):

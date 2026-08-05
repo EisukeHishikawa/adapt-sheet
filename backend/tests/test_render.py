@@ -1,4 +1,5 @@
 import re
+from contextlib import nullcontext
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -6,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.db import get_db_session, get_db_session_or_none
+from app.db import get_db_session, get_db_session_or_none, get_shared_db_session_opener
 from app.main import app
 from app.models import Base
 from app.services.ai_client import AIGenerationError, RenderResult, get_ai_client_factory
@@ -39,11 +40,16 @@ def _override_db(db_session: Session) -> None:
 
     app.dependency_overrides[get_db_session] = _yield_session
     app.dependency_overrides[get_db_session_or_none] = _yield_session
+    # 共有カウンタ用セッションは接続を遅延させるため、セッションではなく開く関数を注入する。
+    app.dependency_overrides[get_shared_db_session_opener] = lambda: (
+        lambda: nullcontext(db_session)
+    )
 
 
 def _clear_db_override() -> None:
     app.dependency_overrides.pop(get_db_session, None)
     app.dependency_overrides.pop(get_db_session_or_none, None)
+    app.dependency_overrides.pop(get_shared_db_session_opener, None)
 
 
 def _override_ai_client(fake_client) -> None:
@@ -578,6 +584,39 @@ def test_render_increments_gemini_free_usage_for_anonymous_user():
 
         status = get_gemini_free_usage(db_session)
         assert status.count == 1
+    finally:
+        _clear_db_override()
+
+
+def test_render_records_gemini_free_usage_on_shared_session_when_logged_in(monkeypatch):
+    # gemini_free_usageはauthenticatorロールにだけ権限を与えたRLS付きテーブルのため、
+    # ログイン中でもauthenticatedへ切り替えたセッションでは書けない。履歴保存とは別の
+    # 共有セッションを使うことをここで固定する。
+    from app.services.history import list_history
+
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    user_session = _sqlite_session()
+    shared_session = _sqlite_session()
+
+    def _yield_user_session():
+        yield user_session
+
+    app.dependency_overrides[get_db_session] = _yield_user_session
+    app.dependency_overrides[get_db_session_or_none] = _yield_user_session
+    app.dependency_overrides[get_shared_db_session_opener] = lambda: (
+        lambda: nullcontext(shared_session)
+    )
+    try:
+        response = client.post(
+            "/api/render",
+            data={"engine": "gemini_free"},
+            headers={"Authorization": _make_bearer_token("test-secret")},
+        )
+        assert response.status_code == 200
+
+        assert get_gemini_free_usage(shared_session).count == 1
+        assert get_gemini_free_usage(user_session).count == 0
+        assert len(list_history(user_session, user_id="user-123")) == 1
     finally:
         _clear_db_override()
 

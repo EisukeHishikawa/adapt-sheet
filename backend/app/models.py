@@ -45,8 +45,11 @@ class RenderHistory(Base):
 
 
 class GeminiFreeUsage(Base):
-    """Gemini無料枠（gemini_free）の利用回数。全ユーザー共有の日次カウンタ（JST基準）で、
-    個人データではないためRLSは適用しない（未ログインでもカウント対象のため）。"""
+    """Gemini無料枠（gemini_free）の利用回数。全ユーザー共有の日次カウンタ（JST基準）。
+
+    未ログインでもカウント対象で行の所有者が無いため、RLSは行を絞るのではなく
+    `authenticator`ロールにだけ権限とポリシーを与える形で掛ける（SupabaseのData API経由で
+    触れないようにするため）。"""
 
     __tablename__ = "gemini_free_usage"
 

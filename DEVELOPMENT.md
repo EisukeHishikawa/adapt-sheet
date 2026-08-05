@@ -122,8 +122,8 @@ AdaptSheet AIをどの順序で作ったかの記録。フェーズ単位で「�
 - [x] 本番エンドポイントへ`GET /`・`POST /api/warmup`を実行し、フロント配信とbackend→docling/pdf2htmlex/DBの疎通を確認
 
 ### ステップ 26: GitHub ActionsによるCI/CD構築
-- [x] `.github/workflows/ci.yml`: PR作成時・mainマージ時にフロント・バック・docling/pdf2htmlexのテストを自動実行。ローカルと同じ`docker-compose.yml`を使い実行結果を乖離させない
-- [x] mainのブランチ保護に必須ステータスチェック（`backend`/`docling`/`pdf2htmlex`/`frontend`）と`strict`を設定
+- [x] `.github/workflows/ci.yml`: PR作成時・mainマージ時にフロント・バックのテストを自動実行。ローカルと同じ`docker-compose.yml`を使い実行結果を乖離させない
+- [x] mainのブランチ保護に必須ステータスチェック（`backend`/`frontend`）と`strict`を設定
 - [x] `.github/workflows/cd.yml`: mainへのpushでOIDC認証→イメージのビルド・push→`terraform apply`→フロントのS3同期・CloudFront無効化→スモークテストまでを自動化
 
 ---

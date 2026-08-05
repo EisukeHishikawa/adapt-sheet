@@ -7,72 +7,113 @@ import json
 import time
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text as sa_text
 from sqlalchemy.orm import Session
 
 import app.db as db_module
 from app.db import apply_rls_context, get_db_session_or_none
 
 
-class _FakeDialect:
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-
-class _FakeBind:
-    def __init__(self, dialect_name: str) -> None:
-        self.dialect = _FakeDialect(dialect_name)
-
-
-class _RecordingSession:
+class _RecordingConnection:
     """executeへ渡されたSQLと引数だけを記録する最小のスタブ。"""
 
-    def __init__(self, dialect_name: str) -> None:
-        self.bind = _FakeBind(dialect_name)
+    def __init__(self) -> None:
         self.statements: list[tuple[str, dict]] = []
 
     def execute(self, statement, params=None):
         self.statements.append((str(statement), params or {}))
 
 
+def _sqlite_session_pretending_to_be_postgresql(monkeypatch) -> Session:
+    """SQLite上で、PostgreSQL向けの分岐だけを通すセッション。
+
+    実際のRLS用SQL（_set_rls_context）はSQLiteで実行できないため、呼び出し側は
+    必ずそちらを差し替えて使う。
+    """
+    engine = create_engine("sqlite://")
+    monkeypatch.setattr(engine.dialect, "name", "postgresql")
+    return Session(engine)
+
+
 def test_sets_jwt_claims_and_switches_role_on_postgresql():
-    session = _RecordingSession("postgresql")
+    connection = _RecordingConnection()
 
-    apply_rls_context(session, "11111111-2222-3333-4444-555555555555")
+    db_module._set_rls_context(
+        connection, json.dumps({"sub": "11111111-2222-3333-4444-555555555555"})
+    )
 
-    sql_texts = [sql for sql, _ in session.statements]
+    sql_texts = [sql for sql, _ in connection.statements]
     assert "set_config('request.jwt.claims'" in sql_texts[0]
     # auth.uid()はrequest.jwt.claimsのsubを読むため、subを含むJSONで渡す必要がある。
-    assert json.loads(session.statements[0][1]["claims"]) == {
+    assert json.loads(connection.statements[0][1]["claims"]) == {
         "sub": "11111111-2222-3333-4444-555555555555"
     }
     # ロール切り替えはクレーム設定の後（切り替え前に値を入れておく）。
     assert sql_texts[1] == "SET LOCAL ROLE authenticated"
 
 
-def test_does_nothing_on_sqlite():
-    """pytestはSQLiteで走るため、RLS用のSQLを発行してはならない（発行すると全テストが壊れる）。"""
-    session = _RecordingSession("sqlite")
+def test_reapplies_context_on_every_transaction(monkeypatch):
+    """commitでSET LOCALが失われるため、トランザクション開始のたびに再設定する。
 
-    apply_rls_context(session, "user-1")
+    1度きりの設定だと、commit後に同じセッションで走る処理（save_historyのrefresh等）が
+    authenticatorロールのままRLS対象テーブルへ触れてしまい権限エラーになる。
+    """
+    applied: list[str] = []
+    monkeypatch.setattr(
+        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
+    )
 
-    assert session.statements == []
-
-
-def test_does_nothing_when_session_has_no_bind():
-    session = _RecordingSession("postgresql")
-    session.bind = None
-
-    apply_rls_context(session, "user-1")
-
-    assert session.statements == []
-
-
-def test_real_sqlite_session_is_unaffected():
-    """スタブではなく実Sessionでも、SQLite接続なら例外なくスキップされる。"""
-    engine = create_engine("sqlite://")
-    with Session(engine) as session:
+    with _sqlite_session_pretending_to_be_postgresql(monkeypatch) as session:
         apply_rls_context(session, "user-1")
+
+        session.execute(sa_text("SELECT 1"))
+        session.commit()
+        session.execute(sa_text("SELECT 1"))
+        session.commit()
+
+    assert applied == [json.dumps({"sub": "user-1"})] * 2
+
+
+def test_applies_context_immediately_when_transaction_already_open(monkeypatch):
+    applied: list[str] = []
+    monkeypatch.setattr(
+        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
+    )
+
+    with _sqlite_session_pretending_to_be_postgresql(monkeypatch) as session:
+        session.execute(sa_text("SELECT 1"))
+
+        apply_rls_context(session, "user-1")
+
+    assert applied == [json.dumps({"sub": "user-1"})]
+
+
+def test_does_nothing_on_sqlite(monkeypatch):
+    """pytestはSQLiteで走るため、RLS用のSQLを発行してはならない（発行すると全テストが壊れる）。"""
+    applied: list[str] = []
+    monkeypatch.setattr(
+        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
+    )
+
+    with Session(create_engine("sqlite://")) as session:
+        apply_rls_context(session, "user-1")
+        session.execute(sa_text("SELECT 1"))
+
+    assert applied == []
+
+
+def test_does_nothing_when_session_has_no_bind(monkeypatch):
+    applied: list[str] = []
+    monkeypatch.setattr(
+        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
+    )
+
+    class _BindlessSession:
+        bind = None
+
+    apply_rls_context(_BindlessSession(), "user-1")
+
+    assert applied == []
 
 
 def test_close_session_calls_close_on_the_underlying_session():

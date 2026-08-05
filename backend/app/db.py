@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from typing import Callable, Iterator, Optional
 
 from fastapi import Depends
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Connection, Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.services.auth import SupabaseUser, get_current_user
@@ -64,21 +64,39 @@ def _get_session_factory() -> sessionmaker:
     return _session_factory
 
 
+def _set_rls_context(connection: Connection, claims: str) -> None:
+    # auth.uid()はrequest.jwt.claimsのsubを読む（Supabaseの標準関数）。
+    connection.execute(
+        text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims}
+    )
+    # 切り替え後はRLSの対象になる。ロール名は固定値のためリテラルで埋める。
+    connection.execute(text("SET LOCAL ROLE authenticated"))
+
+
 def apply_rls_context(session: Session, user_id: str) -> None:
-    """RLSポリシーが参照するユーザーIDを、このトランザクションに限って設定する。
+    """RLSポリシーが参照するユーザーIDを、このセッションの全トランザクションへ設定する。
+
+    SET LOCALもset_config(..., is_local=true)もトランザクション終了で失われるため、
+    トランザクション開始のたびに再設定する。1度きりの設定にすると、commitを挟んで同じ
+    セッションを使い続ける処理（save_historyのrefresh等）が`authenticator`ロールへ
+    戻った状態で走り、RLS対象テーブルへ到達できなくなる。
 
     pytestはSQLite（RLS非対応）で走るため、PostgreSQL以外では何もしない。SET LOCALは
     プレースホルダを取れないため、値を渡す側はset_config(..., is_local=true)を使う。
     """
     if session.bind is None or session.bind.dialect.name != "postgresql":
         return
-    # auth.uid()はrequest.jwt.claimsのsubを読む（Supabaseの標準関数）。
-    session.execute(
-        text("SELECT set_config('request.jwt.claims', :claims, true)"),
-        {"claims": json.dumps({"sub": user_id})},
-    )
-    # 切り替え後はRLSの対象になる。ロール名は固定値のためリテラルで埋める。
-    session.execute(text("SET LOCAL ROLE authenticated"))
+
+    claims = json.dumps({"sub": user_id})
+
+    @event.listens_for(session, "after_begin")
+    def _reapply(_session: Session, _transaction, connection: Connection) -> None:
+        _set_rls_context(connection, claims)
+
+    # 既にトランザクションが始まっているセッションを渡された場合は、その分を今設定する
+    # （after_beginは次のトランザクションからしか呼ばれないため）。
+    if session.in_transaction():
+        _set_rls_context(session.connection(), claims)
 
 
 def ping_database() -> bool:

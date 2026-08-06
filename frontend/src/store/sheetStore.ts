@@ -14,6 +14,8 @@ import {
 import type { HistoryItemResponse, RenderJobStatusResponse } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { formatCss, formatHtml } from '@/lib/codeFormatter'
+import { AI_ENGINES, GEMINI_FREE_QUOTA_ENGINES } from '@/lib/engines'
+import type { RenderEngineId } from '@/lib/engines'
 
 // 定型サイズの用紙寸法。tateは長辺、yokoは短辺。
 export const SIZE_PRESETS = {
@@ -25,30 +27,6 @@ export const SIZE_PRESETS = {
 export type SizePresetName = keyof typeof SIZE_PRESETS
 export type Orientation = 'tate' | 'yoko'
 export type Dimensions = { widthMm: number; heightMm: number }
-
-// backendのRenderEngineと同じ値。アイコン・説明文などの表示情報はEngineSelect.tsxが持つ。
-export type RenderEngineId =
-  | 'gemini_free'
-  | 'gemini'
-  | 'claude'
-  | 'openai'
-  | 'hybrid'
-  | 'docling'
-  | 'pdf2htmlex'
-  | 'pymupdf'
-
-// 生成AIは20〜60秒以上かかることがあり、API Gatewayの29秒固定タイムアウトを受けるため、
-// この集合のengineだけ非同期ジョブ＋ポーリングで描画する。変換エンジンは高速なため対象外。
-const AI_ENGINES: ReadonlySet<RenderEngineId> = new Set([
-  'gemini_free',
-  'gemini',
-  'claude',
-  'openai',
-  'hybrid',
-])
-
-// hybridもgemini_freeと同じ無料枠モデルを使うため、同じ共有カウンタの表示対象にする。
-const GEMINI_FREE_QUOTA_ENGINES: ReadonlySet<RenderEngineId> = new Set(['gemini_free', 'hybrid'])
 
 // ポーリング間隔。warmupStoreと同じ発想でテスト側はvi.useFakeTimersでスキップする。
 const RENDER_JOB_POLL_INTERVAL_MS = 2000

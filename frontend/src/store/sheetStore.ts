@@ -150,7 +150,7 @@ function messageForStatus(status: number): string {
     case 422:
       return 'PDFの解析に失敗しました。ファイルの内容をご確認ください。'
     case 403:
-      return '現在、この生成AIは登録ユーザーのみご利用いただけます。アカウント機能の追加までお待ちください。'
+      return 'この生成AIは登録ユーザーのみご利用いただけます。Googleアカウントでログインしてお試しください。'
     case 429:
       return 'リクエストが混み合っています。しばらくしてから再度お試しください。'
     case 502:

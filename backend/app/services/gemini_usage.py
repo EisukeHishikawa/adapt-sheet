@@ -17,9 +17,6 @@ from app.models import GeminiFreeUsage
 
 GEMINI_FREE_DAILY_LIMIT = 10
 
-# hybridもgemini_freeと同じ無料枠モデルを使うため、同じカウンタの対象にする。
-GEMINI_FREE_QUOTA_ENGINES: frozenset = frozenset({"gemini_free", "hybrid"})
-
 _JST = ZoneInfo("Asia/Tokyo")
 
 

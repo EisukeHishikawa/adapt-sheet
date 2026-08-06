@@ -14,7 +14,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Literal, Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 import anthropic
 import openai
@@ -36,23 +36,6 @@ _RETRY_MAX_ATTEMPTS = 3
 _RETRY_BACKOFF_SECONDS = 2.0
 
 logger = logging.getLogger("app.ai")
-
-RenderEngine = Literal[
-    "gemini_free", "gemini", "claude", "openai", "hybrid", "docling", "pdf2htmlex", "pymupdf"
-]
-
-# 無料枠を超えるAPI利用が発生するため、ログイン済みユーザーにのみ提供する。
-GATED_ENGINES: frozenset = frozenset({"gemini", "claude", "openai"})
-# LLMがHTML/CSS/JSONを生成する。hybridはPyMuPDF・Doclingの抽出結果とPDFを
-# gemini_freeと同じ無料枠モデルへ渡すため、ゲート対象外。
-AI_ENGINES: frozenset = frozenset({"gemini_free", "gemini", "claude", "openai", "hybrid"})
-# AIを介さず、変換結果をそのまま描画結果にする。
-CONVERTER_ENGINES: frozenset = frozenset({"docling", "pdf2htmlex", "pymupdf"})
-# 未知のengine値をPDF読み込み等の重い処理より前に弾くための許可リスト。
-ALL_ENGINES: frozenset = AI_ENGINES | CONVERTER_ENGINES
-# hybridは統合の入力として、CONVERTER_ENGINESは変換対象としてPDFそのものが要る。
-PDF_REQUIRED_ENGINES: frozenset = CONVERTER_ENGINES | frozenset({"hybrid"})
-
 
 def _log_ai_payload(message: str, **fields: str) -> None:
     """生成AIの入出力全文をログへ出す（LOG_AI_PAYLOAD有効時のみ）。
@@ -538,6 +521,17 @@ def _require_env(name: str) -> str:
     return value
 
 
+# engines.pyのAI_ENGINESと1対1で対応させる（対応漏れはtests/test_engines.pyが検出する）。
+# hybridはgemini_freeと同じ無料枠モデルを使う。
+_AI_CLIENT_BUILDERS: dict[str, Callable[[], AIClient]] = {
+    "gemini_free": lambda: GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=False),
+    "gemini": lambda: GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=True),
+    "claude": lambda: ClaudeAIClient(api_key=_require_env("ANTHROPIC_API_KEY")),
+    "openai": lambda: OpenAIAIClient(api_key=_require_env("OPENAI_API_KEY")),
+    "hybrid": lambda: GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=False),
+}
+
+
 def get_ai_client(engine: str = "gemini_free") -> AIClient:
     """FastAPIのDependsとして利用するファクトリ（get_ai_client_factory経由）。
 
@@ -548,23 +542,10 @@ def get_ai_client(engine: str = "gemini_free") -> AIClient:
     if use_mock:
         return MockAIClient()
 
-    if engine == "gemini_free":
-        return GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=False)
-
-    if engine == "gemini":
-        return GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=True)
-
-    if engine == "claude":
-        return ClaudeAIClient(api_key=_require_env("ANTHROPIC_API_KEY"))
-
-    if engine == "openai":
-        return OpenAIAIClient(api_key=_require_env("OPENAI_API_KEY"))
-
-    if engine == "hybrid":
-        # gemini_freeと同じ無料枠モデルを使う。
-        return GeminiAIClient(api_key=_require_env("GEMINI_API_KEY"), standard=False)
-
-    raise AIGenerationError(f"未知のAIエンジンです: {engine}")
+    builder = _AI_CLIENT_BUILDERS.get(engine)
+    if builder is None:
+        raise AIGenerationError(f"未知のAIエンジンです: {engine}")
+    return builder()
 
 
 def get_ai_client_factory() -> Callable[[str], AIClient]:

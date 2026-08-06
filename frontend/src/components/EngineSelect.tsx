@@ -104,7 +104,7 @@ export function EngineSelect() {
               <span className="flex items-center gap-1 font-medium">
                 {option.label}
                 {option.gated && (
-                  <Lock aria-label="要アカウント登録（フェーズ5で利用可能予定）" className="size-3 text-muted-foreground" />
+                  <Lock aria-label="要ログイン" className="size-3 text-muted-foreground" />
                 )}
               </span>
               <span className="text-xs text-muted-foreground">{option.description}</span>

@@ -5,10 +5,20 @@
 実装（例外ハンドラ）より先に期待値を固定するTDDの位置づけ。
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.errors import status_code_for
 from app.main import app
-from app.services.ai_client import RenderResult, get_ai_client_factory
+from app.services.ai_client import (
+    AIGenerationError,
+    AIServiceSuspendedError,
+    AIServiceUnavailableError,
+    RenderResult,
+    get_ai_client_factory,
+)
+from app.services.job_store import get_job_store
+from app.services.pdf_common import PDFConversionError
 
 client = TestClient(app)
 
@@ -104,3 +114,58 @@ def test_success_response_has_request_id_header():
     response = client.post("/api/render", data={})
     assert response.status_code == 200
     assert response.headers.get("X-Request-ID")
+
+
+class _RecordingJobStore:
+    def __init__(self) -> None:
+        self.statuses: dict[str, dict] = {}
+
+    def write_status(self, job_id: str, payload: dict) -> None:
+        self.statuses[job_id] = payload
+
+
+_DOMAIN_ERROR_CASES = [
+    (AIGenerationError, 502, "AI_GENERATION_ERROR"),
+    (AIServiceUnavailableError, 503, "AI_SERVICE_UNAVAILABLE"),
+    (AIServiceSuspendedError, 501, "AI_SERVICE_SUSPENDED"),
+]
+
+
+@pytest.mark.parametrize("error_type, expected_status, expected_code", _DOMAIN_ERROR_CASES)
+def test_domain_error_maps_identically_in_sync_and_job_paths(
+    error_type, expected_status, expected_code
+):
+    """同期経路（例外ハンドラ経由）と非同期ジョブ経路（ハンドラを通らない）が、同じ例外に対して
+    同じステータス・同じ文言を返すことを保証する。両者が別々の対応表を持つと片方だけ古くなる。
+    """
+
+    class _FailingAIClient:
+        def generate(self, prompt: str, pdf=None) -> RenderResult:
+            raise error_type("AI呼び出しに失敗しました（テスト用）")
+
+    job_store = _RecordingJobStore()
+    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FailingAIClient())
+    app.dependency_overrides[get_job_store] = lambda: job_store
+    try:
+        sync_response = client.post("/api/render", data={})
+        job_response = client.post(
+            "/internal/render-jobs/process",
+            json={"job_id": "job-1", "engine": "gemini_free"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_ai_client_factory, None)
+        app.dependency_overrides.pop(get_job_store, None)
+
+    assert sync_response.status_code == expected_status
+    assert sync_response.json()["error"]["code"] == expected_code
+    assert job_response.status_code == 202
+    assert job_store.statuses["job-1"]["status"] == "error"
+    assert job_store.statuses["job-1"]["message"] == sync_response.json()["error"]["message"]
+
+
+def test_status_code_for_maps_domain_errors_and_falls_back_to_500():
+    assert status_code_for(PDFConversionError("テスト用")) == 422
+    assert status_code_for(AIServiceUnavailableError("テスト用")) == 503
+    assert status_code_for(AIServiceSuspendedError("テスト用")) == 501
+    assert status_code_for(AIGenerationError("テスト用")) == 502
+    assert status_code_for(ValueError("テスト用")) == 500

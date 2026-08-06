@@ -443,8 +443,6 @@ class GeminiAIClient:
 
         raise AIGenerationError("Gemini API呼び出しに失敗しました: リトライ上限に達しました")
 
-        raise AIGenerationError("Gemini API呼び出しに失敗しました")
-
 
 class ClaudeAIClient:
     """本番用のClaude APIクライアント。

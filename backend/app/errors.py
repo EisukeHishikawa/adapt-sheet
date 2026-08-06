@@ -15,6 +15,12 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.request_context import get_request_id
+from app.services.ai_client import (
+    AIGenerationError,
+    AIServiceSuspendedError,
+    AIServiceUnavailableError,
+)
+from app.services.pdf_common import PDFConversionError
 
 logger = logging.getLogger("app.errors")
 
@@ -101,10 +107,30 @@ def _domain_error_handler(
     return handler
 
 
+# ドメイン例外→(ステータス, ログ文言)の唯一の対応表。例外ハンドラを通る同期経路と、
+# ハンドラを通らない非同期ジョブ経路（status_code_for）の双方がここだけを参照する。
+# サブクラスを先に置き、status_code_forは最初に一致した行を採る。
+_DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
+    (PDFConversionError, 422, "PDF conversion failed"),
+    (AIServiceUnavailableError, 503, "AI service unavailable"),
+    (AIServiceSuspendedError, 501, "AI service suspended"),
+    (AIGenerationError, 502, "AI generation failed"),
+)
+
 # ドメイン例外はmain.py内でHTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
-pdf_conversion_error_handler = _domain_error_handler(422, "PDF conversion failed")
-ai_generation_error_handler = _domain_error_handler(502, "AI generation failed")
-# AIGenerationErrorのサブクラス専用のハンドラ。Starletteの探索はMRO順のため、
-# 登録順に関わらずこちらが優先される。
-ai_service_unavailable_error_handler = _domain_error_handler(503, "AI service unavailable")
-ai_service_suspended_error_handler = _domain_error_handler(501, "AI service suspended")
+# Starletteのハンドラ探索はMRO順のため、登録順に関わらずサブクラス側が優先される。
+DOMAIN_ERROR_HANDLERS: dict[type[Exception], Callable[[Request, Exception], Awaitable[JSONResponse]]] = {
+    exc_type: _domain_error_handler(status_code, log_message)
+    for exc_type, status_code, log_message in _DOMAIN_ERRORS
+}
+
+
+def status_code_for(exc: Exception) -> int:
+    """ドメイン例外に対応するHTTPステータスを返す。表に無い例外は500へ落とす。
+
+    例外ハンドラが働かない経路（非同期レンダリングジョブ）でも、同期経路と同じ対応表を引くための入口。
+    """
+    for exc_type, status_code, _ in _DOMAIN_ERRORS:
+        if isinstance(exc, exc_type):
+            return status_code
+    return 500

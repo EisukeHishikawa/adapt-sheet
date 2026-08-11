@@ -6,6 +6,8 @@
 
 本番環境: https://d3lal8vccjsy5y.cloudfront.net/
 
+> 本サイトは技術キャッチアップを目的として公開しているため、予告なく閉鎖する予定。
+
 ![PDFをアップロードし、エンジンを選んで描画し、リアルタイムプレビューと履歴に反映されるまでのデモ](./docs/images/demo.gif)
 
 詳細な構想・要件は [`planning/brainstorm.md`](./planning/brainstorm.md)、開発の進め方は [`DEVELOPMENT.md`](./DEVELOPMENT.md) を参照。

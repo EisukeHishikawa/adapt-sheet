@@ -17,12 +17,10 @@ from app.db import (
     get_shared_db_session_opener,
 )
 from app.errors import (
-    ai_generation_error_handler,
-    ai_service_suspended_error_handler,
-    ai_service_unavailable_error_handler,
+    DOMAIN_ERROR_HANDLERS,
     build_error_payload,
     http_exception_handler,
-    pdf_conversion_error_handler,
+    status_code_for,
     validation_exception_handler,
 )
 from app.logging_config import configure_logging
@@ -32,12 +30,6 @@ from app.services.auth import SupabaseUser, get_current_user
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
-    AIServiceSuspendedError,
-    AIServiceUnavailableError,
-    ALL_ENGINES,
-    CONVERTER_ENGINES,
-    GATED_ENGINES,
-    PDF_REQUIRED_ENGINES,
     RenderResult,
     build_hybrid_prompt,
     build_prompt,
@@ -45,9 +37,15 @@ from app.services.ai_client import (
     validate_render_result,
 )
 from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
+from app.services.engines import (
+    ALL_ENGINES,
+    CONVERTER_ENGINES,
+    GATED_ENGINES,
+    GEMINI_FREE_QUOTA_ENGINES,
+    PDF_REQUIRED_ENGINES,
+)
 from app.services.gemini_usage import (
     GEMINI_FREE_DAILY_LIMIT,
-    GEMINI_FREE_QUOTA_ENGINES,
     get_gemini_free_usage,
     record_gemini_free_usage,
 )
@@ -63,6 +61,7 @@ from app.services.worker_invoker import WorkerInvoker, get_worker_invoker
 
 logger = logging.getLogger("app.history")
 warmup_logger = logging.getLogger("app.warmup")
+job_logger = logging.getLogger("app.render_jobs")
 
 # アプリ生成前に設定し、起動〜リクエスト処理まで一貫してJSON構造化ログにする。
 configure_logging()
@@ -78,10 +77,8 @@ app.add_middleware(RequestContextMiddleware)
 # StarletteHTTPExceptionで登録することで、FastAPI/Starlette双方のHTTPExceptionを捕捉する。
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
-app.add_exception_handler(PDFConversionError, pdf_conversion_error_handler)
-app.add_exception_handler(AIGenerationError, ai_generation_error_handler)
-app.add_exception_handler(AIServiceUnavailableError, ai_service_unavailable_error_handler)
-app.add_exception_handler(AIServiceSuspendedError, ai_service_suspended_error_handler)
+for _exc_type, _handler in DOMAIN_ERROR_HANDLERS.items():
+    app.add_exception_handler(_exc_type, _handler)
 
 
 # response_modelを明示しないと、FastAPIが型を推論できずopenapi.json（フロントの型生成元）の
@@ -96,8 +93,8 @@ class RenderResponse(BaseModel):
 
 
 def _validate_engine(engine: str) -> None:
-    """未知のengine値を弾く。ai_client.get_ai_clientのif/elifチェーン末尾でも検出できるが、
-    それより前段（PDF読み込み・非同期ジョブ起動等）で無駄な処理をさせないためここで先に弾く。
+    """未知のengine値を弾く。ai_client.get_ai_clientでも検出できるが、それより前段
+    （PDF読み込み・非同期ジョブ起動等）で無駄な処理をさせないためここで先に弾く。
     """
     if engine not in ALL_ENGINES:
         raise HTTPException(status_code=400)
@@ -421,22 +418,16 @@ async def process_render_job(
         job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except (PDFConversionError, AIGenerationError) as exc:
-        if isinstance(exc, PDFConversionError):
-            status_code = 422
-        elif isinstance(exc, AIServiceUnavailableError):
-            status_code = 503
-        elif isinstance(exc, AIServiceSuspendedError):
-            status_code = 501
-        else:
-            status_code = 502
-        logger.warning(
+        # 例外ハンドラを通らない経路のため、同期経路と同じ対応表（app/errors.py）を明示的に引く。
+        status_code = status_code_for(exc)
+        job_logger.warning(
             "Render job failed: %s", exc, extra={"status_code": status_code, "job_id": payload.job_id}
         )
         message = build_error_payload(status_code)["error"]["message"]
         job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except Exception:
-        logger.exception(
+        job_logger.exception(
             "非同期レンダリングジョブの処理に失敗しました", extra={"job_id": payload.job_id}
         )
         job_store.write_status(

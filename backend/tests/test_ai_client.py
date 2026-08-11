@@ -22,6 +22,7 @@ from app.services.ai_client import (
     validate_render_result,
 )
 
+
 def test_build_prompt_includes_context():
     prompt = build_prompt(
         prompt="請求書のレイアウトにして",
@@ -180,9 +181,7 @@ def test_build_hybrid_prompt_warns_against_injection_in_extracted_html():
 
 def test_build_hybrid_prompt_shares_output_rules_with_build_prompt():
     # フォントサイズ上限・プレースホルダ規約はbuild_promptと同じ内容を共有する契約を固定する。
-    prompt = build_hybrid_prompt(
-        prompt="x", width_mm=None, height_mm=None, pymupdf_html="", docling_html=""
-    )
+    prompt = build_hybrid_prompt(prompt="x", width_mm=None, height_mm=None, pymupdf_html="", docling_html="")
 
     assert "invoice-items" in prompt
     assert "border-collapse" in prompt
@@ -260,9 +259,7 @@ def test_validate_render_result_rejects_non_dict_json():
 def test_validate_render_result_fills_missing_json_keys_with_empty_string():
     # 実AIは空欄セルのプレースホルダに対応するキーを落とすことがある。1件のキー漏れで
     # 帳票全体を502にせず、欠けたキーを空文字列で補完してレンダリングを成立させる。
-    result = RenderResult(
-        html="<p>{{name}}{{missing_key}}</p>", css="body{}", data={"name": "値"}
-    )
+    result = RenderResult(html="<p>{{name}}{{missing_key}}</p>", css="body{}", data={"name": "値"})
     validate_render_result(result)
     assert result.data == {"name": "値", "missing_key": ""}
 
@@ -627,9 +624,7 @@ def test_gemini_client_raises_clear_error_when_output_truncated():
     # 出力がmax_output_tokensの上限で打ち切られた場合、opaqueな「不正JSON」ではなく、原因（上限到達）が
     # 分かるエラーを返し、将来の再発時に切り分け可能にする。
     truncated_json = '{"html": "<p>{{x}}</p>", "css": "body'
-    models = _StubGeminiModels(
-        failures=0, response_text=truncated_json, finish_reason="MAX_TOKENS"
-    )
+    models = _StubGeminiModels(failures=0, response_text=truncated_json, finish_reason="MAX_TOKENS")
     client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
 
     with pytest.raises(AIGenerationError, match="上限"):

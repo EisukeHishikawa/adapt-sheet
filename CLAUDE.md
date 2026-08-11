@@ -36,6 +36,7 @@ mise ls         # 適用中のバージョンを確認
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
+docker compose exec backend ruff format .                # 整形（CIは`ruff format --check .`で適用漏れを検出）
 docker compose exec backend python scripts/export_openapi.py # openapi.jsonを書き出す（型同期の入力）
 docker compose exec backend alembic upgrade head          # 生成履歴用DB（backend/migrations）のマイグレーション適用。RLSも有効化される
 docker compose exec backend alembic revision --autogenerate -m "説明" # app/models.py変更時のマイグレーション作成

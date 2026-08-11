@@ -21,9 +21,7 @@ if config.config_file_name is not None:
 # 実行時のDATABASE_URLはRLSを迂回しないauthenticatorロールを使うが、テーブル作成・ポリシー定義には
 # 所有者権限が要るため、マイグレーションはMIGRATION_DATABASE_URL（postgresロール）を優先する。
 # 設定が無い環境では従来どおりDATABASE_URLへフォールバックする。
-database_url = (
-    os.getenv("MIGRATION_DATABASE_URL", "").strip() or os.getenv("DATABASE_URL", "").strip()
-)
+database_url = os.getenv("MIGRATION_DATABASE_URL", "").strip() or os.getenv("DATABASE_URL", "").strip()
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
@@ -73,9 +71,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

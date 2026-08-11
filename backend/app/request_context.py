@@ -11,9 +11,7 @@ from typing import Optional
 
 # default=Noneにすることで、ミドルウェアを通らない経路（起動時処理・単体呼び出し等）でも
 # 例外にならず「相関IDなし」を表現できる。
-_request_id_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    "request_id", default=None
-)
+_request_id_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar("request_id", default=None)
 
 
 def get_request_id() -> Optional[str]:

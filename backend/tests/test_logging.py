@@ -52,7 +52,7 @@ def test_unhandled_exception_is_logged_with_traceback(caplog):
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise ValueError("想定外の内部エラー（テスト用）")
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _BrokenAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _BrokenAIClient()
     try:
         with caplog.at_level(logging.ERROR, logger="app.access"):
             response = client.post("/api/render", data={})
@@ -130,9 +130,7 @@ def test_access_log_records_user_id_for_authenticated_request(monkeypatch, caplo
     with caplog.at_level(logging.INFO, logger="app.access"):
         client.post("/api/render", data={}, headers={"Authorization": f"Bearer {token}"})
 
-    access_logs = [
-        r for r in caplog.records if r.name == "app.access" and r.getMessage() == "request completed"
-    ]
+    access_logs = [r for r in caplog.records if r.name == "app.access" and r.getMessage() == "request completed"]
     assert len(access_logs) == 1
     assert access_logs[0].user_id == "user-xyz"
 
@@ -141,8 +139,6 @@ def test_access_log_omits_user_id_for_anonymous_request(caplog):
     with caplog.at_level(logging.INFO, logger="app.access"):
         client.post("/api/render", data={})
 
-    access_logs = [
-        r for r in caplog.records if r.name == "app.access" and r.getMessage() == "request completed"
-    ]
+    access_logs = [r for r in caplog.records if r.name == "app.access" and r.getMessage() == "request completed"]
     assert len(access_logs) == 1
     assert not hasattr(access_logs[0], "user_id")

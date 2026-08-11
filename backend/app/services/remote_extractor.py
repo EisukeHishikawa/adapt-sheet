@@ -55,13 +55,9 @@ class RemoteHtmlExtractor:
     # このLambdaが値"aws_sigv4"を持つときのみSigV4署名する（未定義/他の値なら常に無署名）。
     _auth_env_var: str = ""
 
-    def __init__(
-        self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None
-    ) -> None:
+    def __init__(self, base_url: Optional[str] = None, client: Optional[httpx.Client] = None) -> None:
         # テスト側がhttpx.MockTransportを注入したClientやカスタムURLへ差し替えられるよう引数で受ける。
-        self._base_url = (
-            base_url or os.environ.get(self._env_var, self._default_url)
-        ).rstrip("/")
+        self._base_url = (base_url or os.environ.get(self._env_var, self._default_url)).rstrip("/")
         self._client = client or httpx.Client()
 
     def convert_to_html(self, filename: str, content: bytes) -> str:

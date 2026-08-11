@@ -23,8 +23,11 @@ jobs:
         run: docker compose build backend
       - name: pytest
         run: docker compose run --rm --no-deps backend pytest
-      - name: ruff
+      - name: ruff check
         run: docker compose run --rm --no-deps backend ruff check .
+      # 整形はエディタの保存時に自動適用されるため、適用漏れをここで検出する（書き換えはしない）。
+      - name: ruff format --check
+        run: docker compose run --rm --no-deps backend ruff format --check .
 
   frontend:
     runs-on: ubuntu-latest

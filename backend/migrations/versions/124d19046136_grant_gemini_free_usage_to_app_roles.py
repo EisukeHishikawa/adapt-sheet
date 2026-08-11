@@ -8,14 +8,15 @@ gemini_free_usageは個人データを持たない全ユーザー共有のカウ
 RLSは掛けない。未ログイン（authenticatorロールのまま）でもカウント対象のため、
 authenticator/authenticated両ロールへ直接GRANTする（app/db.pyのロール切替設計を参照）。
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = '124d19046136'
-down_revision: Union[str, None] = 'c364aae167e3'
+revision: str = "124d19046136"
+down_revision: Union[str, None] = "c364aae167e3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

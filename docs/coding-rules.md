@@ -31,13 +31,22 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 - 1ファイル1責務。500行を超えたら分割を検討する。
 - フロント・バックで対になる定義（エンジン一覧、エラー文言）は、**片側を一次ソース**とし、他方のコメントで参照元を明示する（例: `frontend/src/lib/engines.ts` は `backend/app/services/engines.py` の `ENGINE_SPECS` と同じ値）。
 
+### リンター・フォーマッタ
+
+- リンターもフォーマッタも**ホストへ入れず、Docker内のもの**をエディタからLSPとして使う（`docker compose --profile lsp` の `backend-lsp` / `frontend-lsp`）。エディタの診断・整形結果を `docker compose exec` で実行するCIと一致させるため。
+- 設定は [`.zed/settings.json`](../.zed/settings.json)（LSP起動は [`scripts/zed-lsp.sh`](../scripts/zed-lsp.sh)）。クローン直後は `./scripts/setup-zed.sh` で絶対パスを自環境へ合わせる。
+- 規則の一次ソースはあくまで `backend/requirements.txt`（ruff）と `frontend/eslint.config.js`。エディタ側の設定でルールを上書きしない。
+- 言語ごとの整形手段・保存時整形の可否は各言語の節を参照（Python: `ruff format`／TypeScript: ESLintの自動修正）。
+
 ## 2. Python（backend / docling-service / pdf2htmlex-service）
 
 ### 静的解析・フォーマット
 
 - `ruff check .` を通すこと（`backend/requirements.txt` で版を固定、CIの必須チェック）。設定ファイルは持たず ruff 既定ルール（E4/E7/E9/F）で運用する。
-- 行長は強制していないが、既存コードに合わせ **120文字程度**を上限の目安とする。
-- 自動フォーマッタは導入していない。既存ファイルのスタイル（4スペース、末尾カンマ）に合わせる。
+- 行長は強制していないが、既存コードに合わせ **120文字程度**を上限の目安とする（`ruff format` の既定88文字より広い）。
+- フォーマッタは `ruff format`（Docker内のruff、Zedのフォーマッタとして設定済み）。スタイルは4スペース・末尾カンマで、手で整えず整形結果に従う。
+- Python は**保存時の自動整形をオフ**にしている（`format_on_save: "off"`）。既存コードが `ruff format` 未適用のため、保存のたびに無関係な行が書き換わるのを避けるため。整形はエディタから明示実行する。
+- 既存ファイル全体への `ruff format` 適用は、他の変更と混ぜず単独のPRで行う。リポジトリ全体へ適用した時点で `format_on_save` を `"on"` へ切り替える。
 
 ### 型
 
@@ -74,7 +83,9 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 ### 静的解析・フォーマット
 
 - `npm run lint`（ESLint）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。
-- Prettier は導入していない。既存スタイルに合わせる: **2スペース・シングルクォート・セミコロンなし・行長120文字程度**。
+- フォーマッタは **ESLint の自動修正**（`source.fixAll.eslint`）。保存時に自動適用される（`format_on_save: "on"`）。
+- **Prettier は使わない**。`.zed/settings.json` で `prettier.allowed: false` を明示しており、Zed同梱のPrettierが走らないようにしている。整形規則の一次ソースを `frontend/eslint.config.js` に一本化するため、Prettier を依存へ追加しない。
+- ESLint が整えない部分は既存スタイルに合わせる: **2スペース・シングルクォート・セミコロンなし・行長120文字程度**。
 
 ### 型
 

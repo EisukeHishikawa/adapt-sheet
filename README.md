@@ -61,7 +61,7 @@ flowchart LR
     CD --> AWSInfra["AWS (S3 / Lambda / CloudFront)"]
 ```
 
-PRごとにフロント（Vitest/ESLint/vite build）・バック（pytest/ruff）をGitHub Actionsで自動実行し、全て成功しないとmainへマージできない（Branch Protection）。mainへのマージをトリガーに、Terraformでインフラを適用しS3・Lambdaへ自動デプロイする。詳細は [`docs/deployment.md`](./docs/deployment.md) を参照。
+PRごとにフロント（Vitest/ESLint/vite build）・バック（pytest/ruff/mypy）をGitHub Actionsで自動実行し、全て成功しないとmainへマージできない（Branch Protection）。mainへのマージをトリガーに、Terraformでインフラを適用しS3・Lambdaへ自動デプロイする。詳細は [`docs/deployment.md`](./docs/deployment.md) を参照。
 
 ## 技術スタック
 

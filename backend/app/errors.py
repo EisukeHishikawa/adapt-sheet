@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, cast
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
@@ -68,16 +68,18 @@ def error_response(status_code: int) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=build_error_payload(status_code))
 
 
-async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """HTTPExceptionを構造化エラーへ変換する。生のdetailはレスポンスに出さずログにのみ残す。"""
+    # Starletteはハンドラを例外型で引くため、登録した型で届くことは呼び出し側が保証する。
+    http_exc = cast(StarletteHTTPException, exc)
     logger.warning(
         "HTTPException",
-        extra={"status_code": exc.status_code, "detail": str(exc.detail), "request_id": get_request_id()},
+        extra={"status_code": http_exc.status_code, "detail": str(http_exc.detail), "request_id": get_request_id()},
     )
-    return error_response(exc.status_code)
+    return error_response(http_exc.status_code)
 
 
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """リクエストバリデーション失敗を400へ寄せる。
 
     FastAPI既定は422だが、本APIでは422をPDF解析エラー専用に割り当てているため、
@@ -85,7 +87,11 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """
     logger.warning(
         "RequestValidationError",
-        extra={"status_code": 400, "detail": str(exc.errors()), "request_id": get_request_id()},
+        extra={
+            "status_code": 400,
+            "detail": str(cast(RequestValidationError, exc).errors()),
+            "request_id": get_request_id(),
+        },
     )
     return error_response(400)
 

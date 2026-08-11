@@ -21,3 +21,4 @@ psycopg[binary]==3.2.3  # PostgreSQL接続ドライバ。binary extraでlibpqを
 alembic==1.14.0  # DBマイグレーション管理（backend/migrations/）
 pytest==8.4.2
 ruff==0.15.20
+mypy==1.19.1  # 型チェック（backend/mypy.ini）。ruffは型を見ないため別途必要

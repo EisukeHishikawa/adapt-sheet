@@ -50,6 +50,10 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 ### 型
 
+- `mypy app` を通すこと（CIの必須チェック、設定は `backend/mypy.ini`）。ruff は型を見ないため、型の整合はmypyが担保する。
+- 厳格モード（`disallow_untyped_defs` 等）は有効にしていない。既定のルールで検出されるものだけを対象とする。
+- boto3・botocore・PyMuPDF（`fitz`）は型スタブを持たないため、`mypy.ini` でこれらのimportのみ解析対象外にしている。除外を増やす前に、呼び出し側の型注釈で解決できないかを先に検討する。
+- 外部SDKのクライアントなど、本番実体とテスト用スタブの双方を受ける注入口は `Any` を明示する。型を `object` にすると属性アクセスが型エラーになり、かえって実態から離れる。
 - 公開関数には引数・戻り値の型注釈を必ず付ける。
 - ファイル冒頭に `from __future__ import annotations` を置く（`app/main.py` を除く全モジュールの慣習）。Python 3.9 で `dict[int, str]` 等の記法を使うため。
 - API の入出力は Pydantic モデルで定義し、エンドポイントに `response_model` を必ず指定する（省略すると `openapi.json` のスキーマが `object` 止まりになり、フロントの型生成が壊れる）。

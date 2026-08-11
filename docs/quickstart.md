@@ -87,6 +87,7 @@ docker compose restart frontend
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
+docker compose exec backend mypy app                     # 型チェック（backend/mypy.ini）
 docker compose exec docling pytest                       # doclingサービス（PDF→HTML変換専用）の全テスト実行
 docker compose exec docling ruff check .                  # doclingサービスの静的解析
 docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）

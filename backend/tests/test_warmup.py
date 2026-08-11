@@ -31,7 +31,7 @@ class _FakeExtractor:
 def _override(docling: _FakeExtractor, pdf2htmlex: _FakeExtractor, db_result: bool) -> None:
     app.dependency_overrides[get_html_extractor] = lambda: docling
     app.dependency_overrides[get_pdf2htmlex_extractor] = lambda: pdf2htmlex
-    app.dependency_overrides[get_db_pinger] = lambda: (lambda: db_result)
+    app.dependency_overrides[get_db_pinger] = lambda: lambda: db_result
 
 
 def _clear_overrides() -> None:

@@ -60,9 +60,7 @@ def load_secrets_into_env(ssm_client_factory: Optional[Callable[[], object]] = N
     paths = [f"{prefix.rstrip('/')}/{name}" for name in names]
     response = ssm.get_parameters(Names=paths, WithDecryption=True)
 
-    resolved = {
-        param["Name"].rsplit("/", 1)[-1]: param["Value"] for param in response.get("Parameters", [])
-    }
+    resolved = {param["Name"].rsplit("/", 1)[-1]: param["Value"] for param in response.get("Parameters", [])}
     for name in names:
         value = resolved.get(name)
         if value == PLACEHOLDER_VALUE:

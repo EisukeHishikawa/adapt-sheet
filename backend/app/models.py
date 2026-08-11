@@ -29,9 +29,7 @@ class RenderHistory(Base):
     user_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
     engine: Mapped[str] = mapped_column(String(32), nullable=False)
     # "render"（描画結果）か "edit"（描画前の編集中スナップショット）か。
-    kind: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="render", server_default="render"
-    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="render", server_default="render")
     html: Mapped[str] = mapped_column(Text, nullable=False)
     css: Mapped[str] = mapped_column(Text, nullable=False, default="")
     json_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)

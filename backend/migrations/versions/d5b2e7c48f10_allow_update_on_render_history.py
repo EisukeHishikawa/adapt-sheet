@@ -7,14 +7,15 @@ Create Date: 2026-07-23 13:10:00.000000
 編集中スナップショットは編集のたびに行を増やさず同じ行を上書きするため、
 自分の行に対するUPDATEを許可するポリシーを追加する。
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'd5b2e7c48f10'
-down_revision: Union[str, None] = 'c3a8f5d21b74'
+revision: str = "d5b2e7c48f10"
+down_revision: Union[str, None] = "c3a8f5d21b74"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

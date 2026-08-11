@@ -57,18 +57,14 @@ def _get_session_factory() -> sessionmaker:
         if not url:
             raise RuntimeError("DATABASE_URL is not set")
         # 未指定だと接続先が詰まったときLambdaのタイムアウトまでブロックしてしまう。
-        _engine = create_engine(
-            url, pool_pre_ping=True, connect_args={"connect_timeout": _DB_CONNECT_TIMEOUT_SECONDS}
-        )
+        _engine = create_engine(url, pool_pre_ping=True, connect_args={"connect_timeout": _DB_CONNECT_TIMEOUT_SECONDS})
         _session_factory = sessionmaker(bind=_engine, expire_on_commit=False)
     return _session_factory
 
 
 def _set_rls_context(connection: Connection, claims: str) -> None:
     # auth.uid()はrequest.jwt.claimsのsubを読む（Supabaseの標準関数）。
-    connection.execute(
-        text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims}
-    )
+    connection.execute(text("SELECT set_config('request.jwt.claims', :claims, true)"), {"claims": claims})
     # authenticatorのままではRLSの対象にならない。ロール名は固定値のためリテラルで埋める。
     connection.execute(text("SET LOCAL ROLE authenticated"))
 

@@ -52,7 +52,7 @@ def test_ai_generation_error_returns_structured_body():
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise AIGenerationError("AI呼び出しに失敗しました（テスト用）")
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FailingAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FailingAIClient()
     try:
         response = client.post("/api/render", data={})
         assert response.status_code == 502
@@ -99,7 +99,7 @@ def test_unhandled_exception_returns_500_structured_body():
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise ValueError("想定外の内部エラー（テスト用）")
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _BrokenAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _BrokenAIClient()
     try:
         response = client.post("/api/render", data={})
         assert response.status_code == 500
@@ -132,9 +132,7 @@ _DOMAIN_ERROR_CASES = [
 
 
 @pytest.mark.parametrize("error_type, expected_status, expected_code", _DOMAIN_ERROR_CASES)
-def test_domain_error_maps_identically_in_sync_and_job_paths(
-    error_type, expected_status, expected_code
-):
+def test_domain_error_maps_identically_in_sync_and_job_paths(error_type, expected_status, expected_code):
     """同期経路（例外ハンドラ経由）と非同期ジョブ経路（ハンドラを通らない）が、同じ例外に対して
     同じステータス・同じ文言を返すことを保証する。両者が別々の対応表を持つと片方だけ古くなる。
     """
@@ -144,7 +142,7 @@ def test_domain_error_maps_identically_in_sync_and_job_paths(
             raise error_type("AI呼び出しに失敗しました（テスト用）")
 
     job_store = _RecordingJobStore()
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FailingAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FailingAIClient()
     app.dependency_overrides[get_job_store] = lambda: job_store
     try:
         sync_response = client.post("/api/render", data={})

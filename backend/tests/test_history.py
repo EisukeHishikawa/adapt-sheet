@@ -150,7 +150,7 @@ def test_render_saves_history_for_logged_in_user(monkeypatch):
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FakeAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FakeAIClient()
     try:
         response = client.post(
             "/api/render",

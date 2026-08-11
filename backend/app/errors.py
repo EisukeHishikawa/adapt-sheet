@@ -99,9 +99,7 @@ def _domain_error_handler(
     """
 
     async def handler(request: Request, exc: Exception) -> JSONResponse:
-        logger.warning(
-            "%s: %s", log_message, exc, extra={"status_code": status_code, "request_id": get_request_id()}
-        )
+        logger.warning("%s: %s", log_message, exc, extra={"status_code": status_code, "request_id": get_request_id()})
         return error_response(status_code)
 
     return handler
@@ -120,8 +118,7 @@ _DOMAIN_ERRORS: tuple[tuple[type[Exception], int, str], ...] = (
 # ドメイン例外はmain.py内でHTTPExceptionへ変換せず、送出のみ行いここで一元的に整形する。
 # Starletteのハンドラ探索はMRO順のため、登録順に関わらずサブクラス側が優先される。
 DOMAIN_ERROR_HANDLERS: dict[type[Exception], Callable[[Request, Exception], Awaitable[JSONResponse]]] = {
-    exc_type: _domain_error_handler(status_code, log_message)
-    for exc_type, status_code, log_message in _DOMAIN_ERRORS
+    exc_type: _domain_error_handler(status_code, log_message) for exc_type, status_code, log_message in _DOMAIN_ERRORS
 }
 
 

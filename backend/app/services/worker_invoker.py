@@ -41,9 +41,7 @@ class LambdaWorkerInvoker:
     """本番用実装。RENDER_WORKER_FUNCTION_NAME環境変数で指定された関数を起動する。"""
 
     def __init__(self, function_name: Optional[str] = None) -> None:
-        self._function_name = function_name or os.environ.get(
-            "RENDER_WORKER_FUNCTION_NAME", ""
-        ).strip()
+        self._function_name = function_name or os.environ.get("RENDER_WORKER_FUNCTION_NAME", "").strip()
         if not self._function_name:
             raise WorkerInvokerError("RENDER_WORKER_FUNCTION_NAME is not set")
 

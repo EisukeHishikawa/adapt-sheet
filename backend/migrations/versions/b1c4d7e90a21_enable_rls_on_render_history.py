@@ -8,14 +8,15 @@ Create Date: 2026-07-21 13:20:00.000000
 状態をDB側で保証する。アプリはauthenticatorロールで接続し、リクエストごとに
 authenticatedロールへ切り替えるため、そのロールにだけ権限とポリシーを与える。
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'b1c4d7e90a21'
-down_revision: Union[str, None] = '9efb14568497'
+revision: str = "b1c4d7e90a21"
+down_revision: Union[str, None] = "9efb14568497"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

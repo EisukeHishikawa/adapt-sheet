@@ -9,14 +9,15 @@ gemini_free_usageはpublicスキーマにあるため、SupabaseのData API（Po
 ロール切り替え前の`authenticator`のまま操作する（PostgRESTが決して使わないロール）ため、
 権限とポリシーを`authenticator`だけに絞り、Data API経由の到達をDB側で塞ぐ。
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'f2b6d904ae31'
-down_revision: Union[str, None] = '124d19046136'
+revision: str = "f2b6d904ae31"
+down_revision: Union[str, None] = "124d19046136"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

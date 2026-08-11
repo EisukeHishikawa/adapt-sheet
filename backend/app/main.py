@@ -111,9 +111,7 @@ def _validate_pdf_requirement(engine: str, has_pdf: bool) -> None:
         raise HTTPException(status_code=428)
 
 
-def _validate_render_params(
-    engine: str, current_user: Optional[SupabaseUser], has_pdf: bool
-) -> None:
+def _validate_render_params(engine: str, current_user: Optional[SupabaseUser], has_pdf: bool) -> None:
     """engine・PDF添付有無に関するパラメータチェックを1箇所にまとめる。
 
     PDF読み込み・PyMuPDF/Docling変換・AI呼び出し・非同期ジョブ起動等の重い処理より前に、
@@ -145,9 +143,7 @@ async def render(
     pdf2htmlex_extractor: Pdf2HtmlExExtractor = Depends(get_pdf2htmlex_extractor),
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Optional[Session] = Depends(get_db_session_or_none),
-    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(
-        get_shared_db_session_opener
-    ),
+    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(get_shared_db_session_opener),
 ) -> RenderResponse:
     # 無駄なPDF読み込み・AI呼び出しを避けるため、パラメータは先に確認する。
     _validate_render_params(engine, current_user, has_pdf=pdf is not None)
@@ -351,9 +347,7 @@ class RenderJobStatusResponse(BaseModel):
     response_model=RenderJobStatusResponse,
     response_model_by_alias=True,
 )
-def get_render_job(
-    job_id: str, job_store: JobStore = Depends(get_job_store)
-) -> RenderJobStatusResponse:
+def get_render_job(job_id: str, job_store: JobStore = Depends(get_job_store)) -> RenderJobStatusResponse:
     status = job_store.read_status(job_id)
     if status is None:
         raise HTTPException(status_code=404)
@@ -385,9 +379,7 @@ async def process_render_job(
     layout_converter: PDFLayoutConverter = Depends(get_layout_converter),
     html_extractor: DoclingHtmlExtractor = Depends(get_html_extractor),
     job_store: JobStore = Depends(get_job_store),
-    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(
-        get_shared_db_session_opener
-    ),
+    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(get_shared_db_session_opener),
 ) -> dict:
     """render-workerが処理する非同期レンダリングジョブの実体。
 
@@ -420,16 +412,12 @@ async def process_render_job(
     except (PDFConversionError, AIGenerationError) as exc:
         # 例外ハンドラを通らない経路のため、同期経路と同じ対応表（app/errors.py）を明示的に引く。
         status_code = status_code_for(exc)
-        job_logger.warning(
-            "Render job failed: %s", exc, extra={"status_code": status_code, "job_id": payload.job_id}
-        )
+        job_logger.warning("Render job failed: %s", exc, extra={"status_code": status_code, "job_id": payload.job_id})
         message = build_error_payload(status_code)["error"]["message"]
         job_store.write_status(payload.job_id, {"status": "error", "message": message})
         return {"status": "error"}
     except Exception:
-        job_logger.exception(
-            "非同期レンダリングジョブの処理に失敗しました", extra={"job_id": payload.job_id}
-        )
+        job_logger.exception("非同期レンダリングジョブの処理に失敗しました", extra={"job_id": payload.job_id})
         job_store.write_status(
             payload.job_id,
             {"status": "error", "message": "サーバーで想定外のエラーが発生しました。"},
@@ -523,21 +511,15 @@ class GeminiFreeUsageResponse(BaseModel):
 
 @app.get("/api/usage/gemini-free", response_model=GeminiFreeUsageResponse)
 def get_gemini_free_usage_status(
-    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(
-        get_shared_db_session_opener
-    ),
+    open_shared_session: Callable[[], ContextManager[Optional[Session]]] = Depends(get_shared_db_session_opener),
 ) -> GeminiFreeUsageResponse:
     """Gemini無料枠（gemini_free）の当日利用回数。認証不要（匿名利用も対象のため）。"""
     with open_shared_session() as db_session:
         if db_session is None:
-            return GeminiFreeUsageResponse(
-                date=date.today().isoformat(), count=0, limit=GEMINI_FREE_DAILY_LIMIT
-            )
+            return GeminiFreeUsageResponse(date=date.today().isoformat(), count=0, limit=GEMINI_FREE_DAILY_LIMIT)
 
         status = get_gemini_free_usage(db_session)
-        return GeminiFreeUsageResponse(
-            date=status.date.isoformat(), count=status.count, limit=status.limit
-        )
+        return GeminiFreeUsageResponse(date=status.date.isoformat(), count=status.count, limit=status.limit)
 
 
 class HistoryItemResponse(BaseModel):

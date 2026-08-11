@@ -16,9 +16,7 @@ from docling_core.types.io import DocumentStream
 
 # OCR・表構造認識はLambdaのCPUでは合計40秒超（実測）かかりタイムアウトするため無効化する。
 # ほとんどのPDFは埋め込みテキストを持ちOCR不要で、表も罫線を含むレイアウトとしては残る。
-_PDF_FORMAT_OPTION = PdfFormatOption(
-    pipeline_options=PdfPipelineOptions(do_ocr=False, do_table_structure=False)
-)
+_PDF_FORMAT_OPTION = PdfFormatOption(pipeline_options=PdfPipelineOptions(do_ocr=False, do_table_structure=False))
 
 
 class PDFConversionError(Exception):
@@ -34,9 +32,7 @@ class PDFConverter(Protocol):
 class DoclingPDFConverter:
     def __init__(self, converter: object = None) -> None:
         # converterはテストがフェイクへ差し替えるための注入口。
-        self._converter = converter or DocumentConverter(
-            format_options={InputFormat.PDF: _PDF_FORMAT_OPTION}
-        )
+        self._converter = converter or DocumentConverter(format_options={InputFormat.PDF: _PDF_FORMAT_OPTION})
 
     def convert_to_html(self, filename: str, content: bytes) -> str:
         # ディスクへの一時ファイル書き出しを避け、メモリ上のbytesを直接渡す。

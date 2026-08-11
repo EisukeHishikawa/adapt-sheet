@@ -30,10 +30,6 @@ from app.services.auth import SupabaseUser, get_current_user
 from app.services.ai_client import (
     AIClient,
     AIGenerationError,
-    ALL_ENGINES,
-    CONVERTER_ENGINES,
-    GATED_ENGINES,
-    PDF_REQUIRED_ENGINES,
     RenderResult,
     build_hybrid_prompt,
     build_prompt,
@@ -41,9 +37,15 @@ from app.services.ai_client import (
     validate_render_result,
 )
 from app.services.docling_client import PDFHtmlExtractor as DoclingHtmlExtractor, get_html_extractor
+from app.services.engines import (
+    ALL_ENGINES,
+    CONVERTER_ENGINES,
+    GATED_ENGINES,
+    GEMINI_FREE_QUOTA_ENGINES,
+    PDF_REQUIRED_ENGINES,
+)
 from app.services.gemini_usage import (
     GEMINI_FREE_DAILY_LIMIT,
-    GEMINI_FREE_QUOTA_ENGINES,
     get_gemini_free_usage,
     record_gemini_free_usage,
 )
@@ -91,8 +93,8 @@ class RenderResponse(BaseModel):
 
 
 def _validate_engine(engine: str) -> None:
-    """未知のengine値を弾く。ai_client.get_ai_clientのif/elifチェーン末尾でも検出できるが、
-    それより前段（PDF読み込み・非同期ジョブ起動等）で無駄な処理をさせないためここで先に弾く。
+    """未知のengine値を弾く。ai_client.get_ai_clientでも検出できるが、それより前段
+    （PDF読み込み・非同期ジョブ起動等）で無駄な処理をさせないためここで先に弾く。
     """
     if engine not in ALL_ENGINES:
         raise HTTPException(status_code=400)

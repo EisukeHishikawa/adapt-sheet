@@ -89,6 +89,8 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 
 ## コード規約
 
+言語別の具体的な規約（命名・型・テスト・フォーマット等）は [`docs/coding-rules.md`](./docs/coding-rules.md) に集約する。以下は全体に関わる方針。
+
 - **型安全**: FastAPIの `openapi.json` から自動生成したTypeScript型を使用する。フロント・バック間でキー名を手書きで一致させない。
 - **AI呼び出しのモック**: pytest実行時・ローカル開発時に生成AI（Gemini/Claude/OpenAI）を実際に叩かない。プロンプトに応じた疑似レスポンスを返すモック層を必ず経由する。pytestの既定は常に`MockAIClient`（`USE_MOCK_AI`未設定時）であり、この既定は`engine`等の他のパラメータの値に関わらず変更しない。
 - **モデル選択機能**: 描画エンジンはフロントの`EngineSelect`で選び、`gemini_free`/`gemini`/`claude`/`openai`/`hybrid`（生成AI）と`docling`/`pdf2htmlex`/`pymupdf`（AIを介さない変換エンジン）の8種類がある。`gemini`/`claude`/`openai`（標準プラン）は未ログインなら`app/main.py`が最初に403 `FREE_ACCESS_FORBIDDEN`で弾く。`hybrid`（画面表示は「精密復元」）はPyMuPDF・Docling・Geminiを組み合わせる生成AIで、`gemini_free`と同じ無料枠モデルを使うためゲート対象外だがPDF添付が必須。生成AIへのリクエストにDocling抽出テキストは一切含めない。PDFがある場合はPDFファイルをマルチモーダル入力として直接添付し（PyMuPDF/Docling経由の事前変換は行わない）、PDFが無い場合は画面に表示中のHTML/JSONをテキストとして送る。PDFを添付したリクエストの応答が返ったタイミングでフロントはPDFの添付を解除する（次回以降は直前の描画結果のHTML/JSONを基準に生成する）。

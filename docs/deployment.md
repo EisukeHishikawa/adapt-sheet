@@ -17,29 +17,75 @@ AdaptSheet AIのデプロイ手順・環境変数設定・運用ルールをま�
 
 ## 2. 環境変数
 
-### バックエンド（Lambda / ローカル共通）
+### 2-1. 格納場所の原則
 
-| 変数名 | 説明 | 備考 |
+秘密情報はリポジトリにコミットしない。開発・本番それぞれ、値の置き場所は次の4つに限定する。
+
+| 環境 | 格納場所 | 対象 |
 |---|---|---|
-| `GEMINI_API_KEY` | Gemini API（Google AI Studio）利用のためのAPIキー | `USE_MOCK_AI=false`のときのみ必須（[CLAUDE.md](../CLAUDE.md)参照） |
-| `USE_MOCK_AI` | AI呼び出しをモック層に固定するかどうかのスイッチ | 未設定時は`true`扱い（モック）。`false`の場合のみ`engine`に応じた実経路を呼び出す |
-| `GEMINI_MODEL` | 使用するGeminiモデル | 未設定時は`gemini-2.5-flash`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う |
-| `LOG_AI_PAYLOAD` | Geminiへの入力プロンプト全文・出力全文をログへ出すかどうかのスイッチ | 未設定時は`false`扱い（出力しない）。`true`/`1`/`yes`で有効。プロンプトには帳票の業務データが含まれるため、本番では有効化しない |
-| `SSM_PARAMETER_PREFIX` | Parameter Storeから秘密情報を取得する際のパス接頭辞（例: `/adapt-sheet/prod`） | Lambda本番でのみ設定。設定時、コールドスタート時に`{prefix}/GEMINI_API_KEY`等を復号取得し`os.environ`へ展開する。取得対象は`app/secrets_loader.py`の`_SECRET_ENV_NAMES`（APIキー3種＋`SUPABASE_JWT_SECRET`＋`DATABASE_URL`）。実値未投入のダミー（`PLACEHOLDER_SET_OUT_OF_BAND`）は展開しない。ローカル/pytestでは未設定のため何もしない |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase接続情報（Auth管理API用） | 現時点のバックエンドコードは未使用（JWT検証は`SUPABASE_JWT_SECRET`、DB接続は`DATABASE_URL`が担う）。管理APIを使う機能を追加する際に利用する想定 |
-| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット、SupabaseダッシュボードのJWT Settingsで確認） | `app/services/auth.py`が`/api/render`・`/api/history`のゲート判定に使用。未設定時は常に未ログイン扱い（fail-closed）。本番はParameter Store経由で渡す |
-| `SUPABASE_JWT_JWKS_URL` | SupabaseがES256（JWT Signing Keys）を使う場合の公開鍵配布URL | 公開情報のためParameter Storeではなく、Terraform変数`supabase_jwt_jwks_url`経由でLambda環境変数として渡す。HS256方式なら未設定でよい |
-| `DATABASE_URL` | 生成履歴を保存するPostgreSQLの接続文字列（`postgresql+psycopg://...`） | `app/db.py`が使用。ローカルはdocker-composeの`db`サービス（Postgres）を指す既定値、本番はSupabaseプロジェクトのPostgres接続文字列をParameter Storeへ投入する。未設定時は`/api/render`の履歴保存を静かにスキップし、`/api/history`は500になる |
+| 開発 | プロジェクトルートの`.env`（Git管理外） | APIキー・DB接続文字列・Supabaseの鍵。`docker-compose.yml`が`${...}`展開で各コンテナへ渡す。`.envrc`（direnv）の`dotenv`によりホストのシェルにも展開され、`scripts/create_user.sh`等から参照できる |
+| 開発 | `docker-compose.yml`に直書き | 秘密でない固定のローカル定数（サービス名でのURL解決、MinIOの資格情報、モック有効化等） |
+| 本番 | SSM Parameter Store（SecureString、`/adapt-sheet/prod/*`） | 秘密情報のみ。対象は`infra/variables.tf`の`secret_parameter_names`と`app/secrets_loader.py`の`_SECRET_ENV_NAMES`を一致させる。コールドスタート時に復号して`os.environ`へ展開する（Lambdaの環境変数はコンソールで平文表示されるため秘密情報は置かない） |
+| 本番 | Terraformが設定するLambda環境変数（`infra/main.tf`の`extra_env`） | 秘密でない接続先・スイッチ（Function URL、S3バケット名、`USE_MOCK_AI`等） |
 
-### フロントエンド
+フロントエンドの`VITE_*`はビルド時にJSへ埋め込まれるため、実行時の格納場所を持たない。値はGitHub ActionsのVariables / Secretsに置き、CDのビルド手順で注入する（[5. CI/CD](#5-cicd) 参照）。
 
-| 変数名 | 説明 |
-|---|---|
-| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDK設定（`lib/supabaseClient.ts`）。未設定時はログインUI（`AuthPanel`）自体を非表示にする。ビルド時に埋め込まれるため、値を変えたら再ビルド・再アップロードが必要 |
+### 2-2. バックエンド（backend / render-worker）
+
+| 変数名 | 説明 | 開発（docker compose） | 本番（Lambda） |
+|---|---|---|---|
+| `USE_MOCK_AI` | AI呼び出しをモック層に固定するスイッチ。未設定時は`true`扱いで、`false`のときだけ`engine`に応じた実経路を呼ぶ | `true`（compose直書き） | `false`（Terraform変数`use_mock_ai`） |
+| `GEMINI_API_KEY` | Gemini API（Google AI Studio）のAPIキー | `.env` | Parameter Store |
+| `ANTHROPIC_API_KEY` | Claude（`engine=claude`）のAPIキー | `.env` | Parameter Store |
+| `OPENAI_API_KEY` | OpenAI（`engine=openai`）のAPIキー | `.env` | Parameter Store |
+| `GEMINI_MODEL` | 無料枠（`gemini_free`/`hybrid`）で使うGeminiモデル。既定は`gemini-flash-latest`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う | 任意（`.env`） | 未設定（既定値） |
+| `GEMINI_STANDARD_MODEL` | 標準プラン（`engine=gemini`）のモデル。既定は`gemini-2.5-pro` | 任意（`.env`） | 未設定（既定値） |
+| `CLAUDE_MODEL` | `engine=claude`のモデル。既定は`claude-opus-4-8` | 任意（`.env`） | 未設定（既定値） |
+| `OPENAI_MODEL` | `engine=openai`のモデル。既定は`gpt-5.1` | 任意（`.env`） | 未設定（既定値） |
+| `LOG_AI_PAYLOAD` | 生成AIへの入力プロンプト全文・出力全文をログへ出すスイッチ（`true`/`1`/`yes`で有効、未設定時は無効）。プロンプトに帳票の業務データが含まれるため本番では有効化しない | `true`（compose直書き） | 未設定 |
+| `SUPABASE_JWT_SECRET` | Supabase Authが発行するJWTの検証鍵（HS256共有シークレット）。`app/services/auth.py`がゲート判定に使う。未設定時は常に未ログイン扱い（fail-closed） | `.env` | Parameter Store |
+| `SUPABASE_JWT_JWKS_URL` | ES256（JWT Signing Keys）方式の公開鍵配布URL。公開情報のためParameter Storeには置かない。HS256方式なら未設定でよい | `.env`（Supabase Local CLIはこの方式のみ発行するため必須。`host.docker.internal`経由） | Lambda環境変数（Terraform変数`supabase_jwt_jwks_url`） |
+| `DATABASE_URL` | 生成履歴を保存するPostgreSQLの接続文字列。RLSを迂回しない`authenticator`ロールで接続する。未設定時は履歴保存を静かにスキップし、`/api/history`は500になる | `.env`（Supabase Local CLIのPostgresへ`host.docker.internal`経由） | Parameter Store |
+| `MIGRATION_DATABASE_URL` | alembic専用の接続文字列。テーブル作成・ポリシー定義に所有者権限が要るため`postgres`ロールを使う | `.env` | Lambdaには渡さない。CDのdeployジョブがGitHub Secretsから受け取る |
+| `SSM_PARAMETER_PREFIX` | Parameter Storeから秘密情報を取得する際のパス接頭辞。実値未投入のダミー（`PLACEHOLDER_SET_OUT_OF_BAND`）は展開しない | 未設定（`secrets_loader.py`はno-op） | `/adapt-sheet/prod`（Terraform） |
+| `DOCLING_SERVICE_URL` | テキスト抽出を委譲するdocling-serviceの接続先 | `http://docling:8100`（compose直書き） | doclingのLambda Function URL（Terraform） |
+| `DOCLING_SERVICE_AUTH` | `aws_sigv4`のときSigV4署名を付けて呼ぶ（Function URLがAWS_IAM認証必須のため） | 未設定 | `aws_sigv4`（Terraform） |
+| `DOCLING_SERVICE_SKIP_WARMUP` | ウォームアップ時に実convertを叩かずOK扱いにするスイッチ。常時稼働でコールドスタートの無い開発環境向け | `true`（compose直書き） | 未設定 |
+| `PDF2HTMLEX_SERVICE_URL` | pdf2htmlex-serviceの接続先 | `http://pdf2htmlex:8200`（compose直書き） | pdf2htmlexのLambda Function URL（Terraform） |
+| `PDF2HTMLEX_SERVICE_AUTH` | 同上のSigV4署名スイッチ | 未設定 | `aws_sigv4`（Terraform） |
+| `RENDER_JOBS_BUCKET` | 非同期レンダリングジョブ（アップロード済みPDF・結果JSON）の保存先バケット | `render-jobs-local`（MinIO、compose直書き） | S3バケット名（Terraform） |
+| `RENDER_JOBS_S3_ENDPOINT_URL` | S3 APIのエンドポイント。未設定時は実AWSのリージョナルエンドポイント | `http://minio:9000` | 未設定 |
+| `RENDER_JOBS_S3_PUBLIC_ENDPOINT_URL` | ブラウザへ返すpresigned URLのホスト。コンテナ内のホスト名では到達できないため分ける | `http://localhost:9000` | 未設定 |
+| `RENDER_WORKER_FUNCTION_NAME` | 非同期ジョブを処理するrender-worker Lambdaの関数名 | 未設定 | 関数名（Terraform） |
+| `RENDER_WORKER_LOCAL_URL` | render-worker Lambdaが存在しない環境で、自身の`/internal/render-jobs/process`へHTTP POSTする際の宛先 | `http://localhost:8000` | 未設定 |
+| `AWS_REGION` / `AWS_DEFAULT_REGION` | S3・Lambda呼び出し・SigV4署名に使うリージョン。既定は`ap-northeast-1` | `AWS_REGION=ap-northeast-1`（compose直書き） | Lambdaランタイムが自動設定 |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | S3互換ストレージの資格情報 | `minioadmin`（MinIO用のローカル固定値、compose直書き） | 未設定（Lambda実行ロールの一時認証情報を使う） |
+
+`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`（Auth管理API用）はバックエンドのコードからは使わない。ローカルの`scripts/create_user.sh`のみが参照する（2-4参照）。
+
+### 2-3. フロントエンド
+
+| 変数名 | 説明 | 開発 | 本番 |
+|---|---|---|---|
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Supabase Auth SDKの設定（`lib/supabaseClient.ts`）。未設定時はログインUI（`AuthPanel`）自体を非表示にする | `.env` | GitHub ActionsのVariables / Secrets（ビルド時に埋め込むため、値を変えたら再ビルド・再アップロードが必要） |
 
 APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront）から配信し、`src/lib/api.ts`は相対パス`/api/...`のまま本番でも動く。
 
-### Supabase AuthのGoogleプロバイダ（ホスト型プロジェクト）
+### 2-4. ローカル開発・ツール専用
+
+本番には存在しない、開発環境だけの変数。
+
+| 変数名 | 説明 | 格納場所 |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | `scripts/create_user.sh`がSupabase Auth管理APIでアカウントを作成する際の管理者キー | `.env` |
+| `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` | Supabase Local CLI（`supabase/config.toml`の`env(...)`参照）で使うGoogle OAuthクライアント。ホスト型プロジェクトには反映されない（2-5参照） | `.env` |
+| `GITHUB_TOKEN` | GitHub MCP Server（`.mcp.json`）の認証に使うPersonal Access Token | `.env` |
+| `PLAYWRIGHT_TEST_BASE_URL` | E2Eの接続先。起動済みfrontendコンテナへサービス名で疎通する | `docker-compose.yml`（`e2e`サービス） |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` / `MINIO_API_CORS_ALLOW_ORIGIN` | ローカルのS3互換ストレージ（MinIO）の資格情報とCORS許可オリジン | `docker-compose.yml`（`minio`サービス） |
+| `HF_HUB_DISABLE_XET` | doclingのモデルダウンロードをhf-xet経路ではなく標準HTTPSへフォールバックさせる | `docker-compose.yml`（`docling`サービス） |
+| `PWD` | Zed向けLSPサービスがホストと同じ絶対パスでリポジトリをマウントするために参照する | シェルが自動設定 |
+
+### 2-5. Supabase AuthのGoogleプロバイダ（ホスト型プロジェクト）
 
 `supabase/config.toml`の`[auth.external.google]`はローカルCLI（`supabase start`）にのみ適用され、ホスト型（本番）Supabaseプロジェクトには反映されない。本番でGoogleログインを使うには、Supabaseダッシュボード側で個別に設定が必要。
 
@@ -49,14 +95,6 @@ APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront�
 4. `https://<project-ref>.supabase.co/auth/v1/settings` を叩き、`external.google: true`になっているか確認する。
 
 1〜3はSupabase側（GoTrueサーバー）の設定であり、フロントエンドの再ビルド・再デプロイなしに即時反映される。未設定のままだとフロントの`signInWithOAuth({ provider: 'google' })`が`{"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}`で失敗する。
-
-### ClaudeCode / MCP
-
-| 変数名 | 説明 | 備考 |
-|---|---|---|
-| `GITHUB_TOKEN` | GitHub MCP Server（`.mcp.json`）の認証に使用するPersonal Access Token | ローカルでは `.env`（gitignore対象）に設定し、`.envrc` + `direnv` での自動読み込みを想定（`direnv` 未導入の場合は手動で `export` する） |
-
-機密情報（APIキー等）はリポジトリにコミットせず、GitHub ActionsのSecretsおよびAWS Systems Manager Parameter Store等で管理する。
 
 ---
 

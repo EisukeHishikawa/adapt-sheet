@@ -19,7 +19,7 @@ AdaptSheet AIのデプロイ手順・環境変数設定・運用ルールをま�
 
 ### 2-1. 格納場所の原則
 
-秘密情報はリポジトリにコミットしない。開発・本番それぞれ、値の置き場所は次の4つに限定する。
+秘密情報はリポジトリにコミットしない。開発・本番それぞれ、値の置き場所は次の6つに限定する。
 
 | 環境 | 格納場所 | 対象 |
 |---|---|---|
@@ -27,8 +27,8 @@ AdaptSheet AIのデプロイ手順・環境変数設定・運用ルールをま�
 | 開発 | `docker-compose.yml`に直書き | 秘密でない固定のローカル定数（サービス名でのURL解決、MinIOの資格情報、モック有効化等） |
 | 本番 | SSM Parameter Store（SecureString、`/adapt-sheet/prod/*`） | 秘密情報のみ。対象は`infra/variables.tf`の`secret_parameter_names`と`app/secrets_loader.py`の`_SECRET_ENV_NAMES`を一致させる。コールドスタート時に復号して`os.environ`へ展開する（Lambdaの環境変数はコンソールで平文表示されるため秘密情報は置かない） |
 | 本番 | Terraformが設定するLambda環境変数（`infra/main.tf`の`extra_env`） | 秘密でない接続先・スイッチ（Function URL、S3バケット名、`USE_MOCK_AI`等） |
-
-フロントエンドの`VITE_*`はビルド時にJSへ埋め込まれるため、実行時の格納場所を持たない。値はGitHub ActionsのVariables / Secretsに置き、CDのビルド手順で注入する（[5. CI/CD](#5-cicd) 参照）。
+| 本番 | `infra/terraform.tfvars`（Git管理外）／CDは`TF_VAR_*` | Terraform自身の入力変数（リージョン・イメージタグ・Lambdaサイズ等）。秘密情報は置かない（2-6参照） |
+| 本番 | GitHub ActionsのVariables / Secrets | CDが使う値。フロントの`VITE_*`（ビルド時にJSへ埋め込まれるため実行時の格納場所を持たない）、Terraformへ渡す`TF_VAR_*`の元値、`MIGRATION_DATABASE_URL`（[5. CI/CD](#5-cicd) 参照） |
 
 ### 2-2. バックエンド（backend / render-worker）
 
@@ -95,6 +95,19 @@ APIのベースURLは持たない。SPAとAPIは同一オリジン（CloudFront�
 4. `https://<project-ref>.supabase.co/auth/v1/settings` を叩き、`external.google: true`になっているか確認する。
 
 1〜3はSupabase側（GoTrueサーバー）の設定であり、フロントエンドの再ビルド・再デプロイなしに即時反映される。未設定のままだとフロントの`signInWithOAuth({ provider: 'google' })`が`{"error_code":"validation_failed","msg":"Unsupported provider: provider is not enabled"}`で失敗する。
+
+### 2-6. Terraform変数（インフラ定義の入力）
+
+アプリケーションの環境変数とは別系統で、`infra/variables.tf`で定義したTerraformの入力変数がある。**秘密情報はここに置かない**（tfvarsもstateも平文のため。秘密はParameter Storeへ別途投入する）。
+
+| 実行元 | 渡し方 |
+|---|---|
+| ローカル（`infra/README.md`の手順） | `infra/terraform.tfvars`。`terraform.tfvars.example`を複製して環境に合わせて調整する。実tfvarsは`.gitignore`対象で、exampleだけをコミットする |
+| CD（GitHub Actions） | 既定値と異なる値だけを`TF_VAR_*`環境変数で渡す（`.github/workflows/cd.yml`）。元値はリポジトリのVariablesに置く。対象は`image_tag`・`docling_image_tag`・`pdf2htmlex_image_tag`（ジョブが算出）、`state_bucket_name`・`state_lock_table_name`・`github_repository`・`supabase_jwt_jwks_url`・`alarm_email`・`create_github_oidc_provider` |
+
+state（S3バケット・DynamoDBロックテーブル）の指定だけは変数ではなく、`terraform init -backend-config=...`で渡す。`infra/backend.tf`を空のpartial configurationにしてあるのは、state置き場をコミットせず環境ごとに差し替えられるようにするため。
+
+Parameter Storeへの実値投入はTerraform管理外。`ssm`モジュールはSecureStringの枠だけをダミー値（`PLACEHOLDER_SET_OUT_OF_BAND`）で作り、実値は`aws ssm put-parameter`で投入する（`infra/README.md`の手順5）。`aws_ssm_parameter`は`ignore_changes = [value]`で実値を追跡しないため、stateにも残らない。
 
 ---
 

@@ -35,18 +35,18 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 - リンターもフォーマッタも**ホストへ入れず、Docker内のもの**をエディタからLSPとして使う（`docker compose --profile lsp` の `backend-lsp` / `frontend-lsp`）。エディタの診断・整形結果を `docker compose exec` で実行するCIと一致させるため。
 - 設定は [`.zed/settings.json`](../.zed/settings.json)（LSP起動は [`scripts/zed-lsp.sh`](../scripts/zed-lsp.sh)）。クローン直後は `./scripts/setup-zed.sh` で絶対パスを自環境へ合わせる。
-- 規則の一次ソースはあくまで `backend/requirements.txt`（ruff）と `frontend/eslint.config.js`。エディタ側の設定でルールを上書きしない。
+- 規則の一次ソースは各サービスの `ruff.toml` と `frontend/eslint.config.js`、ツールの版は `requirements.txt` / `package.json`。エディタ側の設定でルールを上書きしない。
 - 言語ごとの整形手段・保存時整形の可否は各言語の節を参照（Python: `ruff format`／TypeScript: ESLintの自動修正）。
 
 ## 2. Python（backend / docling-service / pdf2htmlex-service）
 
 ### 静的解析・フォーマット
 
-- `ruff check .` を通すこと（`backend/requirements.txt` で版を固定、CIの必須チェック）。設定ファイルは持たず ruff 既定ルール（E4/E7/E9/F）で運用する。
-- 行長は強制していないが、既存コードに合わせ **120文字程度**を上限の目安とする（`ruff format` の既定88文字より広い）。
-- フォーマッタは `ruff format`（Docker内のruff、Zedのフォーマッタとして設定済み）。スタイルは4スペース・末尾カンマで、手で整えず整形結果に従う。
-- Python は**保存時の自動整形をオフ**にしている（`format_on_save: "off"`）。既存コードが `ruff format` 未適用のため、保存のたびに無関係な行が書き換わるのを避けるため。整形はエディタから明示実行する。
-- 既存ファイル全体への `ruff format` 適用は、他の変更と混ぜず単独のPRで行う。リポジトリ全体へ適用した時点で `format_on_save` を `"on"` へ切り替える。
+- `ruff check .`（リント）と `ruff format --check .`（整形漏れの検出）の両方を通すこと。どちらもCIの必須チェックで、ruff の版は各サービスの `requirements.txt` で固定する。
+- リント規則は ruff 既定（E4/E7/E9/F）。ルールの追加・除外は行っていない。
+- フォーマッタは `ruff format`。**保存時に自動適用**される（`format_on_save: "on"`）ので、手で桁を揃えず整形結果に従う。
+- 行長は各サービスの `ruff.toml` で **120文字**（既定の88文字では日本語コメントと型注釈付きシグネチャが頻繁に折り返されるため）。`ruff.toml` を backend / docling-service / pdf2htmlex-service にそれぞれ置いているのは、各サービスが独立したコンテナで自身のディレクトリを `/app` として ruff を動かすため。
+- 整形だけの差分は他の変更と混ぜない。設定を変えて全体を再整形する場合は単独のPRにする。
 
 ### 型
 

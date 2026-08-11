@@ -217,7 +217,7 @@ def test_process_render_job_writes_done_status_on_success():
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FakeAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FakeAIClient()
     try:
         response = client.post(
             "/internal/render-jobs/process",
@@ -243,7 +243,7 @@ def test_process_render_job_writes_error_status_on_ai_generation_error():
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise AIGenerationError("Gemini API呼び出しに失敗しました: 429 RESOURCE_EXHAUSTED (テスト用)")
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FailingAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FailingAIClient()
     try:
         response = client.post(
             "/internal/render-jobs/process",
@@ -266,7 +266,7 @@ def test_process_render_job_writes_error_status_on_ai_service_suspended_error():
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             raise AIServiceSuspendedError("USE_MOCK_AI=false が指定されていますが ANTHROPIC_API_KEY が未設定です")
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _SuspendedAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _SuspendedAIClient()
     try:
         response = client.post(
             "/internal/render-jobs/process",
@@ -332,7 +332,7 @@ def test_process_render_job_fetches_uploaded_pdf_when_has_pdf_true():
             captured["pdf"] = pdf
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _RecordingAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _RecordingAIClient()
     try:
         response = client.post(
             "/internal/render-jobs/process",
@@ -371,7 +371,7 @@ def test_process_render_job_saves_history_when_user_id_present(monkeypatch):
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FakeAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FakeAIClient()
     try:
         response = client.post(
             "/internal/render-jobs/process",
@@ -417,7 +417,7 @@ def test_process_render_job_records_gemini_free_usage_for_anonymous_job(monkeypa
         def generate(self, prompt: str, pdf=None) -> RenderResult:
             return RenderResult(html="<p>{{x}}</p>", css="body{}", data={"x": "1"})
 
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: _FakeAIClient())
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: _FakeAIClient()
     try:
         response = client.post(
             "/internal/render-jobs/process",
@@ -438,9 +438,7 @@ def test_record_gemini_free_usage_rolls_back_session_on_failure(monkeypatch):
     # 後続の履歴保存まで巻き添えで失敗する（本番で実際に発生した連鎖障害）。
     import app.main as main_module
 
-    monkeypatch.setattr(
-        main_module, "record_gemini_free_usage", MagicMock(side_effect=RuntimeError("boom"))
-    )
+    monkeypatch.setattr(main_module, "record_gemini_free_usage", MagicMock(side_effect=RuntimeError("boom")))
     session = MagicMock()
 
     main_module._record_gemini_free_usage(session)

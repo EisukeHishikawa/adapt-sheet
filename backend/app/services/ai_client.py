@@ -37,6 +37,7 @@ _RETRY_BACKOFF_SECONDS = 2.0
 
 logger = logging.getLogger("app.ai")
 
+
 def _log_ai_payload(message: str, **fields: str) -> None:
     """生成AIの入出力全文をログへ出す（LOG_AI_PAYLOAD有効時のみ）。
 
@@ -138,9 +139,7 @@ def build_prompt(
         )
 
     return (
-        "あなたはHTML/CSS帳票の生成アシスタントです。\n"
-        f"{source_instruction}"
-        f"{_common_output_rules(size_line, prompt)}"
+        f"あなたはHTML/CSS帳票の生成アシスタントです。\n{source_instruction}{_common_output_rules(size_line, prompt)}"
     )
 
 
@@ -191,9 +190,7 @@ def build_hybrid_prompt(
     )
 
     return (
-        "あなたはHTML/CSS帳票の生成アシスタントです。\n"
-        f"{source_instruction}"
-        f"{_common_output_rules(size_line, prompt)}"
+        f"あなたはHTML/CSS帳票の生成アシスタントです。\n{source_instruction}{_common_output_rules(size_line, prompt)}"
     )
 
 
@@ -214,7 +211,7 @@ def _common_output_rules(size_line: str, prompt: str) -> str:
         "- サブ見出し（h2相当）: 15〜17px\n"
         "- セクション見出し・ラベル（h3相当）: 12〜14px\n"
         "- 明細・本文・表のセル・その他: 10〜11px（本文・明細は小さめに）\n"
-        "明細（品目）の一覧は必ず<table class=\"invoice-items\">で組み、次のスタイルを付けて"
+        '明細（品目）の一覧は必ず<table class="invoice-items">で組み、次のスタイルを付けて'
         "表として見やすくしてください: border-collapse:collapse、width:100%、"
         "見出し行（th）は下線（border-bottom）付きの太字、各セル（th/td）はpadding 6〜8px、"
         "各行は下線（border-bottom）で区切り、金額など数値の列はtext-align:rightで右寄せ。"
@@ -247,7 +244,7 @@ def _common_output_rules(size_line: str, prompt: str) -> str:
         "5. htmlに書いた{{key}}形式のテンプレート変数と、jsonのキーは過不足なく一対一で"
         "対応させてください。htmlに{{item_1_total}}と書いたなら、jsonには必ずitem_1_totalキーを"
         "含めます。元のPDFで空欄のセルであっても、プレースホルダを置いたなら対応するキーを"
-        "空文字列（\"\"）で必ずjsonに含めてください（キーの省略は許されません）。逆に、jsonにあって"
+        '空文字列（""）で必ずjsonに含めてください（キーの省略は許されません）。逆に、jsonにあって'
         "htmlのどこにも{{key}}として現れないキーは作らないでください。\n"
         "タイトル等の固定テキストはHTMLに直接記述し、明細等の業務データのみを"
         "{{key}}形式のテンプレート変数としてHTMLに埋め込んでください。"
@@ -357,9 +354,7 @@ class GeminiAIClient:
     # render-worker Lambda上で動くため、S3書き込み・履歴保存の余地を残して短く切る。
     _HTTP_TIMEOUT_MS = 150_000
 
-    def __init__(
-        self, api_key: str, client: Optional[object] = None, standard: bool = False
-    ) -> None:
+    def __init__(self, api_key: str, client: Optional[object] = None, standard: bool = False) -> None:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
         self._client = client or genai.Client(
             api_key=api_key, http_options=genai_types.HttpOptions(timeout=self._HTTP_TIMEOUT_MS)
@@ -368,14 +363,10 @@ class GeminiAIClient:
         # GEMINI_MODELで別モデルへ切り替えれば別枠で検証を継続できる。
         if standard:
             self._model = (
-                os.getenv("GEMINI_STANDARD_MODEL", self._DEFAULT_MODEL_STANDARD).strip()
-                or self._DEFAULT_MODEL_STANDARD
+                os.getenv("GEMINI_STANDARD_MODEL", self._DEFAULT_MODEL_STANDARD).strip() or self._DEFAULT_MODEL_STANDARD
             )
         else:
-            self._model = (
-                os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL_FREE).strip()
-                or self._DEFAULT_MODEL_FREE
-            )
+            self._model = os.getenv("GEMINI_MODEL", self._DEFAULT_MODEL_FREE).strip() or self._DEFAULT_MODEL_FREE
         # 思考トークンもmax_output_tokensを消費し、JSON本体が途中で打ち切られうる。無効化
         # （budget=0）は新しいモデルが400 INVALID_ARGUMENTを返すため、動的思考(-1)で妥協する。
         self._config = genai_types.GenerateContentConfig(
@@ -401,9 +392,7 @@ class GeminiAIClient:
                 # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は
                 # Gemini側の一過性の混雑であり、待てば成功しうる。
                 if attempt == _RETRY_MAX_ATTEMPTS:
-                    raise AIServiceUnavailableError(
-                        f"Gemini API呼び出しに失敗しました: {exc}"
-                    ) from exc
+                    raise AIServiceUnavailableError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
                 time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
                 continue
             except genai_errors.APIError as exc:
@@ -465,9 +454,7 @@ class ClaudeAIClient:
         except Exception as exc:  # SDK例外の型に関わらず一律502へマッピングする
             raise AIGenerationError(f"Claude API呼び出しに失敗しました: {exc}") from exc
 
-        text = "".join(
-            block.text for block in response.content if getattr(block, "type", None) == "text"
-        )
+        text = "".join(block.text for block in response.content if getattr(block, "type", None) == "text")
         _log_ai_payload("Claudeからレスポンスを受信", ai_model=self._model, ai_response=text)
         return parse_ai_response(text)
 

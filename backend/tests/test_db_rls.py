@@ -38,16 +38,12 @@ def _sqlite_session_pretending_to_be_postgresql(monkeypatch) -> Session:
 def test_sets_jwt_claims_and_switches_role_on_postgresql():
     connection = _RecordingConnection()
 
-    db_module._set_rls_context(
-        connection, json.dumps({"sub": "11111111-2222-3333-4444-555555555555"})
-    )
+    db_module._set_rls_context(connection, json.dumps({"sub": "11111111-2222-3333-4444-555555555555"}))
 
     sql_texts = [sql for sql, _ in connection.statements]
     assert "set_config('request.jwt.claims'" in sql_texts[0]
     # auth.uid()はrequest.jwt.claimsのsubを読むため、subを含むJSONで渡す必要がある。
-    assert json.loads(connection.statements[0][1]["claims"]) == {
-        "sub": "11111111-2222-3333-4444-555555555555"
-    }
+    assert json.loads(connection.statements[0][1]["claims"]) == {"sub": "11111111-2222-3333-4444-555555555555"}
     # ロール切り替えはクレーム設定の後（切り替え前に値を入れておく）。
     assert sql_texts[1] == "SET LOCAL ROLE authenticated"
 
@@ -59,9 +55,7 @@ def test_reapplies_context_on_every_transaction(monkeypatch):
     authenticatorロールのままRLS対象テーブルへ触れてしまい権限エラーになる。
     """
     applied: list[str] = []
-    monkeypatch.setattr(
-        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
-    )
+    monkeypatch.setattr(db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims))
 
     with _sqlite_session_pretending_to_be_postgresql(monkeypatch) as session:
         apply_rls_context(session, "user-1")
@@ -76,9 +70,7 @@ def test_reapplies_context_on_every_transaction(monkeypatch):
 
 def test_applies_context_immediately_when_transaction_already_open(monkeypatch):
     applied: list[str] = []
-    monkeypatch.setattr(
-        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
-    )
+    monkeypatch.setattr(db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims))
 
     with _sqlite_session_pretending_to_be_postgresql(monkeypatch) as session:
         session.execute(sa_text("SELECT 1"))
@@ -91,9 +83,7 @@ def test_applies_context_immediately_when_transaction_already_open(monkeypatch):
 def test_does_nothing_on_sqlite(monkeypatch):
     """pytestはSQLiteで走るため、RLS用のSQLを発行してはならない（発行すると全テストが壊れる）。"""
     applied: list[str] = []
-    monkeypatch.setattr(
-        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
-    )
+    monkeypatch.setattr(db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims))
 
     with Session(create_engine("sqlite://")) as session:
         apply_rls_context(session, "user-1")
@@ -104,9 +94,7 @@ def test_does_nothing_on_sqlite(monkeypatch):
 
 def test_does_nothing_when_session_has_no_bind(monkeypatch):
     applied: list[str] = []
-    monkeypatch.setattr(
-        db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims)
-    )
+    monkeypatch.setattr(db_module, "_set_rls_context", lambda _connection, claims: applied.append(claims))
 
     class _BindlessSession:
         bind = None

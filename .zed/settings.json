@@ -35,10 +35,9 @@
           "name": "ruff"
         }
       },
-      // 既存コードは`ruff format`未適用（50ファイル中32ファイルが差分あり）のため、保存時の
-      // 自動整形は無効にしている。整形は明示実行（editor: format）で行う。リポジトリ全体へ
-      // `ruff format`を適用した時点で "on" へ切り替えてよい。
-      "format_on_save": "off"
+      // 整形幅（line-length = 120）は各サービスのruff.tomlが一次ソースで、CIも
+      // `ruff format --check`で同じ設定を見る。
+      "format_on_save": "on"
     },
 
     // TypeScript/React側はPrettierを導入していない（package.json参照）ため、保存時は

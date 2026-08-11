@@ -29,9 +29,9 @@ _BOLD_FONT_MARKERS = ("bold", "black", "heavy", "gothic")
 _FONT_STACK = "'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif"
 
 # 帳票として過大にならないフォントサイズ上限（px）。元が大きい字だけを頭打ちにする（min）。
-_MAX_FONT_PX_TITLE = 22.0    # 帳票名・大見出し
+_MAX_FONT_PX_TITLE = 22.0  # 帳票名・大見出し
 _MAX_FONT_PX_HEADING = 14.0  # セクション見出し・ラベル
-_MAX_FONT_PX_BODY = 11.0     # 明細・本文・その他
+_MAX_FONT_PX_BODY = 11.0  # 明細・本文・その他
 # 元のフォントサイズ（pt）から役割を推定する境界。これ以上を各ティアとみなす。
 _FONT_TIER_TITLE_MIN = 15.0
 _FONT_TIER_HEADING_MIN = 12.0
@@ -86,7 +86,7 @@ def _shape_divs(page: "fitz.Page") -> list:
             if w > 1 and h > 1:
                 divs.append(
                     f'        <div class="bg-element" style="left:{rect.x0:.1f}px;'
-                    f' top:{rect.y0:.1f}px; width:{w:.1f}px; height:{h:.1f}px;'
+                    f" top:{rect.y0:.1f}px; width:{w:.1f}px; height:{h:.1f}px;"
                     f' background-color:{_rgb(fill)};"></div>\n'
                 )
         elif draw["type"] == "s":
@@ -96,7 +96,7 @@ def _shape_divs(page: "fitz.Page") -> list:
                 if w > 0 or h > 0:
                     divs.append(
                         f'        <div class="border-element" style="left:{rect.x0:.1f}px;'
-                        f' top:{rect.y0:.1f}px; width:{w:.1f}px; height:{h:.1f}px;'
+                        f" top:{rect.y0:.1f}px; width:{w:.1f}px; height:{h:.1f}px;"
                         f' border-color:{color};"></div>\n'
                     )
     return divs
@@ -117,7 +117,7 @@ def _text_divs(page: "fitz.Page") -> list:
                 weight = "bold" if _is_bold(span["font"]) else "normal"
                 divs.append(
                     f'        <div class="text-element" style="left:{x0:.1f}px;'
-                    f' top:{y0:.1f}px; font-size:{size}px; color:{color};'
+                    f" top:{y0:.1f}px; font-size:{size}px; color:{color};"
                     f' font-weight:{weight};">{escape(text)}</div>\n'
                 )
     return divs

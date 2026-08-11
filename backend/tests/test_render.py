@@ -41,9 +41,7 @@ def _override_db(db_session: Session) -> None:
     app.dependency_overrides[get_db_session] = _yield_session
     app.dependency_overrides[get_db_session_or_none] = _yield_session
     # 共有カウンタ用セッションは接続を遅延させるため、セッションではなく開く関数を注入する。
-    app.dependency_overrides[get_shared_db_session_opener] = lambda: (
-        lambda: nullcontext(db_session)
-    )
+    app.dependency_overrides[get_shared_db_session_opener] = lambda: lambda: nullcontext(db_session)
 
 
 def _clear_db_override() -> None:
@@ -54,7 +52,7 @@ def _clear_db_override() -> None:
 
 def _override_ai_client(fake_client) -> None:
     # ai_client_factoryはengineがリクエスト時にしか決まらないため関数を注入する。
-    app.dependency_overrides[get_ai_client_factory] = lambda: (lambda engine: fake_client)
+    app.dependency_overrides[get_ai_client_factory] = lambda: lambda engine: fake_client
 
 
 def test_render_returns_dummy_html_css_json():
@@ -603,9 +601,7 @@ def test_render_records_gemini_free_usage_on_shared_session_when_logged_in(monke
 
     app.dependency_overrides[get_db_session] = _yield_user_session
     app.dependency_overrides[get_db_session_or_none] = _yield_user_session
-    app.dependency_overrides[get_shared_db_session_opener] = lambda: (
-        lambda: nullcontext(shared_session)
-    )
+    app.dependency_overrides[get_shared_db_session_opener] = lambda: lambda: nullcontext(shared_session)
     try:
         response = client.post(
             "/api/render",

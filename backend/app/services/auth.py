@@ -38,9 +38,7 @@ def _get_jwks_client(jwks_url: str) -> PyJWKClient:
     return PyJWKClient(jwks_url, cache_keys=True, timeout=5)
 
 
-def get_current_user(
-    request: Request, authorization: Optional[str] = Header(None)
-) -> Optional[SupabaseUser]:
+def get_current_user(request: Request, authorization: Optional[str] = Header(None)) -> Optional[SupabaseUser]:
     """AuthorizationヘッダーのSupabase JWTを検証し、成功時のみユーザー情報を返す。
 
     検証に必要な設定（SUPABASE_JWT_SECRET/SUPABASE_JWT_JWKS_URL）が未設定の場合は常にNoneを

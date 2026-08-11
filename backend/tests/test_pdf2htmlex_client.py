@@ -26,9 +26,7 @@ def test_remote_extractor_returns_html_on_success():
         assert b'filename="sample.pdf"' in request.content
         return httpx.Response(200, json={"html": "<html>pdf2htmlex-marker</html>"})
 
-    extractor = RemotePdf2HtmlExExtractor(
-        base_url="http://pdf2htmlex:8200", client=_client_with(handler)
-    )
+    extractor = RemotePdf2HtmlExExtractor(base_url="http://pdf2htmlex:8200", client=_client_with(handler))
 
     html = extractor.convert_to_html("sample.pdf", b"pdf-bytes")
 
@@ -39,9 +37,7 @@ def test_remote_extractor_raises_pdf_conversion_error_on_non_200():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(422, json={"detail": "PDFの解析に失敗しました（テスト用）"})
 
-    extractor = RemotePdf2HtmlExExtractor(
-        base_url="http://pdf2htmlex:8200", client=_client_with(handler)
-    )
+    extractor = RemotePdf2HtmlExExtractor(base_url="http://pdf2htmlex:8200", client=_client_with(handler))
 
     with pytest.raises(PDFConversionError):
         extractor.convert_to_html("broken.pdf", b"not a real pdf content at all")
@@ -51,9 +47,7 @@ def test_remote_extractor_raises_pdf_conversion_error_on_connection_failure():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused", request=request)
 
-    extractor = RemotePdf2HtmlExExtractor(
-        base_url="http://pdf2htmlex:8200", client=_client_with(handler)
-    )
+    extractor = RemotePdf2HtmlExExtractor(base_url="http://pdf2htmlex:8200", client=_client_with(handler))
 
     with pytest.raises(PDFConversionError):
         extractor.convert_to_html("sample.pdf", b"pdf-bytes")
@@ -90,9 +84,7 @@ def test_remote_extractor_sends_only_first_page_of_multi_page_pdf():
         sent_page_widths.extend(float(page.mediabox.width) for page in reader.pages)
         return httpx.Response(200, json={"html": "<html>x</html>"})
 
-    extractor = RemotePdf2HtmlExExtractor(
-        base_url="http://pdf2htmlex:8200", client=_client_with(handler)
-    )
+    extractor = RemotePdf2HtmlExExtractor(base_url="http://pdf2htmlex:8200", client=_client_with(handler))
 
     extractor.convert_to_html("multi.pdf", multi_page_pdf)
 

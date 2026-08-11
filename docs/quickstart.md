@@ -87,6 +87,7 @@ docker compose restart frontend
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
+docker compose exec backend mypy app                     # 型チェック（backend/mypy.ini）
 docker compose exec docling pytest                       # doclingサービス（PDF→HTML変換専用）の全テスト実行
 docker compose exec docling ruff check .                  # doclingサービスの静的解析
 docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
@@ -134,7 +135,7 @@ docker compose exec -T pdf2htmlex curl -sf -F "file=@/tmp/input.pdf" http://loca
 
 | 対象 | 使うもの | 保存時の挙動 |
 |---|---|---|
-| Python | `backend`イメージのruff（`ruff server`） | 診断のみ（整形は`editor: format`で明示実行） |
+| Python | `backend`イメージのruff（`ruff server`） | `ruff format`を適用 |
 | TypeScript / React | `frontend-lsp`イメージのBiome（`biome lsp-proxy`、`biome.json`をそのまま使用） | 整形・自動修正・import整列を適用 |
 
 初回のみLSP用イメージのビルドが必要（未ビルドでも初回起動時に自動ビルドされるが、数分かかるため先に済ませておくとよい）。
@@ -144,7 +145,7 @@ docker compose --profile lsp build          # LSP用イメージをビルド
 ./scripts/setup-zed.sh                       # .zed/settings.json のパスを自分のクローン先に合わせる
 ```
 
-TypeScript側の整形はBiomeが担うため、Zed同梱のPrettierは`.zed/settings.json`で無効化している（リポジトリがバージョンを固定できないツールに整形させないため）。Python側は既存コードに`ruff format`が未適用（差分が大きい）ため、保存時の自動整形をオフにしている。`.zed/tasks.json`には`docker compose exec`で走るテスト・静的解析タスクを定義しており、Zedの`task: spawn`から実行できる。
+TypeScript側の整形はBiomeが担うため、Zed同梱のPrettierは`.zed/settings.json`で無効化している（リポジトリがバージョンを固定できないツールに整形させないため）。Python側は`ruff format`が保存時に適用され、CIも`ruff format --check`で適用漏れを検出する。`.zed/tasks.json`には`docker compose exec`で走るテスト・静的解析タスクを定義しており、Zedの`task: spawn`から実行できる。
 
 ## 型同期
 

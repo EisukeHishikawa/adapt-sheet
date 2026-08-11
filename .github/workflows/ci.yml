@@ -28,6 +28,9 @@ jobs:
       # 整形はエディタの保存時に自動適用されるため、適用漏れをここで検出する（書き換えはしない）。
       - name: ruff format --check
         run: docker compose run --rm --no-deps backend ruff format --check .
+      # ruffは型を見ないため、型の整合はmypyで別途担保する（backend/mypy.ini）。
+      - name: mypy
+        run: docker compose run --rm --no-deps backend mypy app
 
   frontend:
     runs-on: ubuntu-latest

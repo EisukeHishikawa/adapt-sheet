@@ -100,6 +100,16 @@ def _validate_engine(engine: str) -> None:
         raise HTTPException(status_code=400)
 
 
+def _require_pdf(pdf: Optional[UploadFile]) -> UploadFile:
+    """PDF必須エンジンの処理直前で、添付済みであることを型として確定させる。
+
+    _validate_render_paramsが先に弾くため実際には到達しないが、型を絞るために同じ428を返す。
+    """
+    if pdf is None:
+        raise HTTPException(status_code=428)
+    return pdf
+
+
 def _validate_pdf_requirement(engine: str, has_pdf: bool) -> None:
     """hybrid・docling・pdf2htmlex・pymupdfはPDF添付必須。
 
@@ -149,9 +159,9 @@ async def render(
     _validate_render_params(engine, current_user, has_pdf=pdf is not None)
 
     if engine in CONVERTER_ENGINES:
-        # PDF必須は上のバリデーションで確認済み。
-        content = await pdf.read()
-        filename = pdf.filename or "uploaded.pdf"
+        pdf_file = _require_pdf(pdf)
+        content = await pdf_file.read()
+        filename = pdf_file.filename or "uploaded.pdf"
         html = await _convert_with_engine(
             engine, layout_converter, html_extractor, pdf2htmlex_extractor, filename, content
         )

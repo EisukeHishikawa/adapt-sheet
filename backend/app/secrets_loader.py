@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger("app.secrets")
 
@@ -33,7 +33,7 @@ _SECRET_ENV_NAMES = (
 PLACEHOLDER_VALUE = "PLACEHOLDER_SET_OUT_OF_BAND"
 
 
-def load_secrets_into_env(ssm_client_factory: Optional[Callable[[], object]] = None) -> None:
+def load_secrets_into_env(ssm_client_factory: Optional[Callable[[], Any]] = None) -> None:
     """Parameter Store のAPIキーを os.environ へ展開する（コールドスタート時に一度だけ呼ぶ）。
 
     冪等性は「既に env にあるキーは取得対象から外す」ことで担保する。初回はキーが無いので

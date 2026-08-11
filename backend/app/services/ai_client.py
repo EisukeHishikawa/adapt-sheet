@@ -14,7 +14,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 import anthropic
 import openai
@@ -354,9 +354,10 @@ class GeminiAIClient:
     # render-worker Lambda上で動くため、S3書き込み・履歴保存の余地を残して短く切る。
     _HTTP_TIMEOUT_MS = 150_000
 
-    def __init__(self, api_key: str, client: Optional[object] = None, standard: bool = False) -> None:
+    def __init__(self, api_key: str, client: Optional[Any] = None, standard: bool = False) -> None:
         # clientはテストがスタブを注入するための口。本番はapi_keyから生成する。
-        self._client = client or genai.Client(
+        # SDKクライアントとテスト用スタブの双方を受けるため、属性の型は絞らない。
+        self._client: Any = client or genai.Client(
             api_key=api_key, http_options=genai_types.HttpOptions(timeout=self._HTTP_TIMEOUT_MS)
         )
         # 無料枠のクォータ（1日20回）はモデル単位（PerModel）のため、日次上限に達した場合は
@@ -425,8 +426,8 @@ class ClaudeAIClient:
     _DEFAULT_MODEL = "claude-opus-4-8"
     _MAX_OUTPUT_TOKENS = 16384
 
-    def __init__(self, api_key: str, client: Optional[object] = None) -> None:
-        self._client = client or anthropic.Anthropic(api_key=api_key)
+    def __init__(self, api_key: str, client: Optional[Any] = None) -> None:
+        self._client: Any = client or anthropic.Anthropic(api_key=api_key)
         self._model = os.getenv("CLAUDE_MODEL", self._DEFAULT_MODEL).strip() or self._DEFAULT_MODEL
 
     def generate(self, prompt: str, pdf: Optional[bytes] = None) -> RenderResult:
@@ -469,8 +470,8 @@ class OpenAIAIClient:
     _DEFAULT_MODEL = "gpt-5.1"
     _MAX_OUTPUT_TOKENS = 16384
 
-    def __init__(self, api_key: str, client: Optional[object] = None) -> None:
-        self._client = client or openai.OpenAI(api_key=api_key)
+    def __init__(self, api_key: str, client: Optional[Any] = None) -> None:
+        self._client: Any = client or openai.OpenAI(api_key=api_key)
         self._model = os.getenv("OPENAI_MODEL", self._DEFAULT_MODEL).strip() or self._DEFAULT_MODEL
 
     def generate(self, prompt: str, pdf: Optional[bytes] = None) -> RenderResult:

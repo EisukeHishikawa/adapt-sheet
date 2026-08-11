@@ -1,5 +1,5 @@
 #!/bin/sh
-# ZedがLSP（ruff / ESLint）を起動するときに実行するラッパー（ADR-024）。
+# ZedがLSP（ruff / Biome）を起動するときに実行するラッパー（ADR-024）。
 # 標準入出力でLSPを話すため、余計な出力を混ぜないことが唯一の要件。
 #
 # 使い方: scripts/zed-lsp.sh ruff | scripts/zed-lsp.sh biome

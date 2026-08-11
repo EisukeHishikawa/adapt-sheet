@@ -107,6 +107,7 @@ AdaptSheet AIにおける主要な技術選定の背景・理由・トレード�
 - **理由**: 単一の実行環境に一本化することで環境差異とドキュメント・Dockerfileの記述コストを削減できる。特にDoclingのOS依存バイナリ問題（ADR-003）は、コンテナ内Linuxに統一することで実質的に解消される。
 - **トレードオフ**: Docker Desktop（またはOCI互換ランタイム）が無いと開発できない。初回ビルド時はDocling/torch等の大容量パッケージのダウンロードで時間がかかる。本Dockerfileはローカル開発専用であり、本番用コンテナ化とは別物である。
 - **追記**: エディタ（Zed）のリンター/フォーマッターも、ホストに二重導入せず本構成のDocker Compose内（`lsp`プロファイル）で動かす。設定詳細は`.zed/settings.json`・`scripts/zed-lsp.sh`・CLAUDE.mdを参照。
+- **追記**: フロントエンドの静的解析はESLintではなくBiomeを使う。ESLintはv9以降が整形ルールを本体から外しており、リンターとは別にフォーマッターを用意しないと書式が担保できない。Biomeは整形・リント・import整列を1バイナリで賄うため、Prettierを足さずにPython側（ruff）と同じ「1言語1ツール」へ揃えられる。エディタ連携も`biome lsp-proxy`が直接LSPを話すため、`vscode-eslint-language-server`のprocessId監視を回避する中継スクリプトが不要になる。Zed同梱のPrettierは、リポジトリがバージョンを固定できず一次ソースにできないため無効化したままとする。
 
 ---
 

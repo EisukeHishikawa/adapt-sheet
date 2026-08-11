@@ -39,7 +39,7 @@ export function renderTemplate(html: string, jsonText: string): string {
 
   return html.replace(PLACEHOLDER_PATTERN, (match, key: string) => {
     // Object.prototype由来のキー（toString等）を誤検出しないようhasOwnPropertyで判定する。
-    if (!Object.prototype.hasOwnProperty.call(data, key)) return match
+    if (!Object.hasOwn(data, key)) return match
     return escapeHtml(stringifyValue(data[key]))
   })
 }

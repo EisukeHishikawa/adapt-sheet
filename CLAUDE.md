@@ -73,14 +73,15 @@ docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" htt
 
 ```bash
 docker compose exec frontend npm run test          # Vitest（msw使用、実APIには接続しない）
-docker compose exec frontend npm run lint           # ESLint
+docker compose exec frontend npm run lint           # Biome（リント＋整形＋import整列の検査）
+docker compose exec frontend npm run format          # Biome（上記の自動修正を書き込む）
 docker compose exec frontend npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側を先に実行しておく）
 docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス）
 ```
 
 ### エディタ（Zed）向けLSP
 
-エディタ上の診断・整形もDocker内のruff / ESLintで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント規則の一次ソースは`backend/requirements.txt`と`frontend/eslint.config.js`のままである。ホストにruff/ESLintを追加導入しないこと。
+エディタ上の診断・整形もDocker内のruff / Biomeで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント・整形規則の一次ソースは各サービスの`ruff.toml`と`frontend/biome.json`である。ホストにruff/Biomeを追加導入しないこと。
 
 ```bash
 docker compose --profile lsp build   # LSP用イメージ（backend-lsp / frontend-lsp）のビルド

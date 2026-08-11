@@ -35,8 +35,8 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 - リンターもフォーマッタも**ホストへ入れず、Docker内のもの**をエディタからLSPとして使う（`docker compose --profile lsp` の `backend-lsp` / `frontend-lsp`）。エディタの診断・整形結果を `docker compose exec` で実行するCIと一致させるため。
 - 設定は [`.zed/settings.json`](../.zed/settings.json)（LSP起動は [`scripts/zed-lsp.sh`](../scripts/zed-lsp.sh)）。クローン直後は `./scripts/setup-zed.sh` で絶対パスを自環境へ合わせる。
-- 規則の一次ソースはあくまで `backend/requirements.txt`（ruff）と `frontend/eslint.config.js`。エディタ側の設定でルールを上書きしない。
-- 言語ごとの整形手段・保存時整形の可否は各言語の節を参照（Python: `ruff format`／TypeScript: ESLintの自動修正）。
+- 規則の一次ソースは各サービスの `ruff.toml` と `frontend/biome.json`、ツールの版は `requirements.txt` / `package.json`。エディタ側の設定でルールを上書きしない。
+- Python は ruff、TypeScript は Biome が、リントと整形の両方を担う。詳細は各言語の節を参照。
 
 ## 2. Python（backend / docling-service / pdf2htmlex-service）
 
@@ -82,10 +82,12 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 ### 静的解析・フォーマット
 
-- `npm run lint`（ESLint）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。
-- フォーマッタは **ESLint の自動修正**（`source.fixAll.eslint`）。保存時に自動適用される（`format_on_save: "on"`）。
-- **Prettier は使わない**。`.zed/settings.json` で `prettier.allowed: false` を明示しており、Zed同梱のPrettierが走らないようにしている。整形規則の一次ソースを `frontend/eslint.config.js` に一本化するため、Prettier を依存へ追加しない。
-- ESLint が整えない部分は既存スタイルに合わせる: **2スペース・シングルクォート・セミコロンなし・行長120文字程度**。
+- `npm run lint`（Biome）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。`npm run lint` はリント・整形・import整列をまとめて検査する。
+- フォーマッタは **Biome**。保存時に自動適用される（`format_on_save: "on"`）ので、手で桁を揃えず整形結果に従う。手元でまとめて直す場合は `npm run format`。
+- 書式は `frontend/biome.json` が一次ソース: **2スペース・シングルクォート・セミコロンなし・行長120文字**。JSX属性のみダブルクォート。
+- import は Biome が整列する（`organizeImports`）。並び順を手で管理しない。
+- **Prettier は使わない**。`.zed/settings.json` で `prettier.allowed: false` を明示している。リポジトリがバージョンを固定できないツールに整形させないため。
+- Tailwind v4 の記法を Biome の CSS パーサが解釈できないため、`**/*.css` と自動生成物の `src/types/api.ts` は検査対象外にしている。
 
 ### 型
 
@@ -152,4 +154,4 @@ docker compose exec frontend npm run generate-types             # src/types/api.
 
 - Python は `requirements.txt`、Node は `package.json` に**バージョンを固定**して追加する。
 - ホストで直接動かすツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは `mise.toml` で固定する。`node` / `python` は各 `Dockerfile` のベースイメージとパッチバージョンまで揃える。
-- ホストに ruff / ESLint を追加導入しない（エディタの診断も Docker 内のものを使う）。
+- ホストに ruff / Biome を追加導入しない（エディタの診断も Docker 内のものを使う）。

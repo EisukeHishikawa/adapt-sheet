@@ -1,5 +1,5 @@
+import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { http, HttpResponse } from 'msw'
 import { server } from '@/mocks/server'
 
 // Supabaseの疎通確認はSDK経由のため、実APIに接続せずクエリビルダーの呼び出しだけを検証する。

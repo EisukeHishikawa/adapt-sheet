@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PromptInput } from './PromptInput'
 import { useSheetStore } from '@/store/sheetStore'
+import { PromptInput } from './PromptInput'
 
 // 見出しは非表示にしプレースホルダで用途を示す方針のため、プレースホルダ文言と
 // ストア連動（promptContent更新）を固定する。

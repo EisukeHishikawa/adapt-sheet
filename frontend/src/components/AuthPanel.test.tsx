@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { AuthPanel } from './AuthPanel'
 import { useAuthStore } from '@/store/authStore'
+import { AuthPanel } from './AuthPanel'
 
 // authStoreはSupabase SDKを直接叩くため（authStore.test.ts側で検証済み）、ここではストアを
 // モックし、AuthPanelがストアの状態・アクションを正しく橋渡しすることだけを検証する。

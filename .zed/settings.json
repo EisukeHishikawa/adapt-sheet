@@ -1,5 +1,5 @@
 // Zedのプロジェクト設定（ADR-024）。リンター/フォーマッターはホストへ入れず、
-// 開発用Dockerイメージ内のruff / ESLintをLSPとして起動する（scripts/zed-lsp.sh 経由）。
+// 開発用Dockerイメージ内のruff / BiomeをLSPとして起動する（scripts/zed-lsp.sh 経由）。
 //
 // binary.pathは絶対パスで指定する必要がある。クローン先が異なる環境では
 // `scripts/setup-zed.sh` を実行すると、このファイルのパスを自分のリポジトリルートへ書き換える。
@@ -12,15 +12,12 @@
         "arguments": ["ruff"]
       }
     },
-    // frontend/Dockerfile.lsp の vscode-eslint-language-server。
-    // リント規則はfrontend/eslint.config.js（flat config）がそのまま使われる。
-    "eslint": {
+    // frontend/Dockerfile.lsp の biome lsp-proxy。
+    // リント・整形規則はfrontend/biome.jsonがそのまま使われる。
+    "biome": {
       "binary": {
         "path": "/Users/mina/adapt-sheet/scripts/zed-lsp.sh",
-        "arguments": ["eslint"]
-      },
-      "settings": {
-        "useFlatConfig": true
+        "arguments": ["biome"]
       }
     }
   },
@@ -41,13 +38,17 @@
       "format_on_save": "off"
     },
 
-    // TypeScript/React側はPrettierを導入していない（package.json参照）ため、保存時は
-    // ESLintの自動修正のみを適用し、Zed同梱のPrettierによる整形は明示的に無効化する。
+    // 整形・リント・import整列はすべてBiomeが担う。Zed同梱のPrettierはリポジトリが
+    // バージョンを固定できないため明示的に無効化する。
     "TypeScript": {
       "formatter": {
-        "code_actions": {
-          "source.fixAll.eslint": true
+        "language_server": {
+          "name": "biome"
         }
+      },
+      "code_actions_on_format": {
+        "source.fixAll.biome": true,
+        "source.organizeImports.biome": true
       },
       "format_on_save": "on",
       "prettier": {
@@ -56,9 +57,13 @@
     },
     "TSX": {
       "formatter": {
-        "code_actions": {
-          "source.fixAll.eslint": true
+        "language_server": {
+          "name": "biome"
         }
+      },
+      "code_actions_on_format": {
+        "source.fixAll.biome": true,
+        "source.organizeImports.biome": true
       },
       "format_on_save": "on",
       "prettier": {
@@ -67,9 +72,13 @@
     },
     "JavaScript": {
       "formatter": {
-        "code_actions": {
-          "source.fixAll.eslint": true
+        "language_server": {
+          "name": "biome"
         }
+      },
+      "code_actions_on_format": {
+        "source.fixAll.biome": true,
+        "source.organizeImports.biome": true
       },
       "format_on_save": "on",
       "prettier": {

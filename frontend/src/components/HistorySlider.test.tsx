@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { HistorySlider } from './HistorySlider'
-import { useSheetStore } from '@/store/sheetStore'
 import type { HistoryItem } from '@/store/sheetStore'
+import { useSheetStore } from '@/store/sheetStore'
+import { HistorySlider } from './HistorySlider'
 
 // seqは描画ごとの通し番号（表示ラベルの基準）。大きいほど新しい描画。
 function makeEntry(label: string, seq: number, kind: HistoryItem['kind'] = 'render'): HistoryItem {

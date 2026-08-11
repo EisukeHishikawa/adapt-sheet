@@ -84,7 +84,7 @@ describe('useTheme', () => {
 
   it('localStorageが参照できない環境でも例外にならず、OS設定へフォールバックする', () => {
     mockPrefersDark(true)
-    vi.spyOn(window.localStorage.__proto__, 'getItem').mockImplementation(() => {
+    vi.spyOn(Object.getPrototypeOf(window.localStorage), 'getItem').mockImplementation(() => {
       throw new Error('SecurityError（プライベートブラウズ等を想定）')
     })
 
@@ -94,7 +94,7 @@ describe('useTheme', () => {
   })
 
   it('localStorageへの保存が失敗しても、表示上のテーマ切り替え自体は成立する', () => {
-    vi.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => {
+    vi.spyOn(Object.getPrototypeOf(window.localStorage), 'setItem').mockImplementation(() => {
       throw new Error('QuotaExceededError（テスト用）')
     })
 

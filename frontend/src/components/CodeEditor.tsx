@@ -1,5 +1,5 @@
-import { useRef, useState, type ChangeEvent, type KeyboardEvent, type UIEvent } from 'react'
 import Prism from 'prismjs'
+import { type ChangeEvent, type KeyboardEvent, type UIEvent, useRef, useState } from 'react'
 // PrismコアはHTML(markup)を同梱するが、JSON/CSSは別途読み込んで文法を拡張する。
 import 'prismjs/components/prism-json'
 import 'prismjs/components/prism-css'
@@ -55,7 +55,7 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id, readOnly 
     event.preventDefault()
     const el = event.currentTarget
     const { selectionStart, selectionEnd } = el
-    const nextValue = value.slice(0, selectionStart) + '  ' + value.slice(selectionEnd)
+    const nextValue = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`
     onChange(nextValue)
     requestAnimationFrame(() => {
       el.selectionStart = el.selectionEnd = selectionStart + 2

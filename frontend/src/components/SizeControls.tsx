@@ -1,8 +1,8 @@
 import type { ChangeEvent } from 'react'
-import { cn } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
+import { cn } from '@/lib/utils'
 import type { Orientation, SizePresetName } from '@/store/sheetStore'
+import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
 
 // 用紙の向きは文字ではなく実寸の縦横比を持つ紙のイラスト（PaperSwatch）で表現する。
 // 文字表記を持たない分、アクセシブルネームはトリガー・各選択肢のaria-labelで保持する。
@@ -34,7 +34,12 @@ const SWATCH_BASE_SIZE = 25
 
 // 高さだけを固定すると同じ用紙でも「よこ」が「たて」より大きく見えるため、面積の方を固定し、
 // 縦横比から幅・高さを逆算する。
-function swatchPixelSize(widthMm: number, heightMm: number, baseSize: number, areaScale = 1): { width: number; height: number } {
+function swatchPixelSize(
+  widthMm: number,
+  heightMm: number,
+  baseSize: number,
+  areaScale = 1,
+): { width: number; height: number } {
   const aspect = widthMm / heightMm
   const side = baseSize * Math.sqrt(areaScale)
   return { width: side * Math.sqrt(aspect), height: side / Math.sqrt(aspect) }
@@ -77,7 +82,9 @@ function PaperSwatch({
         className,
       )}
     >
-      {label && <span className="text-[0.5rem] leading-none font-semibold tracking-tight text-foreground/70">{label}</span>}
+      {label && (
+        <span className="text-[0.5rem] leading-none font-semibold tracking-tight text-foreground/70">{label}</span>
+      )}
     </span>
   )
 }

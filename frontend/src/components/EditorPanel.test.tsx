@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { EditorPanel } from './EditorPanel'
 import { useSheetStore } from '@/store/sheetStore'
+import { EditorPanel } from './EditorPanel'
 
 // タブ切り替えとストア連動を検証する。見出しテキストは非表示のため、検証はtextareaの
 // aria-labelとタブ（role=tab）に対して行う。

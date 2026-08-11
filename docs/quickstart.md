@@ -97,7 +97,7 @@ docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" htt
 docker compose exec backend pytest tests/test_pdf_layout.py -v # レイアウトHTML生成（PyMuPDF、backend内モジュール）のテスト
 docker compose exec backend alembic upgrade head          # 生成履歴用DBマイグレーションの適用（backend/migrations）
 docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
-docker compose exec frontend npm run lint                # ESLint
+docker compose exec frontend npm run lint                # Biome（リント＋整形＋import整列の検査）
 ```
 
 E2E（Playwright）は、frontendの軽量な`node:20-alpine`イメージがブラウザバイナリに非対応（Alpine/musl libc）のため、Microsoft公式のPlaywrightイメージを使う独立サービス`e2e`から実行する。常時起動しないよう`profiles`でopt-in化しているため、`--profile e2e`を付けて実行する。
@@ -130,12 +130,12 @@ docker compose exec -T pdf2htmlex curl -sf -F "file=@/tmp/input.pdf" http://loca
 
 ## エディタ（Zed）でリンター/フォーマッターを使う
 
-ホストにPython・Node・ruff・ESLintを入れずに、エディタ上でも開発コンテナと同じリンター/フォーマッターを動かすための設定を`.zed/`に用意している。Zedでこのリポジトリを開くと、`scripts/zed-lsp.sh`経由でLSPサーバーがDocker内に起動する。
+ホストにPython・Node・ruff・Biomeを入れずに、エディタ上でも開発コンテナと同じリンター/フォーマッターを動かすための設定を`.zed/`に用意している。Zedでこのリポジトリを開くと、`scripts/zed-lsp.sh`経由でLSPサーバーがDocker内に起動する。
 
 | 対象 | 使うもの | 保存時の挙動 |
 |---|---|---|
 | Python | `backend`イメージのruff（`ruff server`） | 診断のみ（整形は`editor: format`で明示実行） |
-| TypeScript / React | `frontend-lsp`イメージのESLint（`eslint.config.js`をそのまま使用） | ESLintの自動修正（`source.fixAll.eslint`）を適用 |
+| TypeScript / React | `frontend-lsp`イメージのBiome（`biome lsp-proxy`、`biome.json`をそのまま使用） | 整形・自動修正・import整列を適用 |
 
 初回のみLSP用イメージのビルドが必要（未ビルドでも初回起動時に自動ビルドされるが、数分かかるため先に済ませておくとよい）。
 
@@ -144,7 +144,7 @@ docker compose --profile lsp build          # LSP用イメージをビルド
 ./scripts/setup-zed.sh                       # .zed/settings.json のパスを自分のクローン先に合わせる
 ```
 
-Prettierは導入していないため、TypeScript側の保存時整形はESLintの自動修正のみで、Zed同梱のPrettierは`.zed/settings.json`で無効化している。Python側は既存コードに`ruff format`が未適用（差分が大きい）ため、保存時の自動整形をオフにしている。`.zed/tasks.json`には`docker compose exec`で走るテスト・静的解析タスクを定義しており、Zedの`task: spawn`から実行できる。
+TypeScript側の整形はBiomeが担うため、Zed同梱のPrettierは`.zed/settings.json`で無効化している（リポジトリがバージョンを固定できないツールに整形させないため）。Python側は既存コードに`ruff format`が未適用（差分が大きい）ため、保存時の自動整形をオフにしている。`.zed/tasks.json`には`docker compose exec`で走るテスト・静的解析タスクを定義しており、Zedの`task: spawn`から実行できる。
 
 ## 型同期
 

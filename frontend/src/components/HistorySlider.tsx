@@ -1,8 +1,8 @@
 import { Pencil } from 'lucide-react'
-import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
+import { HistoryArchive } from '@/components/HistoryArchive'
 import { composePreviewDocument, renderTemplate } from '@/lib/template'
 import { cn } from '@/lib/utils'
-import { HistoryArchive } from '@/components/HistoryArchive'
+import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
 
 // 96dpi基準（1inch = 25.4mm = 96px）で用紙の実寸(mm)をCSSピクセルへ換算する。PreviewPanelと同じ換算式。
 const PX_PER_MM = 96 / 25.4
@@ -27,11 +27,9 @@ export function HistorySlider() {
         <HistoryArchive />
       </div>
       {history.length === 0 ? (
-        <p className="px-0.5 pb-1 text-xs text-muted-foreground">
-          描画・編集すると、ここに履歴が最大10件まで並びます
-        </p>
+        <p className="px-0.5 pb-1 text-xs text-muted-foreground">描画・編集すると、ここに履歴が最大10件まで並びます</p>
       ) : (
-        <div className="flex gap-2.5 overflow-x-auto pb-1" aria-label="描画履歴">
+        <section className="flex gap-2.5 overflow-x-auto pb-1" aria-label="描画履歴">
           {history.map((entry, index) => {
             const isEdit = entry.kind === 'edit'
             // entry.widthMm/heightMmが無い（サイズ未指定の古い履歴等）場合はPreviewPanelと同じA4縦を既定にする。
@@ -80,7 +78,7 @@ export function HistorySlider() {
               </button>
             )
           })}
-        </div>
+        </section>
       )}
     </div>
   )

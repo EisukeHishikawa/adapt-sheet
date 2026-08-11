@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
 import { CodeEditor } from '@/components/CodeEditor'
+import { cn } from '@/lib/utils'
 import { useSheetStore } from '@/store/sheetStore'
 
 // 右カラムのコード入力。HTML・CSS・JSONを縦に並べず「タブ切り替え」にすることで、広い右カラムを
@@ -46,14 +46,26 @@ export function EditorPanel() {
       </div>
 
       {activeTab === 'html' && (
-        <CodeEditor id="html-editor" ariaLabel="HTML入力" language="html" value={htmlContent} onChange={setHtmlContent} />
+        <CodeEditor
+          id="html-editor"
+          ariaLabel="HTML入力"
+          language="html"
+          value={htmlContent}
+          onChange={setHtmlContent}
+        />
       )}
       {activeTab === 'css' && (
         <CodeEditor id="css-editor" ariaLabel="CSS入力" language="css" value={cssContent} onChange={setCssContent} />
       )}
       {activeTab === 'json' && (
         // JSON構文チェックはフロントで重複実装せず、バックエンドの400 VALIDATION_ERRORに委ねる。
-        <CodeEditor id="json-editor" ariaLabel="JSON入力" language="json" value={jsonContent} onChange={setJsonContent} />
+        <CodeEditor
+          id="json-editor"
+          ariaLabel="JSON入力"
+          language="json"
+          value={jsonContent}
+          onChange={setJsonContent}
+        />
       )}
     </div>
   )

@@ -1,13 +1,12 @@
 #!/bin/sh
 # frontend-lspサービスの起動前処理。
 #
-# ESLintのflat config（eslint.config.js）はプラグインをESMのbare importで読み込むため、
-# 解決はconfigファイルの位置（ホストからbind mountしたfrontend配下）からのnode_modules探索に
-# 限られ、NODE_PATHやイメージ内の/app/node_modulesでは代替できない。そのためホストの空の
-# node_modulesを名前付きボリュームで覆い、初回のみイメージ内の依存を実体としてコピーする。
+# Biomeの実体はnode_modules配下のプラットフォーム別バイナリだが、ホストのfrontend/node_modulesは
+# 空（実体はコンテナ内のみ）で、それが名前付きボリュームとして被さる。初回のみイメージ内の依存を
+# 実体としてコピーし、package.jsonで固定したバージョンのBiomeがエディタからも使われるようにする。
 set -e
 
-if [ ! -x node_modules/.bin/eslint ]; then
+if [ ! -x node_modules/.bin/biome ]; then
   cp -a /app/node_modules/. node_modules/
 fi
 

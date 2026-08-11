@@ -17,7 +17,7 @@
     "use_new_terminal": false
   },
   {
-    "label": "frontend: eslint",
+    "label": "frontend: biome",
     "command": "docker compose exec frontend npm run lint",
     "use_new_terminal": false
   },

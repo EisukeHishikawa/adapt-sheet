@@ -34,7 +34,8 @@ jobs:
         run: docker compose build frontend
       - name: Vitest
         run: docker compose run --rm --no-deps frontend npm run test
-      - name: ESLint
+      # Biomeはリント・整形・import整列を1コマンドで検査する（書き換えはしない）。
+      - name: Biome
         run: docker compose run --rm --no-deps frontend npm run lint
       - name: vite build（tsc型チェック含む）
         run: docker compose run --rm --no-deps frontend npm run build

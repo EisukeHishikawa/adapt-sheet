@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { SizeControls } from './SizeControls'
 import { useSheetStore } from '@/store/sheetStore'
+import { SizeControls } from './SizeControls'
 
 // 1つのSelectで6択（A4/B5/A5 × たて/よこ）を提供する。「たて」「よこ」の文字・mm表記は
 // 画面へ出さず紙の縦横比だけで表現するため、名前はaria-labelで検証する。

@@ -86,6 +86,9 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 - フォーマッタは **Biome**。保存時に自動適用される（`format_on_save: "on"`）ので、手で桁を揃えず整形結果に従う。手元でまとめて直す場合は `npm run format`。
 - 書式は `frontend/biome.json` が一次ソース: **2スペース・シングルクォート・セミコロンなし・行長120文字**。JSX属性のみダブルクォート。
 - import は Biome が整列する（`organizeImports`）。並び順を手で管理しない。
+- リント規則は Biome の推奨セットに、フレームワーク別の **domain**（`react` / `test` / `project` / `playwright` / `tailwind`）を有効化して構成する。個別ルールを列挙せず、domainの追加で賄えないかを先に検討する。
+- 上記に加えて明示的に有効化しているのは、プロジェクトの規約に直結する4つだけ: `noExplicitAny`・`noUnusedImports`・`useImportType`・`useExportType`。
+- ルールに従えない箇所は、`biome-ignore lint/<規則>: <理由>` で**理由を書いて**抑制する。理由を書けないなら、その抑制はしない。
 - **Prettier は使わない**。`.zed/settings.json` で `prettier.allowed: false` を明示している。リポジトリがバージョンを固定できないツールに整形させないため。
 - Tailwind v4 の記法を Biome の CSS パーサが解釈できないため、`**/*.css` と自動生成物の `src/types/api.ts` は検査対象外にしている。
 

@@ -5,6 +5,7 @@
     "includes": ["**", "!dist", "!src/types/api.ts", "!**/*.css"]
   },
   "formatter": {
+    "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 120
@@ -17,14 +18,31 @@
     }
   },
   "linter": {
+    "enabled": true,
+    "domains": {
+      "react": "recommended",
+      "test": "recommended",
+      "project": "recommended",
+      "playwright": "recommended",
+      "tailwind": "recommended"
+    },
     "rules": {
       "correctness": {
-        "useExhaustiveDependencies": "error",
-        "useHookAtTopLevel": "error"
+        "noUnusedImports": "error"
       },
       "style": {
-        "useComponentExportOnlyModules": "error"
+        "useComponentExportOnlyModules": "error",
+        "useImportType": "error",
+        "useExportType": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
       }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": { "organizeImports": "on" }
     }
   },
   "overrides": [

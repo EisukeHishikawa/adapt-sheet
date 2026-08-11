@@ -89,6 +89,7 @@ docker compose up --build   # フロント: http://localhost:5173 / API: http://
 | [DEVELOPMENT.md](./DEVELOPMENT.md) | 開発ロードマップ（フェーズ・ステップ） |
 | [planning/brainstorm.md](./planning/brainstorm.md) | 初期構想・要件・技術選定メモ |
 | [docs/quickstart.md](./docs/quickstart.md) | ローカル開発環境の構築・起動手順 |
+| [docs/coding-rules.md](./docs/coding-rules.md) | コーディングルール（命名・型・テスト・フォーマット） |
 | [docs/spec.md](./docs/spec.md) | 要件定義、画面仕様、APIインターフェース |
 | [docs/architecture.md](./docs/architecture.md) | アーキテクチャ図（システム構成・認証・API・セキュリティ・CI/CD・DB・ログ） |
 | [docs/decisions.md](./docs/decisions.md) | アーキテクチャ決定記録 (ADR) |

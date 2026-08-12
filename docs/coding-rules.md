@@ -88,7 +88,7 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 ### 静的解析・フォーマット
 
-- `npm run lint`（Biome）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。`npm run lint` はリント・整形・import整列をまとめて検査する。
+- `npm run lint`（Biome）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。`npm run lint` はリント・整形・import整列をまとめて検査し、警告もエラー扱いで失敗させる（`--error-on-warnings`）。
 - フォーマッタは **Biome**。保存時に自動適用される（`format_on_save: "on"`）ので、手で桁を揃えず整形結果に従う。手元でまとめて直す場合は `npm run format`。
 - 書式は `frontend/biome.json` が一次ソース: **2スペース・シングルクォート・セミコロンなし・行長120文字**。JSX属性のみダブルクォート。
 - import は Biome が整列する（`organizeImports`）。並び順を手で管理しない。

@@ -101,7 +101,7 @@ docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" htt
 docker compose exec backend pytest tests/test_pdf_layout.py -v # レイアウトHTML生成（PyMuPDF、backend内モジュール）のテスト
 docker compose exec backend alembic upgrade head          # 生成履歴用DBマイグレーションの適用（backend/migrations）
 docker compose exec frontend npm run test               # Vitest（msw使用、実APIには接続しない）
-docker compose exec frontend npm run lint                # Biome（リント＋整形＋import整列の検査）
+docker compose exec frontend npm run lint                # Biome（リント＋整形＋import整列の検査。警告もエラー扱い）
 ```
 
 E2E（Playwright）は、frontendの軽量な`node:20-alpine`イメージがブラウザバイナリに非対応（Alpine/musl libc）のため、Microsoft公式のPlaywrightイメージを使う独立サービス`e2e`から実行する。常時起動しないよう`profiles`でopt-in化しているため、`--profile e2e`を付けて実行する。

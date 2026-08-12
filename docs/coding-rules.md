@@ -36,13 +36,14 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 - リンターもフォーマッタも**ホストへ入れず、Docker内のもの**をエディタからLSPとして使う（`docker compose --profile lsp` の `backend-lsp` / `frontend-lsp`）。エディタの診断・整形結果を `docker compose exec` で実行するCIと一致させるため。
 - 設定は [`.zed/settings.json`](../.zed/settings.json)（LSP起動は [`scripts/zed-lsp.sh`](../scripts/zed-lsp.sh)）。クローン直後は `./scripts/setup-zed.sh` で絶対パスを自環境へ合わせる。
 - 規則の一次ソースは各サービスの `ruff.toml` と `frontend/biome.json`、ツールの版は `requirements.txt` / `package.json`。エディタ側の設定でルールを上書きしない。
-- Python は ruff、TypeScript は Biome が、リントと整形の両方を担う。詳細は各言語の節を参照。
+- Python は ruff、TypeScript は Biome が、リントと整形の両方を担う（1言語1ツール）。型チェックだけは別ツール（mypy / `tsc`）が担う。詳細は各言語の節を参照。
 
 ## 2. Python（backend / docling-service / pdf2htmlex-service）
 
 ### 静的解析・フォーマット
 
-- `ruff check .`（リント）と `ruff format --check .`（整形漏れの検出）の両方を通すこと。どちらもCIの必須チェックで、ruff の版は各サービスの `requirements.txt` で固定する。
+- `ruff check .`（リント）と `ruff format --check .`（整形漏れの検出）の両方を通すこと。ruff の版は各サービスの `requirements.txt` で固定する。
+- CIの必須チェックはbackendのみ。docling-service / pdf2htmlex-service はCIに含めないため、変更したら `docker compose exec docling ruff check . && docker compose exec docling ruff format --check .`（pdf2htmlexも同様）を手元で通す。
 - リント規則は ruff 既定（E4/E7/E9/F）。ルールの追加・除外は行っていない。
 - フォーマッタは `ruff format`。**保存時に自動適用**される（`format_on_save: "on"`）ので、手で桁を揃えず整形結果に従う。
 - 行長は各サービスの `ruff.toml` で **120文字**（既定の88文字では日本語コメントと型注釈付きシグネチャが頻繁に折り返されるため）。`ruff.toml` を backend / docling-service / pdf2htmlex-service にそれぞれ置いているのは、各サービスが独立したコンテナで自身のディレクトリを `/app` として ruff を動かすため。
@@ -50,8 +51,9 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 ### 型
 
-- `mypy app` を通すこと（CIの必須チェック、設定は `backend/mypy.ini`）。ruff は型を見ないため、型の整合はmypyが担保する。
+- `mypy app` を通すこと（CIの必須チェック、設定は `backend/mypy.ini`、版は `backend/requirements.txt` で固定）。ruff は型を見ないため、型の整合はmypyが担保する。対象はbackendのみで、docling-service / pdf2htmlex-service には導入していない。
 - 厳格モード（`disallow_untyped_defs` 等）は有効にしていない。既定のルールで検出されるものだけを対象とする。
+- `pydantic.mypy` プラグインを有効にしているため、フィールド別名・バリデータの型も検査対象になる。Pydanticモデルの定義は `Field` の指定込みで型が通ることを確認する。
 - boto3・botocore・PyMuPDF（`fitz`）は型スタブを持たないため、`mypy.ini` でこれらのimportのみ解析対象外にしている。除外を増やす前に、呼び出し側の型注釈で解決できないかを先に検討する。
 - 外部SDKのクライアントなど、本番実体とテスト用スタブの双方を受ける注入口は `Any` を明示する。型を `object` にすると属性アクセスが型エラーになり、かえって実態から離れる。
 - 公開関数には引数・戻り値の型注釈を必ず付ける。
@@ -91,7 +93,7 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 - 書式は `frontend/biome.json` が一次ソース: **2スペース・シングルクォート・セミコロンなし・行長120文字**。JSX属性のみダブルクォート。
 - import は Biome が整列する（`organizeImports`）。並び順を手で管理しない。
 - リント規則は Biome の推奨セットに、フレームワーク別の **domain**（`react` / `test` / `project` / `playwright` / `tailwind`）を有効化して構成する。個別ルールを列挙せず、domainの追加で賄えないかを先に検討する。
-- 上記に加えて明示的に有効化しているのは、プロジェクトの規約に直結する4つだけ: `noExplicitAny`・`noUnusedImports`・`useImportType`・`useExportType`。
+- 上記に加えて明示的に有効化しているのは、プロジェクトの規約に直結する5つだけ: `noExplicitAny`・`noUnusedImports`・`useImportType`・`useExportType`・`useComponentExportOnlyModules`（1ファイル1コンポーネントを守るため。shadcn/ui の生成物である `src/components/ui/**` は例外として override で無効化）。
 - ルールに従えない箇所は、`biome-ignore lint/<規則>: <理由>` で**理由を書いて**抑制する。理由を書けないなら、その抑制はしない。
 - **Prettier は使わない**。`.zed/settings.json` で `prettier.allowed: false` を明示している。リポジトリがバージョンを固定できないツールに整形させないため。
 - Tailwind v4 の記法を Biome の CSS パーサが解釈できないため、`**/*.css` と自動生成物の `src/types/api.ts` は検査対象外にしている。
@@ -159,6 +161,6 @@ docker compose exec frontend npm run generate-types             # src/types/api.
 
 ## 7. 依存の追加
 
-- Python は `requirements.txt`、Node は `package.json` に**バージョンを固定**して追加する。
+- Python は `requirements.txt` に `==` で**バージョンを固定**する。Node は `package.json` のキャレット範囲と `package-lock.json` の組で固定するため、ロックファイルを必ず同じPRでコミットする。
 - ホストで直接動かすツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは `mise.toml` で固定する。`node` / `python` は各 `Dockerfile` のベースイメージとパッチバージョンまで揃える。
 - ホストに ruff / Biome を追加導入しない（エディタの診断も Docker 内のものを使う）。

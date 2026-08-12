@@ -52,6 +52,7 @@ scripts/create_user.sh user@example.com      # アカウント作成（唯一の
 docker compose exec docling pytest                     # 全テスト実行（実PDF変換の結合テストを含む）
 docker compose exec docling pytest path/to/test.py -v   # 単体テスト
 docker compose exec docling ruff check .                 # 静的解析
+docker compose exec docling ruff format --check .         # 整形漏れの検出（CI対象外のため手元で実行する）
 docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
 docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8100/convert # /convertエンドポイントを直接叩いて動作確認（backend/frontendを介さない）
 ```
@@ -64,6 +65,7 @@ docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http:/
 docker compose exec pdf2htmlex pytest                     # 全テスト実行（実pdf2htmlEX変換の結合テストを含む）
 docker compose exec pdf2htmlex pytest path/to/test.py -v   # 単体テスト
 docker compose exec pdf2htmlex ruff check .                 # 静的解析
+docker compose exec pdf2htmlex ruff format --check .         # 整形漏れの検出（CI対象外のため手元で実行する）
 docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8200/convert # /convertエンドポイントを直接叩いて動作確認（backend/frontendを介さない）
 ```
 

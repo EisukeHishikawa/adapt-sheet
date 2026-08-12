@@ -26,7 +26,7 @@ AdaptSheet AIをどの順序で作ったかの記録。フェーズ単位で「�
 画面全体を作らず、「入力したら右側で変わる」というコア体験を最小で実装する。
 
 ### ステップ 3: フロントエンド「超最小」環境の構築
-- [x] Vite + TypeScript + TailwindCSS + shadcn/ui + ESLint の導入
+- [x] Vite + TypeScript + TailwindCSS + shadcn/ui + Biome の導入
 - [x] Vitest + React Testing Library のテスト環境構築
 
 ### ステップ 4: 2カラムの超最小画面と状態管理の実装

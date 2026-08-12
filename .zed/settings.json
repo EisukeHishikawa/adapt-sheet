@@ -83,6 +83,20 @@
       "prettier": {
         "allowed": false
       }
+    },
+    // CSSもBiomeの検査対象（frontend/biome.jsonのincludesが`**`）のため、エディタ側も
+    // Biomeへ揃える。Zed既定のPrettierに任せると整形結果がCIと食い違う。
+    // JSONはリポジトリ直下（.zed/settings.json等）がBiomeの設定範囲外のため、対象にしない。
+    "CSS": {
+      "formatter": {
+        "language_server": {
+          "name": "biome"
+        }
+      },
+      "format_on_save": "on",
+      "prettier": {
+        "allowed": false
+      }
     }
   }
 }

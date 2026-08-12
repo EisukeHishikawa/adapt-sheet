@@ -87,13 +87,16 @@ docker compose restart frontend
 docker compose exec backend pytest                    # 全テスト実行
 docker compose exec backend pytest path/to/test.py -v  # 単体テスト
 docker compose exec backend ruff check .                # 静的解析
+docker compose exec backend ruff format --check .        # 整形漏れの検出（CIと同じ。書き換えは`ruff format .`）
 docker compose exec backend mypy app                     # 型チェック（backend/mypy.ini）
 docker compose exec docling pytest                       # doclingサービス（PDF→HTML変換専用）の全テスト実行
-docker compose exec docling ruff check .                  # doclingサービスの静的解析
+docker compose exec docling ruff check .                  # doclingサービスの静的解析（CI対象外のため手元で実行する）
+docker compose exec docling ruff format --check .           # doclingサービスの整形漏れの検出
 docker compose exec docling python scripts/verify_docling.py # Docling単体動作検証（環境依存の早期確認）
 docker compose exec docling curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8100/convert # /convertを直接叩いて動作確認（ホスト非公開のため、docling自身にexecして呼び出す）
 docker compose exec pdf2htmlex pytest                     # pdf2htmlex-service（PDF→HTML変換専用）の全テスト実行
-docker compose exec pdf2htmlex ruff check .                # pdf2htmlex-serviceの静的解析
+docker compose exec pdf2htmlex ruff check .                # pdf2htmlex-serviceの静的解析（CI対象外のため手元で実行する）
+docker compose exec pdf2htmlex ruff format --check .         # pdf2htmlex-serviceの整形漏れの検出
 docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" http://localhost:8200/convert # /convertを直接叩いて動作確認
 docker compose exec backend pytest tests/test_pdf_layout.py -v # レイアウトHTML生成（PyMuPDF、backend内モジュール）のテスト
 docker compose exec backend alembic upgrade head          # 生成履歴用DBマイグレーションの適用（backend/migrations）

@@ -17,7 +17,7 @@ from app.db import get_db_session, get_db_session_or_none
 from app.main import app
 from app.models import Base
 from app.services.ai_client import RenderResult, get_ai_client_factory
-from app.services.history import save_history, list_history
+from app.services.history import delete_history, save_history, list_history
 
 
 @pytest.fixture
@@ -100,9 +100,96 @@ def test_list_history_caps_at_max_items(session, monkeypatch):
     for i in range(5):
         _save(session, user_id="user-1", html=f"<p>{i}</p>")
 
-    results = list_history(session, user_id="user-1")
+    results = list_history(session, user_id="user-1", limit=10)
 
     assert len(results) == 3
+
+
+# 履歴が増えても全件を返さないための絞り込み・ページング（GET /api/historyのq/kind/limit/offset）。
+def test_list_history_filters_by_keyword_in_html(session):
+    hit = _save(session, user_id="user-1", html="<p>請求書</p>")
+    _save(session, user_id="user-1", html="<p>納品書</p>")
+
+    results = list_history(session, user_id="user-1", query="請求")
+
+    assert [entry.id for entry in results] == [hit.id]
+
+
+def test_list_history_filters_by_keyword_in_json_data(session):
+    hit = _save(session, user_id="user-1", html="<p>x</p>", json_data={"customer": "山田商店"})
+    _save(session, user_id="user-1", html="<p>x</p>", json_data={"customer": "鈴木工務店"})
+
+    results = list_history(session, user_id="user-1", query="山田")
+
+    assert [entry.id for entry in results] == [hit.id]
+
+
+def test_list_history_keyword_is_case_insensitive(session):
+    hit = _save(session, user_id="user-1", html="<p>Invoice</p>")
+
+    results = list_history(session, user_id="user-1", query="invoice")
+
+    assert [entry.id for entry in results] == [hit.id]
+
+
+def test_list_history_treats_like_wildcards_as_literals(session):
+    # ユーザー入力の%や_がワイルドカードとして働くと、意図せず全件一致してしまう。
+    _save(session, user_id="user-1", html="<p>invoice</p>")
+    hit = _save(session, user_id="user-1", html="<p>100%</p>")
+
+    results = list_history(session, user_id="user-1", query="100%")
+
+    assert [entry.id for entry in results] == [hit.id]
+
+
+def test_list_history_filters_by_kind(session):
+    _save(session, user_id="user-1", kind="render")
+    editing = _save(session, user_id="user-1", kind="edit")
+
+    results = list_history(session, user_id="user-1", kind="edit")
+
+    assert [entry.id for entry in results] == [editing.id]
+
+
+def test_list_history_applies_limit_and_offset(session):
+    saved = [_save(session, user_id="user-1", html=f"<p>{i}</p>") for i in range(5)]
+    newest_first = list(reversed(saved))
+
+    page1 = list_history(session, user_id="user-1", limit=2)
+    page2 = list_history(session, user_id="user-1", limit=2, offset=2)
+
+    assert [entry.id for entry in page1] == [newest_first[0].id, newest_first[1].id]
+    assert [entry.id for entry in page2] == [newest_first[2].id, newest_first[3].id]
+
+
+def test_list_history_clamps_limit_to_max_items(session, monkeypatch):
+    import app.services.history as history_module
+
+    monkeypatch.setattr(history_module, "MAX_HISTORY_ITEMS", 3)
+    for i in range(5):
+        _save(session, user_id="user-1", html=f"<p>{i}</p>")
+
+    results = list_history(session, user_id="user-1", limit=100)
+
+    assert len(results) == 3
+
+
+def test_delete_history_removes_own_entry(session):
+    entry = _save(session, user_id="user-1")
+
+    assert delete_history(session, entry_id=str(entry.id), user_id="user-1") is True
+    assert list_history(session, user_id="user-1") == []
+
+
+def test_delete_history_keeps_other_users_entry(session):
+    entry = _save(session, user_id="other-user")
+
+    assert delete_history(session, entry_id=str(entry.id), user_id="user-1") is False
+    assert len(list_history(session, user_id="other-user")) == 1
+
+
+def test_delete_history_returns_false_for_invalid_id(session):
+    assert delete_history(session, entry_id="not-a-uuid", user_id="user-1") is False
 
 
 # 実PostgreSQLは使わず、SQLiteのin-memory DBをdependency_overridesで差し込む。
@@ -372,6 +459,135 @@ def test_get_history_includes_edit_snapshots(monkeypatch):
         response = client.get("/api/history", headers={"Authorization": _make_bearer_token()})
         assert response.status_code == 200
         assert [item["kind"] for item in response.json()] == ["edit"]
+    finally:
+        _clear_db_override()
+
+
+def test_get_history_filters_by_query_and_kind(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    for html, kind in (("<p>請求書</p>", "render"), ("<p>納品書</p>", "render"), ("<p>請求書</p>", "edit")):
+        save_history(
+            db_session,
+            user_id="user-123",
+            engine="gemini_free",
+            html=html,
+            css="",
+            json_data={},
+            width_mm=None,
+            height_mm=None,
+            kind=kind,
+        )
+    _override_db(db_session)
+    try:
+        response = client.get(
+            "/api/history",
+            params={"q": "請求", "kind": "render"},
+            headers={"Authorization": _make_bearer_token()},
+        )
+        assert response.status_code == 200
+
+        body = response.json()
+        assert [(item["html"], item["kind"]) for item in body] == [("<p>請求書</p>", "render")]
+    finally:
+        _clear_db_override()
+
+
+def test_get_history_returns_only_requested_page(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    for i in range(3):
+        save_history(
+            db_session,
+            user_id="user-123",
+            engine="gemini_free",
+            html=f"<p>{i}</p>",
+            css="",
+            json_data={},
+            width_mm=None,
+            height_mm=None,
+        )
+    _override_db(db_session)
+    try:
+        response = client.get(
+            "/api/history",
+            params={"limit": 2, "offset": 2},
+            headers={"Authorization": _make_bearer_token()},
+        )
+        assert response.status_code == 200
+        assert [item["html"] for item in response.json()] == ["<p>0</p>"]
+    finally:
+        _clear_db_override()
+
+
+def test_get_history_rejects_unknown_kind(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.get(
+            "/api/history",
+            params={"kind": "unknown"},
+            headers={"Authorization": _make_bearer_token()},
+        )
+        # 検証エラーはapp/errors.pyが400へ揃えている。
+        assert response.status_code == 400
+    finally:
+        _clear_db_override()
+
+
+def test_delete_history_removes_own_entry_via_api(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    entry = save_history(
+        db_session,
+        user_id="user-123",
+        engine="gemini_free",
+        html="<p>delete me</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+    )
+    _override_db(db_session)
+    try:
+        response = client.delete(f"/api/history/{entry.id}", headers={"Authorization": _make_bearer_token()})
+        assert response.status_code == 204
+        assert list_history(db_session, user_id="user-123") == []
+    finally:
+        _clear_db_override()
+
+
+def test_delete_history_returns_404_for_other_users_entry(monkeypatch):
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    db_session = _sqlite_session()
+    entry = save_history(
+        db_session,
+        user_id="other-user",
+        engine="gemini_free",
+        html="<p>other</p>",
+        css="",
+        json_data={},
+        width_mm=None,
+        height_mm=None,
+    )
+    _override_db(db_session)
+    try:
+        response = client.delete(
+            f"/api/history/{entry.id}", headers={"Authorization": _make_bearer_token(sub="user-123")}
+        )
+        assert response.status_code == 404
+        assert len(list_history(db_session, user_id="other-user")) == 1
+    finally:
+        _clear_db_override()
+
+
+def test_delete_history_returns_403_when_not_logged_in():
+    db_session = _sqlite_session()
+    _override_db(db_session)
+    try:
+        response = client.delete("/api/history/00000000-0000-0000-0000-000000000000")
+        assert response.status_code == 403
     finally:
         _clear_db_override()
 

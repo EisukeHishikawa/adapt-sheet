@@ -197,12 +197,28 @@ export async function updateEditHistory(
   return requestEditHistory(`/api/history/edit/${encodeURIComponent(entryId)}`, 'PUT', fields, accessToken)
 }
 
-// GET /api/history。ログイン済みユーザーがDBへ保存した生成履歴・編集中スナップショットの一覧
-// （新しい順、最大50件。backend/app/services/history.MAX_HISTORY_ITEMS）を取得する。
+// GET /api/historyの絞り込み条件。履歴が増えても全件を読まないよう、検索・種類・件数の
+// 絞り込みはサーバー側（SQL）で行う。
+export type HistoryQuery = {
+  q?: string
+  kind?: 'render' | 'edit'
+  limit?: number
+  offset?: number
+}
+
+// GET /api/history。ログイン済みユーザーがDBへ保存した生成履歴・編集中スナップショットを
+// 新しい順に1ページ分（既定20件、最大50件）取得する。
 // セッションが切れて（リロード等で）sheetStoreのhistoryがメモリ上から失われた後の
 // 再表示・過去データ閲覧（HistoryArchive）の両方から呼ばれる。
-export async function getHistory(accessToken: string): Promise<HistoryItemResponse[]> {
-  const response = await fetch('/api/history', {
+export async function getHistory(accessToken: string, query: HistoryQuery = {}): Promise<HistoryItemResponse[]> {
+  const params = new URLSearchParams()
+  if (query.q?.trim()) params.set('q', query.q.trim())
+  if (query.kind) params.set('kind', query.kind)
+  if (query.limit !== undefined) params.set('limit', String(query.limit))
+  if (query.offset) params.set('offset', String(query.offset))
+  const search = params.toString()
+
+  const response = await fetch(search ? `/api/history?${search}` : '/api/history', {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
 
@@ -211,6 +227,18 @@ export async function getHistory(accessToken: string): Promise<HistoryItemRespon
   }
 
   return (await response.json()) as HistoryItemResponse[]
+}
+
+// DELETE /api/history/{id}。自分の履歴1件をサーバーから削除する。
+export async function deleteHistory(entryId: string, accessToken: string): Promise<void> {
+  const response = await fetch(`/api/history/${encodeURIComponent(entryId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!response.ok) {
+    throw new RenderApiError(response.status, await parseErrorBody(response))
+  }
 }
 
 async function requestEditHistory(

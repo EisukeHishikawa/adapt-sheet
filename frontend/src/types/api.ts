@@ -61,7 +61,7 @@ export interface paths {
          *     Gemini API自体がGoogle側の事情で20〜30秒以上かかる・504を返すことがあり、
          *     API Gatewayの統合タイムアウト（29秒固定）に収まらない。実処理はrender-worker
          *     Lambdaへ非同期起動（lambda:invoke Event、API Gatewayを経由しないため29秒制約を
-         *     受けない）し、ここではジョブIDだけを即座に返す。ゲート判定は/api/renderと同じく
+         *     受けない）し、ここではジョブIDだけを即座に返す。パラメータチェックは/api/renderと同じく
          *     ここで同期的に行う。
          */
         post: operations["create_render_job_api_render_jobs_post"];
@@ -144,6 +144,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete History Entry */
+        delete: operations["delete_history_entry_api_history__entry_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -612,9 +629,7 @@ export interface operations {
     get_gemini_free_usage_status_api_usage_gemini_free_get: {
         parameters: {
             query?: never;
-            header?: {
-                authorization?: string | null;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -629,20 +644,17 @@ export interface operations {
                     "application/json": components["schemas"]["GeminiFreeUsageResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     get_history_api_history_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description HTML・JSON本文のキーワード検索 */
+                q?: string | null;
+                kind?: ("render" | "edit") | null;
+                limit?: number;
+                offset?: number;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -659,6 +671,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HistoryItemResponse"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_history_entry_api_history__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

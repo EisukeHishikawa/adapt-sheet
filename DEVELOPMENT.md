@@ -168,3 +168,8 @@ AdaptSheet AIをどの順序で作ったかの記録。フェーズ単位で「�
 - [x] 描画成功時のメッセージへ「本日x/10回」を付加
 - [x] ローカルでの生成AI系エンジン検証環境の整備: S3の代わりにMinIOを、render-worker Lambdaの代わりにbackend自身へのHTTP POSTを使う（本番向けクラスは無変更）
 - [x] PDF未添付のエラーを汎用の400から専用の`428 PDF_REQUIRED`へ分離
+
+### ステップ 33: 過去データの検索と削除
+- [x] `DELETE /api/history/{id}`を追加（他ユーザーの行・不正なIDは404）
+- [x] `GET /api/history`に`q`（HTML・業務データの部分一致）・`kind`・`limit`・`offset`を追加し、履歴が増えても全件を読まないようSQL側で絞り込む
+- [x] `HistoryArchive`に自動検索（入力が止まった時点で再取得）・種類の絞り込み・「さらに読み込む」・ゴミ箱アイコンからの削除（確認あり）を追加

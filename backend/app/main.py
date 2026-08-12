@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from datetime import date
-from typing import Callable, ContextManager, Optional
+from typing import Callable, ContextManager, Literal, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
@@ -49,7 +49,14 @@ from app.services.gemini_usage import (
     get_gemini_free_usage,
     record_gemini_free_usage,
 )
-from app.services.history import list_history, save_history, update_edit_history
+from app.services.history import (
+    DEFAULT_HISTORY_PAGE_SIZE,
+    MAX_HISTORY_ITEMS,
+    delete_history,
+    list_history,
+    save_history,
+    update_edit_history,
+)
 from app.services.job_store import JobStore, get_job_store
 from app.services.pdf2htmlex_client import (
     PDFHtmlExtractor as Pdf2HtmlExExtractor,
@@ -578,14 +585,31 @@ def _to_history_response(row) -> HistoryItemResponse:
 
 @app.get("/api/history", response_model=list[HistoryItemResponse], response_model_by_alias=True)
 def get_history(
+    q: Optional[str] = Query(default=None, max_length=200, description="HTML・JSON本文のキーワード検索"),
+    kind: Optional[Literal["render", "edit"]] = None,
+    limit: int = Query(default=DEFAULT_HISTORY_PAGE_SIZE, ge=1, le=MAX_HISTORY_ITEMS),
+    offset: int = Query(default=0, ge=0),
     current_user: Optional[SupabaseUser] = Depends(get_current_user),
     db_session: Session = Depends(get_db_session),
 ) -> list[HistoryItemResponse]:
     if current_user is None:
         raise HTTPException(status_code=403)
 
-    rows = list_history(db_session, user_id=current_user.sub)
+    rows = list_history(db_session, user_id=current_user.sub, query=q, kind=kind, limit=limit, offset=offset)
     return [_to_history_response(row) for row in rows]
+
+
+@app.delete("/api/history/{entry_id}", status_code=204)
+def delete_history_entry(
+    entry_id: str,
+    current_user: Optional[SupabaseUser] = Depends(get_current_user),
+    db_session: Session = Depends(get_db_session),
+) -> None:
+    if current_user is None:
+        raise HTTPException(status_code=403)
+
+    if not delete_history(db_session, entry_id=entry_id, user_id=current_user.sub):
+        raise HTTPException(status_code=404)
 
 
 @app.post(

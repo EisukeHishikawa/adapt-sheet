@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import Text, cast, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import RenderHistory
 
-# 一覧取得が際限なく行を返さないための上限。フロントの表示件数とは別物。
+# 1リクエストで返す上限。フロントの表示件数とは別物。
 MAX_HISTORY_ITEMS = 50
+# limit未指定時の1ページ分。html/cssを含む重い行を一度に返しすぎないため小さく取る。
+DEFAULT_HISTORY_PAGE_SIZE = 20
+
+
+def _like_pattern(value: str) -> str:
+    """部分一致用のLIKEパターン。ユーザー入力の%・_を文字として扱うためエスケープする。"""
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
 
 
 def save_history(
@@ -84,11 +93,52 @@ def update_edit_history(
     return entry
 
 
-def list_history(session: Session, *, user_id: str) -> list[RenderHistory]:
-    stmt = (
-        select(RenderHistory)
-        .where(RenderHistory.user_id == user_id)
-        .order_by(RenderHistory.created_at.desc())
-        .limit(MAX_HISTORY_ITEMS)
+def list_history(
+    session: Session,
+    *,
+    user_id: str,
+    query: Optional[str] = None,
+    kind: Optional[str] = None,
+    limit: int = DEFAULT_HISTORY_PAGE_SIZE,
+    offset: int = 0,
+) -> list[RenderHistory]:
+    """新しい順に1ページ分だけ返す。履歴が増えても全件を読まないため。"""
+    stmt = select(RenderHistory).where(RenderHistory.user_id == user_id)
+    if kind:
+        stmt = stmt.where(RenderHistory.kind == kind)
+    if query and query.strip():
+        keyword = query.strip()
+        json_text = cast(RenderHistory.json_data, Text)
+        # 業務データ（json_data）側の値も探せるよう、HTMLとJSONの両方を対象にする。
+        # JSONは非ASCII文字を\uXXXXへエスケープした形で保存されるため、その形も併せて照合する。
+        stmt = stmt.where(
+            or_(
+                RenderHistory.html.ilike(_like_pattern(keyword), escape="\\"),
+                json_text.ilike(_like_pattern(keyword), escape="\\"),
+                json_text.ilike(_like_pattern(json.dumps(keyword)[1:-1]), escape="\\"),
+            )
+        )
+    return list(
+        session.scalars(
+            stmt.order_by(RenderHistory.created_at.desc())
+            .limit(max(1, min(limit, MAX_HISTORY_ITEMS)))
+            .offset(max(0, offset))
+        )
     )
-    return list(session.scalars(stmt))
+
+
+def delete_history(session: Session, *, entry_id: str, user_id: str) -> bool:
+    """自分の履歴1件を削除する。他ユーザーの行・存在しないID・不正なIDではFalseを返す。"""
+    try:
+        target_id = uuid.UUID(entry_id)
+    except ValueError:
+        return False
+
+    stmt = select(RenderHistory).where(RenderHistory.id == target_id, RenderHistory.user_id == user_id)
+    entry = session.scalars(stmt).first()
+    if entry is None:
+        return False
+
+    session.delete(entry)
+    session.commit()
+    return True

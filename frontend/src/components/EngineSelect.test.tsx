@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { EngineSelect } from './EngineSelect'
 import { useSheetStore } from '@/store/sheetStore'
+import { EngineSelect } from './EngineSelect'
 
 // SizeControls.test.tsxと同じBase UI Selectのテストパターン（combobox→option）を踏襲する。
 describe('EngineSelect（描画エンジン選択）', () => {

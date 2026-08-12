@@ -1,12 +1,12 @@
 #!/bin/sh
-# ZedがLSP（ruff / ESLint）を起動するときに実行するラッパー（ADR-024）。
+# ZedがLSP（ruff / Biome）を起動するときに実行するラッパー（ADR-024）。
 # 標準入出力でLSPを話すため、余計な出力を混ぜないことが唯一の要件。
 #
-# 使い方: scripts/zed-lsp.sh ruff | scripts/zed-lsp.sh eslint
+# 使い方: scripts/zed-lsp.sh ruff | scripts/zed-lsp.sh biome
 set -eu
 
 usage() {
-  echo "usage: $0 {ruff|eslint}" >&2
+  echo "usage: $0 {ruff|biome}" >&2
   exit 64
 }
 
@@ -23,7 +23,7 @@ case "$1" in
   ruff)
     SERVICE=backend-lsp
     ;;
-  eslint)
+  biome)
     SERVICE=frontend-lsp
     ;;
   *)

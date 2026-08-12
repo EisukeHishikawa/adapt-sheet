@@ -55,13 +55,13 @@ flowchart LR
 ```mermaid
 flowchart LR
     Dev["開発者"] -->|PR作成| GitHub["GitHub"]
-    GitHub --> CI["CI (Vitest/pytest/ESLint/Ruff)"]
+    GitHub --> CI["CI (Vitest/pytest/Biome/Ruff)"]
     CI -->|成功| Merge["mainへマージ"]
     Merge --> CD["CD (Terraform apply)"]
     CD --> AWSInfra["AWS (S3 / Lambda / CloudFront)"]
 ```
 
-PRごとにフロント（Vitest/ESLint/vite build）・バック（pytest/ruff/mypy）をGitHub Actionsで自動実行し、全て成功しないとmainへマージできない（Branch Protection）。mainへのマージをトリガーに、Terraformでインフラを適用しS3・Lambdaへ自動デプロイする。詳細は [`docs/deployment.md`](./docs/deployment.md) を参照。
+PRごとにフロント（Vitest/Biome/vite build）・バック（pytest/ruff/mypy）をGitHub Actionsで自動実行し、全て成功しないとmainへマージできない（Branch Protection）。mainへのマージをトリガーに、Terraformでインフラを適用しS3・Lambdaへ自動デプロイする。詳細は [`docs/deployment.md`](./docs/deployment.md) を参照。
 
 ## 技術スタック
 

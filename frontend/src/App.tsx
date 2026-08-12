@@ -1,19 +1,19 @@
-import { useEffect, useState } from 'react'
 import { Loader2, Moon, Sparkles, Sun } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { AuthPanel } from '@/components/AuthPanel'
 import { EditorPanel } from '@/components/EditorPanel'
 import { EngineSelect } from '@/components/EngineSelect'
-import { PreviewPanel } from '@/components/PreviewPanel'
-import { PromptInput } from '@/components/PromptInput'
-import { PdfDropzone } from '@/components/PdfDropzone'
-import { SizeControls } from '@/components/SizeControls'
 import { HistorySlider } from '@/components/HistorySlider'
 import { MessageToast } from '@/components/MessageToast'
+import { PdfDropzone } from '@/components/PdfDropzone'
+import { PreviewPanel } from '@/components/PreviewPanel'
+import { PromptInput } from '@/components/PromptInput'
+import { SizeControls } from '@/components/SizeControls'
 import { Button } from '@/components/ui/button'
-import { useSheetStore } from '@/store/sheetStore'
-import { useAuthStore } from '@/store/authStore'
-import { useWarmupStore } from '@/store/warmupStore'
 import { useTheme } from '@/lib/useTheme'
+import { useAuthStore } from '@/store/authStore'
+import { useSheetStore } from '@/store/sheetStore'
+import { useWarmupStore } from '@/store/warmupStore'
 
 // 各パネルはpropsで繋がず、それぞれがZustandストア（sheetStore）を参照して連動する。
 function App() {
@@ -120,7 +120,10 @@ function BrandMark({ className }: { className?: string }) {
       <rect x="11.6" y="14.4" width="8.8" height="1.7" rx="0.85" fill="#A5B4FC" />
       <rect x="11.6" y="17.9" width="8.8" height="1.7" rx="0.85" fill="#A5B4FC" />
       <rect x="11.6" y="21.4" width="5.2" height="1.7" rx="0.85" fill="#A5B4FC" />
-      <path d="M22.8 18.6c.78 2.34 1.06 2.62 3.4 3.4-2.34.78-2.62 1.06-3.4 3.4-.78-2.34-1.06-2.62-3.4-3.4 2.34-.78 2.62-1.06 3.4-3.4Z" fill="#FBBF24" />
+      <path
+        d="M22.8 18.6c.78 2.34 1.06 2.62 3.4 3.4-2.34.78-2.62 1.06-3.4 3.4-.78-2.34-1.06-2.62-3.4-3.4 2.34-.78 2.62-1.06 3.4-3.4Z"
+        fill="#FBBF24"
+      />
     </svg>
   )
 }

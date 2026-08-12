@@ -1,9 +1,10 @@
 import { create } from 'zustand'
+import type { HistoryItemResponse, RenderJobStatusResponse } from '@/lib/api'
 import {
-  RenderApiError,
   getGeminiFreeUsage,
   getHistory,
   getRenderJobStatus,
+  RenderApiError,
   renderSheet,
   requestUploadUrl,
   saveEditHistory,
@@ -11,11 +12,10 @@ import {
   updateEditHistory,
   uploadPdfToPresignedUrl,
 } from '@/lib/api'
-import type { HistoryItemResponse, RenderJobStatusResponse } from '@/lib/api'
-import { useAuthStore } from '@/store/authStore'
 import { formatCss, formatHtml } from '@/lib/codeFormatter'
-import { AI_ENGINES, GEMINI_FREE_QUOTA_ENGINES } from '@/lib/engines'
 import type { RenderEngineId } from '@/lib/engines'
+import { AI_ENGINES, GEMINI_FREE_QUOTA_ENGINES } from '@/lib/engines'
+import { useAuthStore } from '@/store/authStore'
 
 // 定型サイズの用紙寸法。tateは長辺、yokoは短辺。
 export const SIZE_PRESETS = {
@@ -75,11 +75,7 @@ type EditorState = Pick<SheetState, 'htmlContent' | 'cssContent' | 'jsonContent'
 function entriesEqual(a: HistoryEntry | null, b: HistoryEntry | null): boolean {
   if (a === null || b === null) return a === b
   return (
-    a.html === b.html &&
-    a.css === b.css &&
-    a.json === b.json &&
-    a.widthMm === b.widthMm &&
-    a.heightMm === b.heightMm
+    a.html === b.html && a.css === b.css && a.json === b.json && a.widthMm === b.widthMm && a.heightMm === b.heightMm
   )
 }
 
@@ -248,9 +244,7 @@ function syncEditSnapshotToServer(seq: number, entry: HistoryEntry, engine: Rend
 
       const saved = await saveEditHistory(payload, accessToken)
       useSheetStore.setState((state) => ({
-        history: state.history.map((item) =>
-          item.seq === seq ? { ...item, serverId: saved.id } : item,
-        ),
+        history: state.history.map((item) => (item.seq === seq ? { ...item, serverId: saved.id } : item)),
       }))
     })
     .catch(() => undefined)
@@ -263,8 +257,7 @@ class RenderJobFailedError extends Error {}
 
 // 変換エンジン（docling/pdf2htmlex/pymupdf）向けの同期経路。
 async function runRenderSync(): Promise<RenderResultLike> {
-  const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } =
-    useSheetStore.getState()
+  const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } = useSheetStore.getState()
   const accessToken = useAuthStore.getState().session?.access_token
   return renderSheet(
     {
@@ -283,8 +276,7 @@ async function runRenderSync(): Promise<RenderResultLike> {
 // 生成AIエンジン向けの非同期経路。PDFがある場合のみ先にS3へ直接アップロードし、そのjob_idを
 // 描画ジョブでも使い回す。API Gatewayの29秒制約を受けないため長時間の生成でも待ちきれる。
 async function runRenderJob(): Promise<RenderResultLike> {
-  const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } =
-    useSheetStore.getState()
+  const { promptContent, pdfFile, widthMm, heightMm, engine, htmlContent, jsonContent } = useSheetStore.getState()
   const accessToken = useAuthStore.getState().session?.access_token
 
   let jobId: string | undefined
@@ -322,11 +314,7 @@ async function runRenderJob(): Promise<RenderResultLike> {
 }
 
 // renderSheet/runRenderJobいずれの結果も、この関数を通してエディタ・履歴へ同じ形で反映する。
-function applySuccessfulRender(
-  result: RenderResultLike,
-  widthMm: number | null,
-  heightMm: number | null,
-): void {
+function applySuccessfulRender(result: RenderResultLike, widthMm: number | null, heightMm: number | null): void {
   const newEntry: HistoryEntry = {
     // pdf2htmlEXは1行の自己完結HTML/CSSを返すことがあるため、積む時点で整形しておく。
     html: formatHtml(result.html),
@@ -350,10 +338,7 @@ function applySuccessfulRender(
       // 現在のHTML/JSON（今回の描画結果）を基準に生成させる。
       pdfFile: null,
       pdfFileName: null,
-      history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(
-        0,
-        MAX_HISTORY_LENGTH,
-      ),
+      history: [{ ...newEntry, seq: nextSeq, kind: 'render' as const }, ...state.history].slice(0, MAX_HISTORY_LENGTH),
     }
   })
 }
@@ -464,10 +449,7 @@ export const useSheetStore = create<SheetState>((set, get) => ({
     set({
       historySeq: nextSeq,
       activeEditSeq: nextSeq,
-      history: [{ ...current, seq: nextSeq, kind: 'edit' as const }, ...state.history].slice(
-        0,
-        MAX_HISTORY_LENGTH,
-      ),
+      history: [{ ...current, seq: nextSeq, kind: 'edit' as const }, ...state.history].slice(0, MAX_HISTORY_LENGTH),
     })
     syncEditSnapshotToServer(nextSeq, current, state.engine)
   },

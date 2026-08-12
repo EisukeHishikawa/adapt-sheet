@@ -6,7 +6,7 @@ AdaptSheet AIのデプロイ手順・環境変数設定・運用ルールをま�
 
 ## 1. デプロイ全体フロー
 
-1. PRを作成し、GitHub ActionsのCI（Vitest / pytest / ESLint / Ruff）が全て成功することを確認。
+1. PRを作成し、GitHub ActionsのCI（Vitest / pytest / Biome / Ruff）が全て成功することを確認。
 2. レビュー後、mainブランチへマージ（Branch Protection Ruleにより直接pushは不可）。
 3. マージをトリガーにGitHub ActionsのCDが起動し、Terraformでインフラを適用、S3・Lambdaへ自動デプロイ。
 4. デプロイ後、ステージングエンドポイントに対する疎通テストを実行。
@@ -141,7 +141,7 @@ Terraform定義は [`../infra/`](../infra/) に配置する（使い方は [`inf
 
 ## 5. CI/CD
 
-- **CI**: `.github/workflows/ci.yml` が、PR作成時・mainマージ時にバック（pytest/ruff）・フロント（Vitest/ESLint/vite build）の2ジョブを自動実行する。ローカル開発と同じ`docker-compose.yml`のサービス定義を使い、ローカル/CIの実行結果を乖離させない。
+- **CI**: `.github/workflows/ci.yml` が、PR作成時・mainマージ時にバック（pytest/ruff）・フロント（Vitest/Biome/vite build）の2ジョブを自動実行する。ローカル開発と同じ`docker-compose.yml`のサービス定義を使い、ローカル/CIの実行結果を乖離させない。
 - 「CIが100%成功しなければマージ不可」はBranch Protection Ruleに設定済み（[CLAUDE.md](../CLAUDE.md) のGit/CI運用ルール参照）。必須チェックは`backend` / `frontend` の2ジョブ。
 - docling/pdf2htmlexはコア機能（AI生成・リアルタイムプレビュー）への影響が小さいためCIに含めず、変更時は`docker compose exec docling/pdf2htmlex pytest`で手動検証する。
 - **CD**: `.github/workflows/cd.yml` が、mainへのpush（＝マージ）と手動実行で本番へデプロイする。AWSの長期アクセスキーは持たず、OIDC（`infra/modules/github_oidc`）で発行される短期認証情報でデプロイロールを引き受ける。

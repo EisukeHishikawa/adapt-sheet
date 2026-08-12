@@ -1,7 +1,7 @@
-import { useLayoutEffect, useRef, useState } from 'react'
 import { FileText, Maximize2, Minimize2, ZoomIn, ZoomOut } from 'lucide-react'
-import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { composePreviewDocument, renderTemplate } from '@/lib/template'
+import { dimensionsFor, useSheetStore } from '@/store/sheetStore'
 
 // iframeを使うのは、生成HTML/CSSを親ページのスタイルから隔離するため。用紙の実寸pxで組版した
 // ページ全体をscaleすることで、用紙サイズ変更や拡大に中身の比率が追従する。
@@ -47,6 +47,7 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [container, setContainer] = useState<{ width: number; height: number }>({ width: 0, height: 0 })
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: expandedは本体で参照しないが、切り替え時に測り直す必要がある
   useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -95,6 +96,7 @@ export function PreviewPanel({ expanded, onToggleExpand }: PreviewPanelProps) {
         {/* ページ枠自体を押下領域にして拡大/縮小をトグルする。ネイティブ<button>だとHTML仕様上
             子に<button>を入れ子にできないため、role="button"のdivにしてキーボード操作を自前で扱う。
             iframeはpointer-events-noneにしてクリックをこのdivへ通す。 */}
+        {/* biome-ignore lint/a11y/useSemanticElements: 子に<button>を持つため<button>にできない（上記コメント参照） */}
         <div
           role="button"
           tabIndex={0}

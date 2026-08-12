@@ -1,5 +1,6 @@
-import { useState } from 'react'
 import { History as HistoryIcon, Loader2, X } from 'lucide-react'
+import { useState } from 'react'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Dialog,
   DialogBackdrop,
@@ -9,12 +10,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { buttonVariants } from '@/components/ui/button'
+import type { HistoryItemResponse } from '@/lib/api'
+import { getHistory } from '@/lib/api'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { useSheetStore } from '@/store/sheetStore'
-import { getHistory } from '@/lib/api'
-import type { HistoryItemResponse } from '@/lib/api'
-import { cn } from '@/lib/utils'
 
 const KIND_LABEL: Record<string, string> = { edit: '編集中', render: '描画結果' }
 
@@ -60,10 +60,7 @@ export function HistoryArchive() {
         <DialogPopup aria-label="過去データ">
           <div className="flex items-center justify-between">
             <DialogTitle>過去データ</DialogTitle>
-            <DialogClose
-              aria-label="閉じる"
-              className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))}
-            >
+            <DialogClose aria-label="閉じる" className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))}>
               <X aria-hidden="true" />
             </DialogClose>
           </div>

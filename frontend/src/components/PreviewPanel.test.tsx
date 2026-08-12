@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PreviewPanel } from './PreviewPanel'
 import { useSheetStore } from '@/store/sheetStore'
+import { PreviewPanel } from './PreviewPanel'
 
 // 拡大表示（expanded）中のズーム機能（ズームイン/ズームアウト）の検証。
 // jsdomはResizeObserver/clientWidth等の実測ができないため、実際のpx倍率(iframeのtransform)は

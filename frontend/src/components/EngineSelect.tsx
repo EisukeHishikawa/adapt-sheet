@@ -1,8 +1,8 @@
 import { Lock } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useSheetStore } from '@/store/sheetStore'
-import { ENGINES } from '@/lib/engines'
 import type { RenderEngineId } from '@/lib/engines'
+import { ENGINES } from '@/lib/engines'
+import { useSheetStore } from '@/store/sheetStore'
 
 const ENGINE_BY_ID = new Map(ENGINES.map((engine) => [engine.id, engine]))
 
@@ -32,9 +32,7 @@ export function EngineSelect() {
             <span className="flex min-w-0 flex-col gap-0.5">
               <span className="flex items-center gap-1 font-medium">
                 {option.label}
-                {option.gated && (
-                  <Lock aria-label="要ログイン" className="size-3 text-muted-foreground" />
-                )}
+                {option.gated && <Lock aria-label="要ログイン" className="size-3 text-muted-foreground" />}
               </span>
               <span className="text-xs text-muted-foreground">{option.description}</span>
             </span>

@@ -71,7 +71,7 @@ flowchart LR
         PH["pdf2htmlex<br/>:8200 (内部のみ)"]
         MinIO["minio<br/>:9000 (実S3の代替)"]
         E2E["e2e (profile: e2e)<br/>Playwright"]
-        LSP["backend-lsp / frontend-lsp<br/>(profile: lsp)<br/>Ruff / ESLint"]
+        LSP["backend-lsp / frontend-lsp<br/>(profile: lsp)<br/>Ruff / Biome"]
     end
 
     subgraph SupaCompose["Supabase Local CLI（別のDocker Compose、`supabase start`）"]
@@ -245,7 +245,7 @@ JWT検証（JWKS/共有シークレット）・RLSの仕組みは3章、決定�
 ```mermaid
 flowchart LR
     Dev["開発者"] -->|PR作成| GitHub["GitHub"]
-    GitHub --> CI["GitHub Actions CI<br/>・Vitest (フロント)<br/>・pytest (バック)<br/>・ESLint / Ruff / mypy (静的解析)"]
+    GitHub --> CI["GitHub Actions CI<br/>・Vitest (フロント)<br/>・pytest (バック)<br/>・Biome / Ruff / mypy (静的解析)"]
     CI -->|全て成功| Review["レビュー & main へマージ<br/>(Branch Protection Ruleで直接push禁止)"]
     CI -->|失敗| Dev
     Review --> CD["GitHub Actions CD"]

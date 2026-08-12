@@ -75,14 +75,15 @@ docker compose exec pdf2htmlex curl -sf -F "file=@tests/fixtures/sample.pdf" htt
 
 ```bash
 docker compose exec frontend npm run test          # Vitest（msw使用、実APIには接続しない）
-docker compose exec frontend npm run lint           # ESLint
+docker compose exec frontend npm run lint           # Biome（リント＋整形＋import整列の検査）
+docker compose exec frontend npm run format          # Biome（上記の自動修正を書き込む）
 docker compose exec frontend npm run generate-types  # backend/openapi.json → src/types/api.ts（backend側を先に実行しておく）
 docker compose --profile e2e run --rm e2e            # Playwright（frontend/Dockerfile.e2e、専用サービス）
 ```
 
 ### エディタ（Zed）向けLSP
 
-エディタ上の診断・整形もDocker内のruff / ESLintで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント・整形規則の一次ソースは各サービスの`ruff.toml`と`frontend/eslint.config.js`である。ホストにruff/ESLintを追加導入しないこと。
+エディタ上の診断・整形もDocker内のruff / Biomeで行う。設定は`.zed/settings.json`（LSPの起動は`scripts/zed-lsp.sh`）にあり、リント・整形規則の一次ソースは各サービスの`ruff.toml`と`frontend/biome.json`である。ホストにruff/Biomeを追加導入しないこと。
 
 ```bash
 docker compose --profile lsp build   # LSP用イメージ（backend-lsp / frontend-lsp）のビルド
@@ -118,7 +119,7 @@ docker compose --profile lsp build   # LSP用イメージ（backend-lsp / fronte
 ## Git / CI運用
 
 - mainブランチへの直接pushは禁止（Branch Protection）。
-- PR作成時・main merge時に`.github/workflows/ci.yml`がフロント（Vitest/ESLint/vite build）・バック（pytest/ruff/mypy）を自動実行する（DEVELOPMENT.md ステップ26）。この2ジョブはBranch Protectionの必須チェックであり、100%成功しなければマージできない。ブランチがmainより古い場合もマージ不可のため、`git fetch origin && git rebase origin/main` で追従させる。docling/pdf2htmlexはコア機能（AI生成・リアルタイムプレビュー）への影響が小さくCIには含めないため、変更時は`docker compose exec docling/pdf2htmlex pytest`で手動検証する。
+- PR作成時・main merge時に`.github/workflows/ci.yml`がフロント（Vitest/Biome/vite build）・バック（pytest/ruff/mypy）を自動実行する（DEVELOPMENT.md ステップ26）。この2ジョブはBranch Protectionの必須チェックであり、100%成功しなければマージできない。ブランチがmainより古い場合もマージ不可のため、`git fetch origin && git rebase origin/main` で追従させる。docling/pdf2htmlexはコア機能（AI生成・リアルタイムプレビュー）への影響が小さくCIには含めないため、変更時は`docker compose exec docling/pdf2htmlex pytest`で手動検証する。
 - レビュー承認必須（Require approvals）は、ソロ開発期間中は無効化している（PR作成者本人は自分のPRを承認できないGitHub仕様のため）。共同開発者が加わった時点で再度有効化を検討する。
 - **ブランチ命名**: `feat/step{N}-{概要}`（`DEVELOPMENT.md` のステップ番号に対応させる。例: `feat/step2-backend-base`）。
 - **ブランチの切り方**: プライマリの作業ディレクトリで `main` を**チェックアウトしない**。`docs-space`（後述）が `main` を保持しており、Gitは同一ブランチを複数のワークツリーで同時にチェックアウトできないため、`git checkout main` は `fatal: 'main' is already used by worktree at ...` で失敗する。最新の`main`から直接ブランチを切ること。

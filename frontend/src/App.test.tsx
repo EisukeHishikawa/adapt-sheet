@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http, HttpResponse } from 'msw'
-import App from './App'
-import { useSheetStore } from '@/store/sheetStore'
+import { HttpResponse, http } from 'msw'
+import { formatCss, formatHtml } from '@/lib/codeFormatter'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
-import { formatCss, formatHtml } from '@/lib/codeFormatter'
+import { useSheetStore } from '@/store/sheetStore'
+import App from './App'
 
 // zustandのストアはシングルトンでテスト間に状態が漏れるため、全フィールドを網羅した初期値を
 // 1箇所にまとめ、フィールド追加時のリセット漏れを防ぐ。

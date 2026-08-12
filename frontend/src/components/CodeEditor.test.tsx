@@ -61,9 +61,7 @@ describe('CodeEditor（コードエディタ風入力UI）', () => {
 
   it('readOnly時は入力欄がreadOnlyになり、変更してもonChangeが呼ばれない', () => {
     const handleChange = vi.fn()
-    render(
-      <CodeEditor ariaLabel="HTML入力" language="html" value="<p>a</p>" onChange={handleChange} readOnly />,
-    )
+    render(<CodeEditor ariaLabel="HTML入力" language="html" value="<p>a</p>" onChange={handleChange} readOnly />)
 
     const editor = screen.getByRole('textbox', { name: 'HTML入力' })
     expect(editor).toHaveAttribute('readonly')

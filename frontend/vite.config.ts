@@ -1,8 +1,8 @@
 /// <reference types="vitest/config" />
 import path from 'node:path'
-import { defineConfig, type Plugin } from 'vite'
-import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
+import { defineConfig, type Plugin } from 'vite'
 
 // XSSでアクセストークン（sessionStorage）を盗まれる経路を狭めるCSP。開発サーバーは
 // React Fast Refreshのインラインscriptとwebsocket(HMR)を使うため同じポリシーでは動かず、

@@ -202,7 +202,7 @@ services:
       - e2e
 
   # ⑦⑧ エディタ（Zed）向けのLSPサービス（ADR-024）
-  # リンター/フォーマッターをホストへ二重導入せず、開発用イメージと同じruff/ESLintをエディタからも
+  # リンター/フォーマッターをホストへ二重導入せず、開発用イメージと同じruff/Biomeをエディタからも
   # 使うための入口。エディタがLSPでやり取りするのはファイルの絶対パス（URI）であるため、ホストと
   # 同じ絶対パス（${PWD}）へリポジトリをマウントし、コンテナ側でのパス読み替えを不要にする。
   # 常駐不要（起動・終了はエディタが管理する）ため、e2eと同じくprofilesでopt-in化し、
@@ -224,7 +224,7 @@ services:
     volumes:
       - ${PWD:-.}:${PWD:-.}
       # ホスト側のfrontend/node_modulesは空（実体はfrontendコンテナ内のみ）のため、
-      # ESLintのプラグイン解決用にLinux向けの依存を名前付きボリュームとして被せる
+      # Biomeバイナリの実体としてLinux向けの依存を名前付きボリュームとして被せる
       # （中身の初期化はfrontend/scripts/lsp-entrypoint.sh）。
       - frontend_lsp_node_modules:${PWD:-.}/frontend/node_modules
     profiles:
@@ -234,7 +234,7 @@ services:
 volumes:
   docling_hf_cache:
   docling_rapidocr_models:
-  # frontend-lspがESLint実行に使う依存（上記frontend-lsp.volumes参照）。
+  # frontend-lspがBiome実行に使う依存（上記frontend-lsp.volumes参照）。
   frontend_lsp_node_modules:
   # ローカル開発用MinIOのオブジェクト永続化用（上記minio.volumes参照）。
   minio_data:

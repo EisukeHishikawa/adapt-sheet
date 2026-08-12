@@ -1,9 +1,9 @@
-import { http, HttpResponse } from 'msw'
-import { EDIT_SNAPSHOT_DELAY_MS, MAX_HISTORY_LENGTH, useSheetStore } from './sheetStore'
-import { useAuthStore } from './authStore'
+import { HttpResponse, http } from 'msw'
+import { formatCss, formatHtml } from '@/lib/codeFormatter'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
-import { formatCss, formatHtml } from '@/lib/codeFormatter'
+import { useAuthStore } from './authStore'
+import { EDIT_SNAPSHOT_DELAY_MS, MAX_HISTORY_LENGTH, useSheetStore } from './sheetStore'
 
 const initialSheetState = {
   htmlContent: '',
@@ -99,11 +99,7 @@ describe('sheetStore（履歴スライド機能）', () => {
 
   it('履歴番号(seq)は10を超えても振り直さず加算し続け、番号が小さい古い履歴から削除される', async () => {
     for (let i = 1; i <= 11; i += 1) {
-      server.use(
-        http.post('/api/render', () =>
-          HttpResponse.json({ ...dummyRenderResponse, html: `<p>${i}</p>` }),
-        ),
-      )
+      server.use(http.post('/api/render', () => HttpResponse.json({ ...dummyRenderResponse, html: `<p>${i}</p>` })))
       await useSheetStore.getState().fetchRender()
     }
 
@@ -237,9 +233,7 @@ describe('sheetStore（編集内容の履歴登録）', () => {
 
   it('待ち時間の途中で履歴を復元しても、編集中の内容は履歴へ残る', () => {
     useSheetStore.setState({
-      history: [
-        { html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297, seq: 1, kind: 'render' },
-      ],
+      history: [{ html: '<p>past</p>', css: '', json: '{}', widthMm: 210, heightMm: 297, seq: 1, kind: 'render' }],
       historySeq: 1,
     })
     useSheetStore.getState().setHtmlContent('<p>editing</p>')
@@ -364,40 +358,26 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
     // mocks/handlers.tsの既定モック（本日3/10回）が付加される。
     await useSheetStore.getState().fetchRender()
 
-    expect(useSheetStore.getState().successMessage).toBe(
-      '描画が完了しました（Gemini無料枠 本日3/10回）',
-    )
+    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました（Gemini無料枠 本日3/10回）')
     expect(useSheetStore.getState().error).toBeNull()
   })
 
   it('gemini_freeで描画に成功すると、成功メッセージへGemini無料枠の当日利用回数が付加される', async () => {
     useSheetStore.setState({ engine: 'gemini_free' })
-    server.use(
-      http.get('/api/usage/gemini-free', () =>
-        HttpResponse.json({ date: '2026-01-01', count: 4, limit: 10 }),
-      ),
-    )
+    server.use(http.get('/api/usage/gemini-free', () => HttpResponse.json({ date: '2026-01-01', count: 4, limit: 10 })))
 
     await useSheetStore.getState().fetchRender()
 
-    expect(useSheetStore.getState().successMessage).toBe(
-      '描画が完了しました（Gemini無料枠 本日4/10回）',
-    )
+    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました（Gemini無料枠 本日4/10回）')
   })
 
   it('hybridはgemini_freeと同じ無料枠モデルを使うため、成功メッセージへ利用回数が付加される', async () => {
     useSheetStore.setState({ engine: 'hybrid' })
-    server.use(
-      http.get('/api/usage/gemini-free', () =>
-        HttpResponse.json({ date: '2026-01-01', count: 5, limit: 10 }),
-      ),
-    )
+    server.use(http.get('/api/usage/gemini-free', () => HttpResponse.json({ date: '2026-01-01', count: 5, limit: 10 })))
 
     await useSheetStore.getState().fetchRender()
 
-    expect(useSheetStore.getState().successMessage).toBe(
-      '描画が完了しました（Gemini無料枠 本日5/10回）',
-    )
+    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました（Gemini無料枠 本日5/10回）')
   })
 
   it('変換エンジン（AIを介さない）では、利用回数の付加なしに既定の成功メッセージのままになる', async () => {
@@ -709,9 +689,7 @@ describe('sheetStore（生成AIエンジンの非同期ジョブ・ポーリン�
 
     expect(getCount).toBe(3)
     expect(useSheetStore.getState().htmlContent).toBe(formatHtml(dummyRenderResponse.html))
-    expect(useSheetStore.getState().successMessage).toBe(
-      '描画が完了しました（Gemini無料枠 本日3/10回）',
-    )
+    expect(useSheetStore.getState().successMessage).toBe('描画が完了しました（Gemini無料枠 本日3/10回）')
   })
 
   it('ジョブがerrorになった場合、backendのmessageがそのままエラー表示に使われる', async () => {

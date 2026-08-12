@@ -35,8 +35,8 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 - リンターもフォーマッタも**ホストへ入れず、Docker内のもの**をエディタからLSPとして使う（`docker compose --profile lsp` の `backend-lsp` / `frontend-lsp`）。エディタの診断・整形結果を `docker compose exec` で実行するCIと一致させるため。
 - 設定は [`.zed/settings.json`](../.zed/settings.json)（LSP起動は [`scripts/zed-lsp.sh`](../scripts/zed-lsp.sh)）。クローン直後は `./scripts/setup-zed.sh` で絶対パスを自環境へ合わせる。
-- 規則の一次ソースは各サービスの `ruff.toml` と `frontend/eslint.config.js`、ツールの版は `requirements.txt` / `package.json`。エディタ側の設定でルールを上書きしない。
-- 整形の扱いは言語で異なる。Python は `ruff format` が保存時に自動適用されCIでも検査するが、TypeScript は整形ツールを使わず書き手が既存スタイルに合わせる。詳細は各言語の節を参照。
+- 規則の一次ソースは各サービスの `ruff.toml` と `frontend/biome.json`、ツールの版は `requirements.txt` / `package.json`。エディタ側の設定でルールを上書きしない。
+- Python は ruff、TypeScript は Biome が、リントと整形の両方を担う。詳細は各言語の節を参照。
 
 ## 2. Python（backend / docling-service / pdf2htmlex-service）
 
@@ -86,10 +86,15 @@ CLAUDE.md のコメント3原則（コードに語らせる／How を書かな�
 
 ### 静的解析・フォーマット
 
-- `npm run lint`（ESLint）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。
-- **整形ツールは使っていない**。Prettier は導入せず、`.zed/settings.json` で `prettier.allowed: false` を明示して Zed 同梱のものも走らないようにしている。
-- 保存時に走るのは ESLint の自動修正（`source.fixAll.eslint`）だが、これは未使用 import の削除等のリント修正であって**整形ではない**。ESLint 本体は v9 以降、整形系ルール（`indent` / `quotes` / `semi` 等）を非推奨として本体から外しており、`eslint.config.js` が読み込む4つのプリセットにも整形ルールは含まれない。
-- したがって書式は**書き手が既存コードに合わせる**: **2スペース・シングルクォート・セミコロンなし・行長120文字程度**。Python 側（`ruff format`）と違い、CIも整形崩れを検出しない。
+- `npm run lint`（Biome）と `npm run build`（`tsc -b`）を通すこと。どちらもCIの必須チェック。`npm run lint` はリント・整形・import整列をまとめて検査する。
+- フォーマッタは **Biome**。保存時に自動適用される（`format_on_save: "on"`）ので、手で桁を揃えず整形結果に従う。手元でまとめて直す場合は `npm run format`。
+- 書式は `frontend/biome.json` が一次ソース: **2スペース・シングルクォート・セミコロンなし・行長120文字**。JSX属性のみダブルクォート。
+- import は Biome が整列する（`organizeImports`）。並び順を手で管理しない。
+- リント規則は Biome の推奨セットに、フレームワーク別の **domain**（`react` / `test` / `project` / `playwright` / `tailwind`）を有効化して構成する。個別ルールを列挙せず、domainの追加で賄えないかを先に検討する。
+- 上記に加えて明示的に有効化しているのは、プロジェクトの規約に直結する4つだけ: `noExplicitAny`・`noUnusedImports`・`useImportType`・`useExportType`。
+- ルールに従えない箇所は、`biome-ignore lint/<規則>: <理由>` で**理由を書いて**抑制する。理由を書けないなら、その抑制はしない。
+- **Prettier は使わない**。`.zed/settings.json` で `prettier.allowed: false` を明示している。リポジトリがバージョンを固定できないツールに整形させないため。
+- Tailwind v4 の記法を Biome の CSS パーサが解釈できないため、`**/*.css` と自動生成物の `src/types/api.ts` は検査対象外にしている。
 
 ### 型
 
@@ -156,4 +161,4 @@ docker compose exec frontend npm run generate-types             # src/types/api.
 
 - Python は `requirements.txt`、Node は `package.json` に**バージョンを固定**して追加する。
 - ホストで直接動かすツール（Terraform / Node / Python / AWS CLI / Supabase CLI / GitHub CLI）のバージョンは `mise.toml` で固定する。`node` / `python` は各 `Dockerfile` のベースイメージとパッチバージョンまで揃える。
-- ホストに ruff / ESLint を追加導入しない（エディタの診断も Docker 内のものを使う）。
+- ホストに ruff / Biome を追加導入しない（エディタの診断も Docker 内のものを使う）。

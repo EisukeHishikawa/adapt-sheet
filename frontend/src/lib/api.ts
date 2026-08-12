@@ -80,10 +80,7 @@ async function parseErrorBody(response: Response): Promise<RenderErrorInfo | und
 
 // pdfを同じ関数で扱えるようFormDataで送る。accessTokenが無い場合はAuthorizationヘッダーを
 // 付けず、ゲート対象engineに対してバックエンドが403を返す。
-export async function renderSheet(
-  fields: RenderRequestFields,
-  accessToken?: string,
-): Promise<RenderResponse> {
+export async function renderSheet(fields: RenderRequestFields, accessToken?: string): Promise<RenderResponse> {
   const formData = new FormData()
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue
@@ -145,10 +142,7 @@ export async function uploadPdfToPresignedUrl(uploadUrl: string, pdf: File): Pro
 }
 
 // 描画ジョブを起動する。backendは受理してjob_idを返すだけで、実処理はworker Lambdaが行う。
-export async function startRenderJob(
-  fields: RenderJobRequestFields,
-  accessToken?: string,
-): Promise<RenderJobResponse> {
+export async function startRenderJob(fields: RenderJobRequestFields, accessToken?: string): Promise<RenderJobResponse> {
   const response = await fetch('/api/render/jobs', {
     method: 'POST',
     headers: {
@@ -190,10 +184,7 @@ export async function getGeminiFreeUsage(): Promise<GeminiFreeUsageResponse> {
 // 編集中スナップショットをサーバーの履歴へ保存する。描画と違い画面の主目的ではないため、
 // 呼び出し側は結果を待たず、失敗も画面へ出さない（編集操作を妨げない）。
 // 返り値のidは、以降の更新（updateEditHistory）で同じ行を指すために使う。
-export async function saveEditHistory(
-  fields: HistoryEditRequest,
-  accessToken: string,
-): Promise<HistoryItemResponse> {
+export async function saveEditHistory(fields: HistoryEditRequest, accessToken: string): Promise<HistoryItemResponse> {
   return requestEditHistory('/api/history/edit', 'POST', fields, accessToken)
 }
 
@@ -203,12 +194,7 @@ export async function updateEditHistory(
   fields: HistoryEditRequest,
   accessToken: string,
 ): Promise<HistoryItemResponse> {
-  return requestEditHistory(
-    `/api/history/edit/${encodeURIComponent(entryId)}`,
-    'PUT',
-    fields,
-    accessToken,
-  )
+  return requestEditHistory(`/api/history/edit/${encodeURIComponent(entryId)}`, 'PUT', fields, accessToken)
 }
 
 // GET /api/history。ログイン済みユーザーがDBへ保存した生成履歴・編集中スナップショットの一覧

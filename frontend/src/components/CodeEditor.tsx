@@ -1,5 +1,5 @@
-import { useRef, useState, type ChangeEvent, type KeyboardEvent, type UIEvent } from 'react'
 import Prism from 'prismjs'
+import { type ChangeEvent, type KeyboardEvent, type UIEvent, useRef, useState } from 'react'
 // PrismコアはHTML(markup)を同梱するが、JSON/CSSは別途読み込んで文法を拡張する。
 import 'prismjs/components/prism-json'
 import 'prismjs/components/prism-css'
@@ -55,7 +55,7 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id, readOnly 
     event.preventDefault()
     const el = event.currentTarget
     const { selectionStart, selectionEnd } = el
-    const nextValue = value.slice(0, selectionStart) + '  ' + value.slice(selectionEnd)
+    const nextValue = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`
     onChange(nextValue)
     requestAnimationFrame(() => {
       el.selectionStart = el.selectionEnd = selectionStart + 2
@@ -84,6 +84,7 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id, readOnly 
         className="shrink-0 select-none overflow-hidden py-2 pr-2 pl-3 text-right text-[#6e7681]"
       >
         {Array.from({ length: lineCount }, (_, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: 行番号そのものが同一性で、並び替え・挿入は起きない
           <div key={index} style={{ height: LINE_HEIGHT_PX, lineHeight: `${LINE_HEIGHT_PX}px` }}>
             {index + 1}
           </div>
@@ -98,6 +99,7 @@ export function CodeEditor({ value, onChange, ariaLabel, language, id, readOnly 
           className="code-editor pointer-events-none absolute inset-0 m-0 overflow-hidden whitespace-pre py-2 pr-3 pl-2 text-[#e6edf3]"
           style={sharedTextStyle}
         >
+          {/* biome-ignore lint/security/noDangerouslySetInnerHtml: Prismがエスケープ済みのHTMLのみを返すため、入力は素通りしない */}
           <code dangerouslySetInnerHTML={{ __html: highlighted }} />
         </pre>
         {/* 文字は透明にして背面の色付き文字を見せ、キャレットのみ明色にする。 */}

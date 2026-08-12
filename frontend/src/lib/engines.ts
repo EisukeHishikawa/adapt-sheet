@@ -1,5 +1,5 @@
-import type { ComponentType } from 'react'
 import { Bot, Brain, FileCode2, FileText, Gem, Layers, Rows3, Sparkles } from 'lucide-react'
+import type { ComponentType } from 'react'
 
 // backendのapp/services/engines.pyのENGINE_SPECSと同じ値。
 export type RenderEngineId =

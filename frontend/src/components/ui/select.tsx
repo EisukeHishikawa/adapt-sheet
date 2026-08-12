@@ -1,23 +1,19 @@
-import { Select as SelectPrimitive } from "@base-ui/react/select"
-import { Check, ChevronDown } from "lucide-react"
+import { Select as SelectPrimitive } from '@base-ui/react/select'
+import { Check, ChevronDown } from 'lucide-react'
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils'
 
 // shadcn/uiのBase UI版Selectと同じRoot/Trigger/Content/Item構成の土台。位置・見た目も
 // Base UIの既定に従う（独自の重ね合わせ配置は保守性が落ちるため採用しない）。
 
 const Select = SelectPrimitive.Root
 
-function SelectTrigger({
-  className,
-  children,
-  ...props
-}: SelectPrimitive.Trigger.Props) {
+function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigger.Props) {
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none select-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-disabled:pointer-events-none data-disabled:opacity-50",
+        'flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none select-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-disabled:pointer-events-none data-disabled:opacity-50',
         className,
       )}
       {...props}
@@ -39,7 +35,7 @@ function SelectContent({
   children,
   sideOffset = 4,
   ...props
-}: SelectPrimitive.Popup.Props & Pick<SelectPrimitive.Positioner.Props, "sideOffset" | "align">) {
+}: SelectPrimitive.Popup.Props & Pick<SelectPrimitive.Positioner.Props, 'sideOffset' | 'align'>) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner sideOffset={sideOffset} align="start" className="z-50 outline-none">
@@ -48,7 +44,7 @@ function SelectContent({
           className={cn(
             // Firefox向けにscrollbar-width:thin、WebKit系ブラウザ向けに
             // ::-webkit-scrollbarの幅を細くし、ドロップダウンのスクロールバーを目立たせない。
-            "max-h-(--available-height) min-w-(--anchor-width) overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
+            'max-h-(--available-height) min-w-(--anchor-width) overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border',
             className,
           )}
           {...props}
@@ -65,7 +61,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground",
+        'relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground',
         className,
       )}
       {...props}
@@ -78,4 +74,4 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   )
 }
 
-export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue }

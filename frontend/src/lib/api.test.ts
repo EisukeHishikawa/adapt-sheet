@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RenderApiError, renderSheet } from './api'
 import { dummyRenderResponse } from '@/mocks/handlers'
+import { RenderApiError, renderSheet } from './api'
 
 // MSW（Node環境）でFile入りのFormDataをHTTPボディへエンコードする際、jsdomのFileと
 // undiciのFile実装がかみ合わず例外になる既知の制約があるため（App.test.tsx参照）、
@@ -136,10 +136,10 @@ describe('renderSheet（構造化エラーレスポンスの伝播）', () => {
 
   it('エラーボディにrequest_idが無くても、X-Request-IDヘッダーから相関IDを補完する', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: '想定外のエラー' } }),
-        { status: 500, headers: { 'X-Request-ID': 'header-only-request-id' } },
-      ),
+      new Response(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: '想定外のエラー' } }), {
+        status: 500,
+        headers: { 'X-Request-ID': 'header-only-request-id' },
+      }),
     )
 
     await expect(renderSheet({ prompt: '' })).rejects.toMatchObject({

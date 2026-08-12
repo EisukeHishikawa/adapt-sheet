@@ -156,8 +156,9 @@ services:
     environment:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
-      # フロントの開発サーバー（http://localhost:5173）からのpresigned URLへの直接PUTを許可する。
-      - MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:5173
+      # フロントの開発サーバーからのpresigned URLへの直接PUTを許可する。localhostと127.0.0.1は
+      # ブラウザにとって別オリジンのため、どちらで開いても動くよう両方を許可する。
+      - MINIO_API_CORS_ALLOW_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
     command: server /data
     volumes:
       - minio_data:/data

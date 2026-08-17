@@ -25,6 +25,9 @@ export type EngineDefinition = {
   usesAi: boolean
   // gemini_freeと同じ無料枠モデルを使うため、共有カウンタの表示対象になる。
   countsFreeQuota: boolean
+  // 変換対象、またはhybridの統合入力としてPDFそのものが要る。未添付での描画はバックエンドが
+  // 428で弾くため、通信の前にフロントで同じ判定を行うための列。
+  requiresPdf: boolean
 }
 
 // 描画エンジンの一覧。表示情報（ラベル・説明・アイコン）と挙動の分岐条件を1行にまとめ、
@@ -38,6 +41,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: false,
     usesAi: true,
     countsFreeQuota: true,
+    requiresPdf: true,
   },
   {
     id: 'gemini_free',
@@ -47,6 +51,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: false,
     usesAi: true,
     countsFreeQuota: true,
+    requiresPdf: false,
   },
   {
     id: 'gemini',
@@ -56,6 +61,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: true,
     usesAi: true,
     countsFreeQuota: false,
+    requiresPdf: false,
   },
   {
     id: 'claude',
@@ -65,6 +71,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: true,
     usesAi: true,
     countsFreeQuota: false,
+    requiresPdf: false,
   },
   {
     id: 'openai',
@@ -74,6 +81,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: true,
     usesAi: true,
     countsFreeQuota: false,
+    requiresPdf: false,
   },
   {
     id: 'docling',
@@ -83,6 +91,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: false,
     usesAi: false,
     countsFreeQuota: false,
+    requiresPdf: true,
   },
   {
     id: 'pdf2htmlex',
@@ -92,6 +101,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: false,
     usesAi: false,
     countsFreeQuota: false,
+    requiresPdf: true,
   },
   {
     id: 'pymupdf',
@@ -101,6 +111,7 @@ export const ENGINES: readonly EngineDefinition[] = [
     gated: false,
     usesAi: false,
     countsFreeQuota: false,
+    requiresPdf: true,
   },
 ]
 
@@ -110,3 +121,4 @@ function idsWhere(predicate: (engine: EngineDefinition) => boolean): ReadonlySet
 
 export const AI_ENGINES = idsWhere((engine) => engine.usesAi)
 export const GEMINI_FREE_QUOTA_ENGINES = idsWhere((engine) => engine.countsFreeQuota)
+export const PDF_REQUIRED_ENGINES = idsWhere((engine) => engine.requiresPdf)

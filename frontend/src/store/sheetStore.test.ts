@@ -15,7 +15,7 @@ const initialSheetState = {
   widthMm: null,
   heightMm: null,
   // setStateは浅いマージのため、リセットに含めないとテスト間で前回選択したengineが漏れる。
-  engine: 'hybrid' as const,
+  engine: 'gemini_free' as const,
   history: [],
   // 履歴の通し番号カウンタ。setStateは浅いマージのため、リセットに含めないとテスト間で
   // seqが漏れて番号検証がずれる。
@@ -80,7 +80,7 @@ describe('sheetStore（履歴スライド機能）', () => {
 
   it('11件目の描画で最も古い履歴が破棄され、最大10件を維持する', async () => {
     for (let i = 0; i < 11; i += 1) {
-      // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
+      // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
       server.use(
         http.get('/api/render/jobs/:jobId', () =>
           HttpResponse.json({ status: 'done', ...dummyRenderResponse, html: `<p>${i}</p>` }),
@@ -354,7 +354,7 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
   })
 
   it('描画に成功すると成功メッセージが設定され、エラーはnullになる', async () => {
-    // 既定engine（hybrid）はgemini_freeと同じ無料枠を使うため、成功メッセージには
+    // 既定engine（gemini_free）は無料枠の対象のため、成功メッセージには
     // mocks/handlers.tsの既定モック（本日3/10回）が付加される。
     await useSheetStore.getState().fetchRender()
 
@@ -372,7 +372,9 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
   })
 
   it('hybridはgemini_freeと同じ無料枠モデルを使うため、成功メッセージへ利用回数が付加される', async () => {
-    useSheetStore.setState({ engine: 'hybrid' })
+    // hybridはPDF必須のため、添付が無いとfetchRenderが通信前に弾く。
+    const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
+    useSheetStore.setState({ engine: 'hybrid', pdfFile, pdfFileName: pdfFile.name })
     server.use(http.get('/api/usage/gemini-free', () => HttpResponse.json({ date: '2026-01-01', count: 5, limit: 10 })))
 
     await useSheetStore.getState().fetchRender()
@@ -381,7 +383,9 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
   })
 
   it('変換エンジン（AIを介さない）では、利用回数の付加なしに既定の成功メッセージのままになる', async () => {
-    useSheetStore.setState({ engine: 'docling' })
+    // 変換エンジンはPDF必須のため、添付が無いとfetchRenderが通信前に弾く。
+    const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
+    useSheetStore.setState({ engine: 'docling', pdfFile, pdfFileName: pdfFile.name })
 
     await useSheetStore.getState().fetchRender()
 
@@ -409,7 +413,7 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
     [501, '現在、利用停止中です。'],
     [500, 'サーバーで想定外のエラーが発生しました。'],
   ])('ステータス%dの場合、規定のエラーメッセージが表示される', async (status, expectedMessage) => {
-    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ起動側を差し替える。
+    // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、ジョブ起動側を差し替える。
     server.use(http.post('/api/render/jobs', () => new HttpResponse(null, { status })))
 
     await useSheetStore.getState().fetchRender()
@@ -437,6 +441,42 @@ describe('sheetStore（ステータスコード準拠のエラー/成功メッ�
     expect(useSheetStore.getState().successMessage).toBeNull()
   })
 
+  // PDF必須エンジン（hybrid/docling/pdf2htmlex/pymupdf）でPDFが無い場合は、バックエンドの428を
+  // 待たずにフロントで弾く。hybridは描画成功時に添付が解除されるため、この状態になりやすい。
+  it.each(['hybrid', 'docling', 'pdf2htmlex', 'pymupdf'] as const)(
+    '%sでPDF未添付のまま描画すると、通信せずにPDF添付を促すエラーが表示される',
+    async (engine) => {
+      let requested = false
+      server.use(
+        http.post('/api/render/jobs', () => {
+          requested = true
+          return HttpResponse.json({ job_id: 'job-1' }, { status: 202 })
+        }),
+        http.post('/api/render', () => {
+          requested = true
+          return HttpResponse.json(dummyRenderResponse)
+        }),
+      )
+      useSheetStore.setState({ engine, pdfFile: null, pdfFileName: null })
+
+      await useSheetStore.getState().fetchRender()
+
+      expect(useSheetStore.getState().error).toBe(
+        'このエンジンを使うにはPDFファイルの添付が必要です。ファイルを選択してください。',
+      )
+      expect(useSheetStore.getState().isLoading).toBe(false)
+      expect(requested).toBe(false)
+    },
+  )
+
+  it('PDF不要なエンジン（gemini_free）はPDF未添付でも描画できる', async () => {
+    useSheetStore.setState({ engine: 'gemini_free', pdfFile: null, pdfFileName: null })
+
+    await useSheetStore.getState().fetchRender()
+
+    expect(useSheetStore.getState().error).toBeNull()
+  })
+
   it('描画を再実行すると、前回の成功/エラーメッセージがクリアされる', async () => {
     useSheetStore.setState({ successMessage: '描画が完了しました', error: null })
     server.use(http.post('/api/render', () => new HttpResponse(null, { status: 500 })))
@@ -456,7 +496,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   })
 
   it('promptContentの値がfetchRenderでリクエストのpromptフィールドとして送信され、PDF未添付時はhtmlContent/jsonContentがcurrent_html/current_jsonとして送信される', async () => {
-    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
+    // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
     let capturedBody: Record<string, unknown> | undefined
     server.use(
       http.post('/api/render/jobs', async ({ request }) => {
@@ -489,7 +529,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   })
 
   it('描画結果が1行のHTML/CSSでも、htmlContent/cssContentは改行付きに自動整形される（精密復元エンジン対策）', async () => {
-    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
+    // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
     server.use(
       http.get('/api/render/jobs/:jobId', () =>
         HttpResponse.json({
@@ -508,7 +548,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
   })
 
   it('PDFを添付している場合はcurrent_html/current_jsonを送信しない（PDFの直接添付を正とする）', async () => {
-    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
+    // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのJSONボディを検証する。
     let capturedBody: Record<string, unknown> | undefined
     server.use(
       http.post('/api/render/jobs', async ({ request }) => {
@@ -549,8 +589,9 @@ describe('sheetStore（モデル選択）', () => {
     useSheetStore.setState(initialSheetState)
   })
 
+  // beforeEachのリセット値ではなくストア本来の初期値を見るため、getInitialStateで確認する。
   it('engineの既定値はhybrid（精密復元・無料枠）である', () => {
-    expect(useSheetStore.getState().engine).toBe('hybrid')
+    expect(useSheetStore.getInitialState().engine).toBe('hybrid')
   })
 
   it('setEngineでengineを変更できる', () => {
@@ -568,6 +609,9 @@ describe('sheetStore（モデル選択）', () => {
       }),
     )
     useSheetStore.getState().setEngine('pymupdf')
+    // pymupdfはPDF必須のため、添付が無いとfetchRenderが通信前に弾く。
+    const pdfFile = new File([new Uint8Array([1, 2, 3])], 'sample.pdf', { type: 'application/pdf' })
+    useSheetStore.setState({ pdfFile, pdfFileName: pdfFile.name })
 
     await useSheetStore.getState().fetchRender()
 
@@ -739,7 +783,7 @@ describe('sheetStore（ログイン状態の反映）', () => {
   })
 
   it('authStoreにsessionがある場合、Authorizationヘッダーへaccess_tokenを付与する', async () => {
-    // 既定engine（hybrid、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのヘッダーを検証する。
+    // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、POST /api/render/jobsのヘッダーを検証する。
     let capturedAuthorization: string | null = null
     server.use(
       http.post('/api/render/jobs', ({ request }) => {

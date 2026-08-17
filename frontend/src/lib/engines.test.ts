@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AI_ENGINES, ENGINES, GEMINI_FREE_QUOTA_ENGINES } from '@/lib/engines'
+import { AI_ENGINES, ENGINES, GEMINI_FREE_QUOTA_ENGINES, PDF_REQUIRED_ENGINES } from '@/lib/engines'
 
 describe('engines', () => {
   it('各エンジンをちょうど1行ずつ持つ', () => {
@@ -13,6 +13,11 @@ describe('engines', () => {
 
   it('無料枠カウンタの対象はgemini_freeと同じモデルを使うエンジンだけ', () => {
     expect(GEMINI_FREE_QUOTA_ENGINES).toEqual(new Set(['gemini_free', 'hybrid']))
+  })
+
+  // backendのapp/services/engines.pyのPDF_REQUIRED_ENGINESと同じ集合であること。
+  it('PDF必須の対象は変換エンジンとhybridだけ', () => {
+    expect(PDF_REQUIRED_ENGINES).toEqual(new Set(['hybrid', 'docling', 'pdf2htmlex', 'pymupdf']))
   })
 
   it('要ログインのエンジンはすべて生成AIエンジン', () => {

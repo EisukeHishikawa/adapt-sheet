@@ -14,7 +14,7 @@ import {
 } from '@/lib/api'
 import { formatCss, formatHtml } from '@/lib/codeFormatter'
 import type { RenderEngineId } from '@/lib/engines'
-import { AI_ENGINES, GEMINI_FREE_QUOTA_ENGINES } from '@/lib/engines'
+import { AI_ENGINES, GEMINI_FREE_QUOTA_ENGINES, PDF_REQUIRED_ENGINES } from '@/lib/engines'
 import { useAuthStore } from '@/store/authStore'
 
 // 定型サイズの用紙寸法。tateは長辺、yokoは短辺。
@@ -456,6 +456,12 @@ export const useSheetStore = create<SheetState>((set, get) => ({
   dismissError: () => set({ error: null }),
   dismissSuccessMessage: () => set({ successMessage: null }),
   fetchRender: async () => {
+    // PDF必須エンジンは描画成功時に添付が解除されるため、続けて描画すると未添付になる。
+    // バックエンドの428と同じ文言で、S3アップロード・ジョブ起動より前に知らせる。
+    if (PDF_REQUIRED_ENGINES.has(get().engine) && get().pdfFile === null) {
+      set({ error: messageForStatus(428), successMessage: null, isLoading: false })
+      return
+    }
     // 描画結果でエディタを上書きする前に、待ち時間の途中だった編集内容を履歴へ残す。
     get().commitEditSnapshot()
     // ここで前回のメッセージを消さないと、再試行の通信中も前回のエラー文言が残り誤解を与える。

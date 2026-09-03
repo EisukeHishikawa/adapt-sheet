@@ -41,6 +41,25 @@ describe('warmupBackendServices', () => {
 
     await expect(warmupBackendServices()).resolves.toBeNull()
   })
+
+  it('応答が一定時間返らない場合は中断してnullを返す（リトライが止まらないようにする）', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const pending = warmupBackendServices()
+    await vi.advanceTimersByTimeAsync(15000)
+
+    await expect(pending).resolves.toBeNull()
+
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
 })
 
 describe('pingSupabase', () => {

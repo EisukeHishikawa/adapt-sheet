@@ -5,15 +5,25 @@ type WarmupResponse = components['schemas']['WarmupResponse']
 
 // 画面を開いた時点で、コールドスタートしがちな依存先を起こしておくための処理。
 
+// backend側の処理（docling/pdf2htmlexの/health10秒＋DBの接続5秒）は自前でタイムアウトを
+// 持つが、fetch自体には既定のタイムアウトが無い。CloudFront〜API Gateway間の接続が
+// 応答を返さないまま滞留すると、このawaitが返らずリトライが一切進まなくなるため、
+// バックエンド側の想定所要時間より長い上限で必ず打ち切る。
+const WARMUP_FETCH_TIMEOUT_MS = 15000
+
 // docling/pdf2htmlexはIAM認証必須のFunction URLでフロントから直接は叩けないため、backendに
 // 代理ピングさせる。呼び出し側が活性判定に使うため、失敗時は例外ではなくnullを返す。
 export async function warmupBackendServices(): Promise<WarmupResponse | null> {
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), WARMUP_FETCH_TIMEOUT_MS)
   try {
-    const res = await fetch('/api/warmup', { method: 'POST' })
+    const res = await fetch('/api/warmup', { method: 'POST', signal: timeoutController.signal })
     if (!res.ok) return null
     return (await res.json()) as WarmupResponse
   } catch {
     return null
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 

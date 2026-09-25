@@ -197,3 +197,9 @@ variable "alarm_email" {
   type        = string
   default     = ""
 }
+
+variable "gemini_model" {
+  description = "無料枠（gemini_free/hybrid）で使うGeminiモデル。空ならアプリの既定値を使う。既定のgemini-flash-latestが高負荷（503）で使えなかったため固定している"
+  type        = string
+  default     = "gemini-3.6-flash"
+}

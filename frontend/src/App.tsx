@@ -59,6 +59,7 @@ function App() {
                 <RenderButton />
               </div>
             </div>
+            <WarmupNotice />
             <PdfDropzone />
             <PromptInput />
           </div>
@@ -166,6 +167,17 @@ function RenderButton() {
         </>
       )}
     </Button>
+  )
+}
+
+// 描画ボタンが「準備中…」の間、待たされる理由と目安を伝える（コールドスタートは数分かかることがある）。
+function WarmupNotice() {
+  const isWarmingUp = useWarmupStore((state) => state.status === 'pending')
+  if (!isWarmingUp) return null
+  return (
+    <p role="status" className="text-xs text-muted-foreground">
+      起動の準備中です。コールドスタート時は数分かかることがあります。
+    </p>
   )
 }
 

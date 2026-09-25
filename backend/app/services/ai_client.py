@@ -390,10 +390,10 @@ class GeminiAIClient:
                     model=self._model, contents=contents, config=self._config
                 )
             except genai_errors.ServerError as exc:
-                # 503 UNAVAILABLE（"This model is currently experiencing high demand"）は
-                # Gemini側の一過性の混雑であり、待てば成功しうる。
+                # 5xxは一過性のことが多いため再試行するが、「混雑」の文言を出すのは503のみにする。
                 if attempt == _RETRY_MAX_ATTEMPTS:
-                    raise AIServiceUnavailableError(f"Gemini API呼び出しに失敗しました: {exc}") from exc
+                    error_type = AIServiceUnavailableError if exc.code == 503 else AIGenerationError
+                    raise error_type(f"Gemini API呼び出しに失敗しました: {exc}") from exc
                 time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
                 continue
             except genai_errors.APIError as exc:

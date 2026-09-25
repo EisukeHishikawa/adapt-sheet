@@ -528,7 +528,7 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
     expect(useSheetStore.getState().promptContent).toBe('請求書レイアウトにして')
   })
 
-  it('描画結果が1行のHTML/CSSでも、htmlContent/cssContentは改行付きに自動整形される（精密復元エンジン対策）', async () => {
+  it('描画結果が1行のHTML/CSSでも、htmlContent/cssContentは改行付きに自動整形される（pdf2htmlexエンジン対策）', async () => {
     // 既定engine（gemini_free、生成AI）は非同期ジョブ経路のため、ジョブ状態取得側を差し替える。
     server.use(
       http.get('/api/render/jobs/:jobId', () =>
@@ -583,14 +583,14 @@ describe('sheetStore（JSON/プロンプト入力欄の送信）', () => {
 })
 
 // EngineSelectで選択したengineがfetchRenderのリクエストへ反映されること、
-// 既定値がhybrid（精密復元・無料枠）であることを検証する。
+// 既定値がhybrid（Docling + Gemini API（無料枠））であることを検証する。
 describe('sheetStore（モデル選択）', () => {
   beforeEach(() => {
     useSheetStore.setState(initialSheetState)
   })
 
   // beforeEachのリセット値ではなくストア本来の初期値を見るため、getInitialStateで確認する。
-  it('engineの既定値はhybrid（精密復元・無料枠）である', () => {
+  it('engineの既定値はhybrid（Docling + Gemini API（無料枠））である', () => {
     expect(useSheetStore.getInitialState().engine).toBe('hybrid')
   })
 

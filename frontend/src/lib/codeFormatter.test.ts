@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { formatCss, formatHtml } from './codeFormatter'
 
-// 精密復元（pdf2htmlexエンジン）は自己完結HTMLを1行で返すことがあるため、
+// pdf2htmlexエンジンは自己完結HTMLを1行で返すことがあるため、
 // 描画結果を履歴・エディタへ積む時点（sheetStore.applySuccessfulRender）で
 // 自動的に読みやすく整形するユーティリティを検証する。CSSも同様に1行で入ってくることがある。
 describe('formatHtml', () => {

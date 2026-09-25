@@ -173,7 +173,7 @@ sequenceDiagram
     else engineが利用可能な生成AI
         API->>API: プロンプトを動的構築（PDFがあれば見た目の正として扱う指示）
         API->>AI: PDF（マルチモーダル添付、あれば）+ 指示
-        Note over API,AI: 精密復元（hybrid）のみ、PyMuPDF・Doclingの変換結果も併せて渡す
+        Note over API,AI: Docling + Gemini API（無料枠）（hybrid）のみ、PyMuPDF・Doclingの変換結果も併せて渡す
         AI-->>API: HTML/CSS/JSON
         API-->>FE: 200 OK { html, css, json }
     end

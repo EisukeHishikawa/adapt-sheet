@@ -6,7 +6,7 @@ AdaptSheet AIの要件定義・画面仕様・APIインターフェース・エ�
 
 ## 1. プロダクト概要
 
-エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI・精密復元。PDFを直接読み取るマルチモーダル入力）と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
+エンジニアが保守しやすいHTML/CSS帳票を、AIの力で構築・管理するプラットフォーム。生成AI（Gemini/Claude/OpenAI・Docling + Gemini API（無料枠）。PDFを直接読み取るマルチモーダル入力）と、AIを介さない変換エンジン（Docling/pdf2htmlEX/PyMuPDF）を描画ボタンの隣で選べるモデル選択機能、リアルタイムプレビューを統合したSPA。
 
 ### 対象ユーザー
 

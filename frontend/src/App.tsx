@@ -176,7 +176,7 @@ function WarmupNotice() {
   if (!isWarmingUp) return null
   return (
     <p role="status" className="text-xs text-muted-foreground">
-      初回リロード時は数分かかることがあります。
+      起動の準備中です。コールドスタート時は数分かかることがあります。
     </p>
   )
 }

@@ -256,11 +256,15 @@ describe('App（ホットスタンバイ）', () => {
 
       render(<App />)
 
-      expect(screen.getByRole('status')).toHaveTextContent('起動の準備中です。コールドスタート時は数分かかることがあります。')
+      expect(screen.getByRole('status')).toHaveTextContent(
+        '起動の準備中です。コールドスタート時は数分かかることがあります。',
+      )
 
       act(() => useWarmupStore.setState({ status: 'ready' }))
 
-      expect(screen.queryByText('起動の準備中です。コールドスタート時は数分かかることがあります。')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('起動の準備中です。コールドスタート時は数分かかることがあります。'),
+      ).not.toBeInTheDocument()
     })
 
     it('準備済みなら案内は出ない', () => {
@@ -268,7 +272,9 @@ describe('App（ホットスタンバイ）', () => {
 
       render(<App />)
 
-      expect(screen.queryByText('起動の準備中です。コールドスタート時は数分かかることがあります。')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('起動の準備中です。コールドスタート時は数分かかることがあります。'),
+      ).not.toBeInTheDocument()
     })
   })
 })

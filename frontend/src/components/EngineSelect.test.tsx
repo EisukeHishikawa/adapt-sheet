@@ -25,7 +25,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     const options = await screen.findAllByRole('option')
     const labels = options.map((option) => option.textContent)
     expect(labels).toHaveLength(8)
-    expect(labels[0]).toContain('精密復元')
+    expect(labels[0]).toContain('Docling + Gemini API（無料枠）')
     expect(labels[1]).toContain('Gemini API（無料枠）')
     expect(labels[2]).toContain('Gemini API')
     expect(labels[3]).toContain('Claude API')
@@ -38,7 +38,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     expect(screen.getByText('PDFのレイアウトを座標付きで再現します（AIなし）')).toBeInTheDocument()
   })
 
-  it('標準プラン・Claude・OpenAIには要ログインのロックアイコンが表示される（精密復元は無料枠のため対象外）', async () => {
+  it('標準プラン・Claude・OpenAIには要ログインのロックアイコンが表示される（Docling + Gemini API（無料枠）は無料枠のため対象外）', async () => {
     const user = userEvent.setup()
     render(<EngineSelect />)
 
@@ -52,7 +52,7 @@ describe('EngineSelect（描画エンジン選択）', () => {
     render(<EngineSelect />)
 
     await user.click(screen.getByRole('combobox', { name: '生成エンジン選択：Gemini API（無料枠）' }))
-    await user.click(await screen.findByRole('option', { name: /^Docling/ }))
+    await user.click(await screen.findByRole('option', { name: /^Docling(?! \+)/ }))
 
     expect(useSheetStore.getState().engine).toBe('docling')
     expect(screen.getByRole('combobox', { name: '生成エンジン選択：Docling' })).toHaveTextContent('Docling')

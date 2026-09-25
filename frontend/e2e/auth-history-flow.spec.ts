@@ -122,7 +122,7 @@ test.describe('ログイン状態でのAI生成・履歴復元フロー', () => 
     // 3) エンジンをgemini（標準プラン・要ログイン）へ切り替えて描画する。
     // サイズ選択も同じcombobox roleのため、生成エンジン選択のaria-labelで絞り込む。
     // 「Gemini API（無料）」と名前が前方一致してしまうため、説明文で一意に絞り込む。
-    await page.getByRole('combobox', { name: '生成エンジン選択：精密復元（無料）' }).click()
+    await page.getByRole('combobox', { name: '生成エンジン選択：Docling + Gemini API（無料枠）' }).click()
     await page.getByRole('option', { name: '標準プランのモデルでより高精度に整形します' }).click()
     await page.getByRole('button', { name: '描画' }).click()
 

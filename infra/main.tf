@@ -112,6 +112,7 @@ module "lambda_render_worker" {
       RENDER_JOBS_BUCKET      = module.job_bucket.bucket_name
     },
     var.supabase_jwt_jwks_url != "" ? { SUPABASE_JWT_JWKS_URL = var.supabase_jwt_jwks_url } : {},
+    var.gemini_model != "" ? { GEMINI_MODEL = var.gemini_model } : {},
   )
 }
 

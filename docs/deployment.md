@@ -38,7 +38,7 @@ AdaptSheet AIのデプロイ手順・環境変数設定・運用ルールをま�
 | `GEMINI_API_KEY` | Gemini API（Google AI Studio）のAPIキー | `.env` | Parameter Store |
 | `ANTHROPIC_API_KEY` | Claude（`engine=claude`）のAPIキー | `.env` | Parameter Store |
 | `OPENAI_API_KEY` | OpenAI（`engine=openai`）のAPIキー | `.env` | Parameter Store |
-| `GEMINI_MODEL` | 無料枠（`gemini_free`/`hybrid`）で使うGeminiモデル。既定は`gemini-flash-latest`。無料枠の日次クォータはモデル単位のため、上限到達時の切り替えに使う | 任意（`.env`） | 未設定（既定値） |
+| `GEMINI_MODEL` | 無料枠（`gemini_free`/`hybrid`）で使うGeminiモデル。既定は`gemini-flash-latest`。無料枠の日次クォータはモデル単位のため、上限到達時や高負荷（503）時の切り替えに使う | 任意（`.env`） | `gemini-3.6-flash`（Terraform変数`gemini_model`、render-workerのLambda環境変数） |
 | `GEMINI_STANDARD_MODEL` | 標準プラン（`engine=gemini`）のモデル。既定は`gemini-2.5-pro` | 任意（`.env`） | 未設定（既定値） |
 | `CLAUDE_MODEL` | `engine=claude`のモデル。既定は`claude-opus-4-8` | 任意（`.env`） | 未設定（既定値） |
 | `OPENAI_MODEL` | `engine=openai`のモデル。既定は`gpt-5.1` | 任意（`.env`） | 未設定（既定値） |

@@ -5,6 +5,7 @@ import { formatCss, formatHtml } from '@/lib/codeFormatter'
 import { dummyRenderResponse } from '@/mocks/handlers'
 import { server } from '@/mocks/server'
 import { useSheetStore } from '@/store/sheetStore'
+import { useWarmupStore } from '@/store/warmupStore'
 import App from './App'
 
 // zustandのストアはシングルトンでテスト間に状態が漏れるため、全フィールドを網羅した初期値を
@@ -240,5 +241,34 @@ describe('App（ホットスタンバイ）', () => {
     render(<App />)
 
     await waitFor(() => expect(calls).toEqual(['warmup']))
+  })
+
+  describe('準備中の案内', () => {
+    const originalRun = useWarmupStore.getState().run
+
+    afterEach(() => {
+      useWarmupStore.setState({ status: 'ready', run: originalRun })
+    })
+
+    it('準備中の間は初回リロード時の所要時間の案内を表示し、準備完了で消す', () => {
+      // 実際のウォームアップを走らせず、状態遷移をテストから制御する。
+      useWarmupStore.setState({ status: 'pending', run: async () => {} })
+
+      render(<App />)
+
+      expect(screen.getByRole('status')).toHaveTextContent('初回リロード時は数分かかることがあります。')
+
+      act(() => useWarmupStore.setState({ status: 'ready' }))
+
+      expect(screen.queryByText('初回リロード時は数分かかることがあります。')).not.toBeInTheDocument()
+    })
+
+    it('準備済みなら案内は出ない', () => {
+      useWarmupStore.setState({ status: 'ready', run: async () => {} })
+
+      render(<App />)
+
+      expect(screen.queryByText('初回リロード時は数分かかることがあります。')).not.toBeInTheDocument()
+    })
   })
 })

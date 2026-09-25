@@ -409,8 +409,9 @@ def test_parse_ai_response_rejects_missing_keys():
 
 
 class _StubGeminiModels:
-    def __init__(self, failures: int, response_text: str, finish_reason: Optional[str] = None):
+    def __init__(self, failures: int, response_text: str, finish_reason: Optional[str] = None, failure_code: int = 503):
         self._remaining_failures = failures
+        self._failure_code = failure_code
         self._response_text = response_text
         self._finish_reason = finish_reason
         self.call_count = 0
@@ -424,7 +425,7 @@ class _StubGeminiModels:
         self.last_contents = contents
         if self._remaining_failures > 0:
             self._remaining_failures -= 1
-            raise genai_errors.ServerError(503, {"error": {"message": "high demand"}})
+            raise genai_errors.ServerError(self._failure_code, {"error": {"message": "server error"}})
         candidates = None
         if self._finish_reason is not None:
             candidates = [SimpleNamespace(finish_reason=SimpleNamespace(name=self._finish_reason))]
@@ -461,6 +462,20 @@ def test_gemini_client_raises_after_exhausting_retries(monkeypatch):
     with pytest.raises(AIServiceUnavailableError):
         client.generate("prompt")
 
+    assert models.call_count == 3
+
+
+@pytest.mark.parametrize("code", [500, 504])
+def test_gemini_client_503以外の5xxは混雑ではなく通常のAI生成失敗になる(monkeypatch, code):
+    # 500/504は混雑ではなく入力や処理時間切れ起因のため、「混雑」の文言（503）でユーザーを誤誘導しない。
+    monkeypatch.setattr("app.services.ai_client._RETRY_BACKOFF_SECONDS", 0)
+    models = _StubGeminiModels(failures=99, response_text=_VALID_RESPONSE, failure_code=code)
+    client = GeminiAIClient(api_key="dummy", client=_StubGeminiClient(models))
+
+    with pytest.raises(AIGenerationError) as exc_info:
+        client.generate("prompt")
+
+    assert not isinstance(exc_info.value, AIServiceUnavailableError)
     assert models.call_count == 3
 
 
